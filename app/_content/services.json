@@ -1,0 +1,170 @@
+[
+  {
+    "category": "Facials",
+    "name": "Signature Aura Facial",
+    "slug": "signature-aura-facial",
+    "summary": "Customized facial for balanced, luminous skin.",
+    "duration": "60–75 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Facials",
+    "name": "Classic European Facial",
+    "slug": "classic-european-facial",
+    "summary": "Deep cleansing and relaxation for all skin types.",
+    "duration": "60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Facials",
+    "name": "HydraFacial",
+    "slug": "hydrafacial",
+    "summary": "Medical-grade hydration and exfoliation for instant glow.",
+    "duration": "45–60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Facials",
+    "name": "Calming Barrier Facial",
+    "slug": "calming-barrier",
+    "summary": "Soothing, hydration‑forward care for sensitized skin.",
+    "duration": "60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Facials",
+    "name": "Clarifying Facial with Extractions",
+    "slug": "clarifying-facial-extractions",
+    "summary": "Deep cleansing with gentle extractions for congested skin.",
+    "duration": "60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "Dermaplaning",
+    "slug": "dermaplaning",
+    "summary": "Ultra‑smooth exfoliation for instant radiance and texture refinement.",
+    "duration": "45 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "Chemical Peel",
+    "slug": "chemical-peel",
+    "summary": "Customized peel for improved texture, tone, and clarity.",
+    "duration": "30–45 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "Microneedling",
+    "slug": "microneedling",
+    "summary": "Collagen-boosting treatment for fine lines, scars, and texture.",
+    "duration": "60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "LED Light Therapy",
+    "slug": "led-light-therapy",
+    "summary": "Red and blue light therapy for healing, anti-aging, and acne.",
+    "duration": "20–30 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "Microcurrent Facial",
+    "slug": "microcurrent-facial",
+    "summary": "Non-invasive lifting and toning for sculpted facial contours.",
+    "duration": "60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "Lymphatic Drainage Facial",
+    "slug": "lymphatic-drainage",
+    "summary": "Gentle massage to reduce puffiness and promote detoxification.",
+    "duration": "60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Advanced",
+    "name": "Buccal Facial Massage",
+    "slug": "buccal-massage",
+    "summary": "Intra-oral massage for jaw tension, sculpting, and lifted appearance.",
+    "duration": "60–75 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Brows & Lashes",
+    "name": "Brow Lamination",
+    "slug": "brow-lamination",
+    "summary": "Lifted, fuller-looking brows that stay in place.",
+    "duration": "45–60 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Brows & Lashes",
+    "name": "Brow Shape & Tint",
+    "slug": "brow-shape-tint",
+    "summary": "Custom shaping with tint for natural definition.",
+    "duration": "30–45 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Brows & Lashes",
+    "name": "Lash Lift & Tint",
+    "slug": "lash-lift-tint",
+    "summary": "Low‑maintenance curl and depth for natural lashes.",
+    "duration": "60–75 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Brows & Lashes",
+    "name": "Brow Lamination + Tint Combo",
+    "slug": "brow-lamination-tint-combo",
+    "summary": "Full brow transformation with lamination and custom tint.",
+    "duration": "75 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Waxing",
+    "name": "Brow Wax",
+    "slug": "brow-wax",
+    "summary": "Clean, defined brow shape.",
+    "duration": "15 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Waxing",
+    "name": "Lip Wax",
+    "slug": "lip-wax",
+    "summary": "Quick, gentle hair removal.",
+    "duration": "10 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Waxing",
+    "name": "Chin Wax",
+    "slug": "chin-wax",
+    "summary": "Smooth chin and jawline.",
+    "duration": "15 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Waxing",
+    "name": "Full Face Wax",
+    "slug": "full-face-wax",
+    "summary": "Complete facial hair removal for smooth, glowing skin.",
+    "duration": "30 min",
+    "price": "from $--"
+  },
+  {
+    "category": "Waxing",
+    "name": "Underarm Wax",
+    "slug": "underarm-wax",
+    "summary": "Smooth underarms with gentle technique.",
+    "duration": "15 min",
+    "price": "from $--"
+  }
+]
