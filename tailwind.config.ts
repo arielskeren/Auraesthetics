@@ -27,10 +27,10 @@ const config: Config = {
         'h3': ['24px', { lineHeight: '1.4' }],
         'body': ['16px', { lineHeight: '1.6' }],
       },
-      spacing: {
-        'section-mobile': '40px',
-        'section-desktop': '60px',
-      },
+          spacing: {
+            'section-mobile': '20px',
+            'section-desktop': '30px',
+          },
     },
   },
   plugins: [],

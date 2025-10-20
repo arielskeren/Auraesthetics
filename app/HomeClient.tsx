@@ -30,18 +30,18 @@ export default function HomeClient() {
   return (
     <>
       {/* Hero Section */}
-      <Section className="relative overflow-hidden min-h-[70vh] flex items-center" background="sand">
+      <Section className="relative overflow-hidden min-h-[40vh] flex items-center" background="sand">
         <div className="absolute inset-0 bg-gradient-to-br from-sand via-ivory to-taupe/20 opacity-60" />
         <motion.div
           className="relative z-10 text-center max-w-4xl mx-auto"
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-4xl md:text-display font-serif text-charcoal mb-6 text-balance">
+          <h1 className="text-4xl md:text-display font-serif text-charcoal mb-2 text-balance">
             Skin rituals, done gently.
           </h1>
-          <p className="text-lg md:text-xl text-warm-gray mb-10 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl text-warm-gray mb-4 leading-relaxed max-w-2xl mx-auto">
             At Aura Wellness Aesthetics, Amy blends modern technique with a calming, bohemian touch to support healthy, luminous skin.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -62,13 +62,13 @@ export default function HomeClient() {
       {/* Why Aura Aesthetics */}
       <Section background="ivory">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-16"
+          className="text-center mb-6"
         >
-          <h2 className="text-h1 font-serif text-charcoal mb-4">Why aura aesthetics</h2>
+          <h2 className="text-h1 font-serif text-charcoal mb-2">Why aura aesthetics</h2>
           <p className="text-warm-gray max-w-2xl mx-auto">
             Three pillars that guide every treatment and moment in our studio.
           </p>
@@ -95,11 +95,11 @@ export default function HomeClient() {
       {/* Featured Services */}
       <Section background="sand">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-16"
+          className="text-center mb-6"
         >
           <h2 className="text-h1 font-serif text-charcoal mb-4">Featured Services</h2>
           <p className="text-warm-gray max-w-2xl mx-auto">
@@ -134,8 +134,8 @@ export default function HomeClient() {
       <Section background="ivory">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 1, x: 0 }}
+          whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
@@ -143,8 +143,8 @@ export default function HomeClient() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 1, x: 0 }}
+          whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
@@ -167,11 +167,11 @@ export default function HomeClient() {
       {/* Reviews Section */}
       <Section background="sand">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="text-center mb-4"
         >
           <h2 className="text-h1 font-serif text-charcoal mb-4">Client Love</h2>
           <p className="text-warm-gray max-w-2xl mx-auto">
@@ -229,8 +229,8 @@ export default function HomeClient() {
           </div>
 
           <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+          initial={{ opacity: 1 }}
+          whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-center text-warm-gray text-sm"
@@ -243,11 +243,11 @@ export default function HomeClient() {
       {/* Social Media Feed */}
       <Section background="ivory">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="text-center mb-4"
         >
           <h2 className="text-h1 font-serif text-charcoal mb-4">Follow Our Journey</h2>
           <p className="text-warm-gray max-w-2xl mx-auto mb-6">
@@ -275,7 +275,7 @@ export default function HomeClient() {
 
         {/* Instagram Feed Placeholder */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
@@ -285,8 +285,8 @@ export default function HomeClient() {
             {[1, 2, 3, 4, 5, 6, 7, 8].map((item, index) => (
               <motion.div
                 key={item}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 1, scale: 1 }}
+          whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
                 className="aspect-square rounded-lg bg-gradient-to-br from-sand via-taupe/20 to-sage/20 flex items-center justify-center group cursor-pointer hover:shadow-lg transition-shadow"

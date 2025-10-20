@@ -53,9 +53,9 @@ export default function EmailCapture({
   };
 
   return (
-    <div className="bg-white p-8 md:p-10 rounded-lg shadow-sm max-w-2xl mx-auto">
-      <h3 className="text-h2 text-charcoal mb-3 text-center font-serif">{title}</h3>
-      <p className="text-warm-gray text-center mb-8 leading-relaxed">{description}</p>
+    <div className="bg-white p-6 md:p-8 rounded-lg shadow-sm max-w-2xl mx-auto">
+      <h3 className="text-h2 text-charcoal mb-2 text-center font-serif">{title}</h3>
+      <p className="text-warm-gray text-center mb-6 leading-relaxed">{description}</p>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -123,7 +123,7 @@ export default function EmailCapture({
       <AnimatePresence>
         {showSuccess && (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 1, y: 0 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className="mt-4 p-4 bg-sage/20 text-charcoal rounded text-center"

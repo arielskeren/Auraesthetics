@@ -20,12 +20,12 @@ export default function ServicesClient() {
       {/* Hero */}
       <Section background="sand">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="text-center max-w-3xl mx-auto"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-6">
+          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-4">
             Services
           </h1>
           <p className="text-lg text-warm-gray leading-relaxed">
@@ -57,7 +57,7 @@ export default function ServicesClient() {
       <Section background="ivory" className="!pt-8">
         <motion.div
           key={activeCategory}
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
@@ -79,12 +79,12 @@ export default function ServicesClient() {
       <Section background="sand">
         <div className="max-w-4xl mx-auto">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 1, y: 0 }}
+          whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-h2 font-serif text-charcoal mb-8 text-center">
+            <h2 className="text-h2 font-serif text-charcoal mb-6 text-center">
               Pre‑ & Post‑Care Guidelines
             </h2>
 

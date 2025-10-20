@@ -7,17 +7,17 @@ export default function Footer() {
   return (
     <footer className="bg-sand">
       {/* Email Capture Section */}
-      <div className="container mx-auto px-6 md:px-12 max-w-7xl py-12">
+      <div className="container mx-auto px-6 md:px-12 max-w-7xl py-8">
         <EmailCapture />
       </div>
 
       {/* Footer Content */}
       <div className="border-t border-taupe/30">
-        <div className="container mx-auto px-6 md:px-12 max-w-7xl py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div className="container mx-auto px-6 md:px-12 max-w-7xl py-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Brand */}
             <div>
-              <h3 className="text-2xl font-serif text-charcoal mb-4">Aura Wellness Aesthetics</h3>
+              <h3 className="text-2xl font-serif text-charcoal mb-2">Aura Wellness Aesthetics</h3>
               <p className="text-warm-gray text-sm leading-relaxed">
                 Bohemian, serene skincare studio by Amy. Customized facials, brows, and gentle advanced treatments.
               </p>
@@ -25,7 +25,7 @@ export default function Footer() {
 
             {/* Studio Info */}
             <div>
-              <h4 className="text-lg font-serif text-charcoal mb-4">Studio</h4>
+              <h4 className="text-lg font-serif text-charcoal mb-2">Studio</h4>
               <div className="space-y-2 text-sm text-warm-gray">
                 <p>
                   <span className="font-medium">Location:</span> Fort Lauderdale, FL
@@ -45,7 +45,7 @@ export default function Footer() {
 
             {/* Quick Links */}
             <div>
-              <h4 className="text-lg font-serif text-charcoal mb-4">Quick Links</h4>
+              <h4 className="text-lg font-serif text-charcoal mb-2">Quick Links</h4>
               <nav className="space-y-2">
                 <Link href="/about" className="block text-sm text-warm-gray hover:text-charcoal transition-colors">
                   About Amy
@@ -67,7 +67,7 @@ export default function Footer() {
           </div>
 
           {/* Social & Legal */}
-          <div className="mt-12 pt-8 border-t border-taupe/30 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+          <div className="mt-6 pt-4 border-t border-taupe/30 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <div className="flex space-x-6">
               <a 
                 href="https://instagram.com/auraesthetics" 
