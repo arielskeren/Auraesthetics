@@ -51,6 +51,8 @@ export default function EmailCapture({
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string }>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  
+  console.log('EmailCapture render - isWelcomeOffer:', isWelcomeOffer, 'onCloseOffer:', !!onCloseOffer);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -135,7 +137,7 @@ export default function EmailCapture({
     <div className="max-w-md mx-auto">
       <div className="text-center mb-5">
         {isWelcomeOffer && (
-          <div className="inline-block bg-sage/20 text-sage px-6 py-2 rounded-full text-sm font-bold mb-3 animate-pulse">
+          <div className="inline-block bg-sage/20 text-sage px-6 py-2 rounded-full text-sm font-bold mb-3">
             🎁 SPECIAL OFFER
           </div>
         )}
@@ -241,14 +243,20 @@ export default function EmailCapture({
           <p id="consent-error" className="text-red-600 text-xs">{errors.consent}</p>
         )}
         
-        <button
+        <motion.button
           type="submit"
-          className={`w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md ${
-            isWelcomeOffer ? 'animate-pulse' : ''
-          }`}
+          className="w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md"
+          animate={isWelcomeOffer ? {
+            scale: [1, 1.05, 1],
+          } : {}}
+          transition={isWelcomeOffer ? {
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          } : {}}
         >
           {isWelcomeOffer ? 'Claim 15% Off' : 'Join the List'}
-        </button>
+        </motion.button>
       </form>
       
       {/* Terms & Conditions - Compact Link */}
@@ -267,10 +275,10 @@ export default function EmailCapture({
       {/* Close Link - Shows below the form for welcome offers */}
       {isWelcomeOffer && onCloseOffer && (
         <>
-          <div className="mt-4 text-center">
+          <div className="mt-6 text-center">
             <button
               onClick={() => setShowConfirmDialog(true)}
-              className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
+              className="text-sm text-warm-gray hover:text-charcoal transition-colors underline hover:no-underline font-medium"
               type="button"
             >
               Maybe later
