@@ -1,102 +1,96 @@
-# Aura Aesthetics Website
+# Aura Wellness Aesthetics
 
-A beautiful, bohemian wellness website for Amy Margolis's aesthetics studio.
+A modern, elegant website for Aura Wellness Aesthetics - a serene skincare studio by Amy in Fort Lauderdale, FL.
 
-## Quick Start (Local Development)
+## 🌟 Features
+
+- **Service Catalog**: 20+ aesthetic treatments with detailed descriptions
+- **Responsive Design**: Beautiful on all devices (mobile, tablet, desktop)
+- **Email Capture**: Integrated Brevo mailing list signup
+- **Fast & Modern**: Built with Next.js 14, TypeScript, Tailwind CSS
+- **SEO Optimized**: Metadata and Open Graph tags included
+
+## 🛠 Tech Stack
+
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Animations**: Framer Motion
+- **Email Service**: Brevo (formerly Sendinblue)
+- **Hosting**: Vercel
+
+## 📦 Getting Started
 
 ### Prerequisites
-- Node.js 18+ installed
-- npm or yarn package manager
+
+- Node.js 18+ 
+- npm or yarn
 
 ### Installation
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/YOUR-USERNAME/Auraesthetics.git
+cd Auraesthetics
 
-2. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+# Install dependencies
+npm install
 
-3. **Open your browser:**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+# Create environment file
+cp .env.local.example .env.local
 
-   The site will automatically reload when you make changes to files.
-
-### Available Scripts
-
-- `npm run dev` - Start development server (with hot reload)
-- `npm run build` - Build for production
-- `npm run start` - Run production build locally
-- `npm run lint` - Check code for issues
-
-## Testing Before Deployment
-
-1. Run `npm run build` to create a production build
-2. Run `npm run start` to test the production build locally
-3. Visit all pages and test:
-   - Navigation between pages
-   - Disabled booking states
-   - Email capture form validation
-   - Responsive design (resize browser or use dev tools)
-   - Accessibility (tab through all interactive elements)
-
-## Project Structure
-
-```
-/app
-  /_components      # Reusable UI components
-  /_content         # JSON data files (services, FAQs, site info)
-  /about            # About page
-  /book             # Booking page (disabled state)
-  /contact          # Contact page (disabled state)
-  /faq              # FAQ page
-  /services         # Services page
-  page.tsx          # Home page
-  layout.tsx        # Root layout with Nav and Footer
-  globals.css       # Global styles and design tokens
+# Add your credentials to .env.local
+# BREVO_API_KEY=your_api_key
+# BREVO_LIST_ID=your_list_id
 ```
 
-## Design System
+### Development
 
-### Colors
-- **Sand:** `#E9E2D8` - Warm background
-- **Ivory:** `#F8F6F2` - Primary background
-- **Taupe:** `#B6A999` - Accents
-- **Sage:** `#C9D2C0` - Highlights
-- **Charcoal:** `#3F3A37` - Primary text
-- **Warm Gray:** `#6B635B` - Secondary text
+```bash
+# Start dev server
+npm run dev
 
-### Typography
-- **Headings:** Cormorant Garamond (serif)
-- **Body:** Inter (sans-serif)
+# Visit http://localhost:4000
+```
 
-## Content Updates
+### Build
 
-To update content without changing code:
+```bash
+# Create production build
+npm run build
 
-1. **Services:** Edit `/app/_content/services.json`
-2. **FAQs:** Edit `/app/_content/faqs.json`
-3. **Site Info:** Edit `/app/_content/site.json`
+# Start production server
+npm start
+```
 
-## Deployment
+## 📝 Content Management
 
-This site is ready to deploy to Vercel:
+Edit content in JSON files:
+- **Services**: `app/_content/services.json`
+- **FAQs**: `app/_content/faqs.json`
+- **Site Info**: `app/_content/site.json`
 
-1. Push to GitHub
-2. Import repository in Vercel
-3. Deploy (automatic configuration for Next.js)
+## 🌐 Deployment
 
-## Notes
+The site is hosted on Vercel and automatically deploys on every push to `main`.
 
-- Email capture is UI-only; backend integration needed later
-- Booking functionality is disabled with placeholder states
-- All TBD content can be updated in JSON files or component text
-- Image placeholders use gradients; replace with real images when ready
+**Live URLs:**
+- Production: https://theauraesthetics.com
+- Vercel: https://auraesthetics.vercel.app
 
-## Support
+## 📧 Email Integration
 
-For questions or issues, contact the development team.
+The site integrates with Brevo for email capture:
+- Environment variables are set in Vercel dashboard
+- Contacts are added to a Brevo mailing list
+- Form appears in footer on all pages
 
+## 🎨 Design
+
+- **Colors**: Sand, Ivory, Taupe, Sage, Charcoal
+- **Fonts**: Cormorant Garamond (serif), Inter (sans-serif)
+- **Style**: Bohemian, serene, minimalist
+
+## 📄 License
+
+All rights reserved © Aura Wellness Aesthetics

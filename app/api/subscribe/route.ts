@@ -58,33 +58,36 @@ export async function POST(request: NextRequest) {
       email,
       listIds: [Number(listId)], // Convert to number as Brevo expects
       updateEnabled: true, // Update contact if they already exist
-      attributes: {
-        FIRSTNAME: firstName.trim(),
-        LASTNAME: lastName.trim(),
-      },
     };
 
-    // Format phone number for Brevo (they expect format like +1234567890)
-    // Remove all non-numeric characters and add + prefix
+    // Set attributes (case-sensitive!)
+    const attributes: any = {
+      FIRSTNAME: firstName.trim(),
+      LASTNAME: lastName.trim(),
+    };
+
+    // Add phone if provided (as SMS attribute)
     const formattedPhone = phone.trim().replace(/\D/g, '');
     if (formattedPhone) {
-      // Add country code if not present (assuming US +1)
-      const phoneNumber = formattedPhone.startsWith('+') 
-        ? formattedPhone 
-        : formattedPhone.length === 10 
-          ? `+1${formattedPhone}`
+      attributes.SMS = formattedPhone.length === 10 
+        ? `+1${formattedPhone}` 
+        : formattedPhone.startsWith('+') 
+          ? formattedPhone 
           : `+${formattedPhone}`;
-      contactData.attributes.SMS = phoneNumber;
     }
 
     // Add optional fields
     if (birthday && birthday.trim()) {
-      contactData.attributes['BIRTHDAY'] = birthday.trim();
+      attributes.BIRTHDAY = birthday.trim();
     }
 
     if (address && address.trim()) {
-      contactData.attributes['ADDRESS'] = address.trim();
+      attributes.ADDRESS = address.trim();
     }
+
+    contactData.attributes = attributes;
+
+    console.log('Sending to Brevo:', JSON.stringify(contactData, null, 2));
 
     // Send to Brevo API
     const response = await fetch('https://api.brevo.com/v3/contacts', {
@@ -123,6 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log('Brevo response:', data);
     return NextResponse.json(
       { message: 'Successfully subscribed', data },
       { status: 200 }
