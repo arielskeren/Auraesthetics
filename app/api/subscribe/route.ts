@@ -66,23 +66,29 @@ export async function POST(request: NextRequest) {
       LASTNAME: lastName.trim(),
     };
 
-    // Add phone if provided (as SMS attribute)
+    // Format and add phone to both SMS and LANDLINE_NUMBER
     const formattedPhone = phone.trim().replace(/\D/g, '');
     if (formattedPhone) {
-      attributes.SMS = formattedPhone.length === 10 
+      const phoneNumber = formattedPhone.length === 10 
         ? `+1${formattedPhone}` 
         : formattedPhone.startsWith('+') 
           ? formattedPhone 
           : `+${formattedPhone}`;
+      
+      // Add to both SMS and LANDLINE_NUMBER attributes
+      attributes.SMS = phoneNumber;
+      attributes.LANDLINE_NUMBER = phoneNumber;
     }
 
-    // Add optional fields
+    // Add optional BIRTHDAY field (format: YYYY-MM-DD)
     if (birthday && birthday.trim()) {
+      // Brevo expects BIRTHDAY in YYYY-MM-DD format
       attributes.BIRTHDAY = birthday.trim();
     }
 
+    // Add optional PHYSICAL_ADDRESS field
     if (address && address.trim()) {
-      attributes.ADDRESS = address.trim();
+      attributes.PHYSICAL_ADDRESS = address.trim();
     }
 
     contactData.attributes = attributes;
@@ -95,13 +101,22 @@ export async function POST(request: NextRequest) {
       headers: {
         'api-key': apiKey,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(contactData),
     });
 
+    console.log('Brevo response status:', response.status);
+    
+    // Log response body for debugging
+    const responseText = await response.text();
+    console.log('Brevo response body:', responseText);
+    
+    const responseData = responseText ? JSON.parse(responseText) : {};
+
     // Handle response
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = responseData;
       
       console.error('Brevo API error:', {
         status: response.status,
@@ -125,10 +140,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    console.log('Brevo response:', data);
+    console.log('Brevo success response:', responseData);
     return NextResponse.json(
-      { message: 'Successfully subscribed', data },
+      { message: 'Successfully subscribed', data: responseData },
       { status: 200 }
     );
 
