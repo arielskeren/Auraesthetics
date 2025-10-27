@@ -264,8 +264,8 @@ export default function EmailCapture({
         </div>
       )}
       
-      {/* Close Link - Shows below the form */}
-      {showCloseLink && onCloseLinkClick && isWelcomeOffer && onCloseOffer && (
+      {/* Close Link - Shows below the form for welcome offers */}
+      {isWelcomeOffer && onCloseOffer && (
         <>
           <div className="mt-4 text-center">
             <button
