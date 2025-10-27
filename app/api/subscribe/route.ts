@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
     const contactData: any = {
       email,
       listIds: [Number(listId)], // Convert to number as Brevo expects
-      updateEnabled: true, // Update contact if they already exist
+      updateEnabled: true, // Update existing contact if email matches
+      emailBlacklisted: false,
+      smsBlacklisted: false,
     };
 
     // Set attributes (case-sensitive!)
@@ -126,12 +128,25 @@ export async function POST(request: NextRequest) {
         requestBody: contactData
       });
       
-      // If contact already exists, that's okay
-      if (response.status === 400 && errorData.code === 'duplicate_parameter') {
-        return NextResponse.json(
-          { message: 'Contact added successfully' },
-          { status: 200 }
-        );
+      // Handle various Brevo errors
+      if (response.status === 400) {
+        // Duplicate contact (same email)
+        if (errorData.code === 'duplicate_parameter') {
+          console.log('Contact already exists - updating...');
+          return NextResponse.json(
+            { message: 'Already subscribed - contact updated' },
+            { status: 200 }
+          );
+        }
+        
+        // Invalid parameter
+        if (errorData.message && errorData.message.includes('already exist')) {
+          console.log('Contact already in list');
+          return NextResponse.json(
+            { message: 'You are already subscribed!' },
+            { status: 200 }
+          );
+        }
       }
 
       return NextResponse.json(
