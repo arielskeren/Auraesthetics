@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
 
     // Format and add phone to both SMS and LANDLINE_NUMBER
     const formattedPhone = phone.trim().replace(/\D/g, '');
-    if (formattedPhone) {
+    if (formattedPhone && formattedPhone.length >= 10) {
+      // Only add phone if it's at least 10 digits (valid format)
       const phoneNumber = formattedPhone.length === 10 
         ? `+1${formattedPhone}` 
         : formattedPhone.startsWith('+') 
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
       attributes.SMS = phoneNumber;
       attributes.LANDLINE_NUMBER = phoneNumber;
     }
+    // Note: We're not adding phone if it's invalid to avoid Brevo errors
 
     // Add optional BIRTHDAY field (format: YYYY-MM-DD)
     if (birthday && birthday.trim()) {
