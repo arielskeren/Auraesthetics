@@ -3,6 +3,11 @@
 import AutoEmailCaptureModal from './_components/AutoEmailCaptureModal';
 
 export default function ClientLayout() {
-  return <AutoEmailCaptureModal />;
+  console.log('ClientLayout rendered');
+  return (
+    <>
+      <AutoEmailCaptureModal />
+    </>
+  );
 }
 

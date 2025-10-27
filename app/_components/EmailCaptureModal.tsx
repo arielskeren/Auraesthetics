@@ -11,6 +11,8 @@ interface EmailCaptureModalProps {
 }
 
 export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = true }: EmailCaptureModalProps) {
+  console.log('EmailCaptureModal - isOpen:', isOpen, 'showCloseButton:', showCloseButton);
+  
   return (
     <AnimatePresence>
       {isOpen && (

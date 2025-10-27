@@ -7,7 +7,10 @@ export default function AutoEmailCaptureModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [showCloseButton, setShowCloseButton] = useState(false);
 
+  console.log('AutoEmailCaptureModal rendered, isOpen:', isOpen);
+
   useEffect(() => {
+    console.log('useEffect triggered');
     // Open modal after 5 seconds
     const timer = setTimeout(() => {
       setIsOpen(true);
