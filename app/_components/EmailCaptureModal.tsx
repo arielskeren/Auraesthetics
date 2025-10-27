@@ -58,9 +58,11 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
                   onCloseLinkClick={onClose}
                   isWelcomeOffer={isWelcomeOffer}
                   onCloseOffer={(confirmed) => {
-                    if (!confirmed) {
+                    // If user confirmed they want to throw away the offer, close the modal
+                    if (confirmed) {
                       onClose();
                     }
+                    // If they clicked "Keep my offer", do nothing (modal stays open)
                   }}
                 />
               </div>
