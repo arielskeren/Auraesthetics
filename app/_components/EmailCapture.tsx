@@ -7,12 +7,16 @@ interface EmailCaptureProps {
   title?: string;
   description?: string;
   includeSMS?: boolean;
+  showCloseLink?: boolean;
+  onCloseLinkClick?: () => void;
 }
 
 export default function EmailCapture({ 
   title = "Booking opens soon.",
   description = "Be the first to know when online booking goes live and receive launch‑week perks.",
-  includeSMS = true 
+  includeSMS = true,
+  showCloseLink = false,
+  onCloseLinkClick
 }: EmailCaptureProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -235,6 +239,19 @@ export default function EmailCapture({
           Join the List
         </button>
       </form>
+      
+      {/* Close Link - Shows below the form */}
+      {showCloseLink && onCloseLinkClick && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={onCloseLinkClick}
+            className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+      )}
       
       <AnimatePresence>
         {showSuccess && (

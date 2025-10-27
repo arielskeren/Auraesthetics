@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "./_components/Nav";
 import Footer from "./_components/Footer";
+import AutoEmailCaptureModal from "./_components/AutoEmailCaptureModal";
 
 export const metadata: Metadata = {
   title: "Aura Wellness Aesthetics — Amy",
@@ -26,6 +27,7 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
+        <AutoEmailCaptureModal />
       </body>
     </html>
   );
