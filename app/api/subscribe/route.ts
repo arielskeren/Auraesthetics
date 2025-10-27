@@ -12,7 +12,12 @@ function generateWelcomeCode(): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { firstName, lastName, email, phone, birthday, address, signupSource } = await request.json();
+    const body = await request.json();
+    console.log('📥 API received request with body:', body);
+    
+    const { firstName, lastName, email, phone, birthday, address, signupSource } = body;
+    
+    console.log('📥 Extracted signupSource:', signupSource);
 
     // Validate required fields
     if (!firstName || firstName.trim() === '') {

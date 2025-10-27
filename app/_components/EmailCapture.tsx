@@ -87,21 +87,26 @@ export default function EmailCapture({
     }
     
     try {
+      const payload = { 
+        firstName,
+        lastName,
+        email, 
+        phone,
+        birthday: '',
+        address: '',
+        signupSource: signupSource,
+      };
+      
+      console.log('📧 Submitting to API with signupSource:', signupSource);
+      console.log('📧 Full payload:', payload);
+      
       // Submit to Brevo API
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          firstName,
-          lastName,
-          email, 
-          phone,
-          birthday: '',
-          address: '',
-          signupSource: signupSource,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
