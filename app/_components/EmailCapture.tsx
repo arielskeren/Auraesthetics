@@ -27,6 +27,8 @@ interface EmailCaptureProps {
   includeSMS?: boolean;
   showCloseLink?: boolean;
   onCloseLinkClick?: () => void;
+  isWelcomeOffer?: boolean;
+  onCloseOffer?: (confirmed: boolean) => void;
 }
 
 export default function EmailCapture({ 
@@ -34,7 +36,9 @@ export default function EmailCapture({
   description = "Join our waitlist and get 15% off your first service",
   includeSMS = true,
   showCloseLink = false,
-  onCloseLinkClick
+  onCloseLinkClick,
+  isWelcomeOffer = false,
+  onCloseOffer
 }: EmailCaptureProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -119,13 +123,22 @@ export default function EmailCapture({
   return (
     <div className="max-w-md mx-auto">
       <div className="text-center mb-5">
-        <div className="inline-block bg-sage/20 text-sage px-4 py-1 rounded-full text-xs font-semibold mb-3">
-          🎁 SPECIAL OFFER
-        </div>
+        {isWelcomeOffer && (
+          <div className="inline-block bg-sage/20 text-sage px-6 py-2 rounded-full text-sm font-bold mb-3 animate-pulse">
+            🎁 SPECIAL OFFER
+          </div>
+        )}
         <h3 className="text-2xl font-serif text-charcoal mb-2">{title}</h3>
-        <p className="text-base font-semibold text-sage mb-1">15% OFF</p>
-        <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
-        <p className="text-xs text-warm-gray/80 mt-2">New clients only • Up to $30 value</p>
+        {isWelcomeOffer && (
+          <>
+            <p className="text-2xl font-bold text-sage mb-1">15% OFF</p>
+            <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
+            <p className="text-xs text-warm-gray/80 mt-2">New clients only • Up to $30 value</p>
+          </>
+        )}
+        {!isWelcomeOffer && (
+          <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
+        )}
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-2">
@@ -219,31 +232,44 @@ export default function EmailCapture({
         
         <button
           type="submit"
-          className="w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md"
+          className={`w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md ${
+            isWelcomeOffer ? 'animate-pulse' : ''
+          }`}
         >
-          Claim 15% Off
+          {isWelcomeOffer ? 'Claim 15% Off' : 'Join the List'}
         </button>
       </form>
       
-      {/* Terms & Conditions */}
-      <div className="mt-4 p-3 bg-sand/40 rounded-lg border border-taupe/20">
-        <p className="text-xs text-warm-gray leading-relaxed mb-2">
-          <strong className="text-charcoal">Terms & Conditions:</strong>
-        </p>
-        <ul className="text-xs text-warm-gray space-y-1 list-disc list-inside">
-          <li>Valid for new clients only</li>
-          <li>Discount up to $30 value</li>
-          <li>Must be used within 3 months of sign-up</li>
-          <li>Cannot be combined with other offers</li>
-          <li>One-time use only</li>
-        </ul>
-        <p className="text-[10px] text-warm-gray/60 mt-2 italic">
-          *Note: Discount will be automatically applied at checkout when booking through our site. Signup date will be verified in our system.
-        </p>
-      </div>
+      {/* Terms & Conditions - Compact Link */}
+      {isWelcomeOffer && (
+        <div className="mt-3 text-center">
+          <a 
+            href="/terms" 
+            target="_blank"
+            className="text-xs text-warm-gray hover:text-charcoal underline"
+          >
+            Terms & Conditions
+          </a>
+        </div>
+      )}
       
       {/* Close Link - Shows below the form */}
-      {showCloseLink && onCloseLinkClick && (
+      {showCloseLink && onCloseLinkClick && isWelcomeOffer && onCloseOffer && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => {
+              const confirmed = confirm('Are you sure you want to throw away your 15% off? This offer won\'t be shown again.');
+              onCloseOffer(confirmed);
+            }}
+            className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
+            type="button"
+          >
+            Maybe later
+          </button>
+        </div>
+      )}
+      
+      {showCloseLink && onCloseLinkClick && !isWelcomeOffer && (
         <div className="mt-4 text-center">
           <button
             onClick={onCloseLinkClick}

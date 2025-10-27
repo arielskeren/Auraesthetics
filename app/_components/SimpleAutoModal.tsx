@@ -36,6 +36,7 @@ export default function SimpleAutoModal() {
       isOpen={isOpen} 
       onClose={handleClose}
       showCloseButton={true}
+      isWelcomeOffer={true}
     />
   );
 }

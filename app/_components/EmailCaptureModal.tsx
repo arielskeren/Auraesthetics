@@ -8,9 +8,10 @@ interface EmailCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
   showCloseButton?: boolean;
+  isWelcomeOffer?: boolean;
 }
 
-export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = true }: EmailCaptureModalProps) {
+export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = true, isWelcomeOffer = true }: EmailCaptureModalProps) {
   console.log('EmailCaptureModal - isOpen:', isOpen, 'showCloseButton:', showCloseButton);
   
   return (
@@ -50,11 +51,17 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
               {/* Content */}
               <div className="p-5">
                 <EmailCapture 
-                  title="Welcome Offer"
-                  description="Join our waitlist and get 15% off your first service"
+                  title={isWelcomeOffer ? "Welcome Offer" : "Join Our Waitlist"}
+                  description={isWelcomeOffer ? "Join our waitlist and get 15% off your first service" : "Be the first to know when booking opens"}
                   includeSMS={true}
                   showCloseLink={showCloseButton}
                   onCloseLinkClick={onClose}
+                  isWelcomeOffer={isWelcomeOffer}
+                  onCloseOffer={(confirmed) => {
+                    if (!confirmed) {
+                      onClose();
+                    }
+                  }}
                 />
               </div>
             </motion.div>
