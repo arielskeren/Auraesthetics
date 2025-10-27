@@ -53,6 +53,9 @@ export default function EmailCapture({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
   console.log('EmailCapture render - isWelcomeOffer:', isWelcomeOffer, 'onCloseOffer:', !!onCloseOffer);
+  
+  // Debug: Force show button temporarily
+  const debugShowButton = isWelcomeOffer && onCloseOffer;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -258,6 +261,13 @@ export default function EmailCapture({
           {isWelcomeOffer ? 'Claim 15% Off' : 'Join the List'}
         </motion.button>
       </form>
+      
+      {/* Debug Info */}
+      {isWelcomeOffer && (
+        <div className="mt-2 text-center text-xs text-red-600">
+          DEBUG: isWelcomeOffer={String(isWelcomeOffer)}, onCloseOffer={String(!!onCloseOffer)}
+        </div>
+      )}
       
       {/* Maybe Later Button - Shows below the form for welcome offers */}
       {isWelcomeOffer && onCloseOffer && (
