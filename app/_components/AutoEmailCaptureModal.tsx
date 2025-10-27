@@ -46,6 +46,7 @@ export default function AutoEmailCaptureModal() {
   };
 
   const handleCloseOffer = (confirmed: boolean) => {
+    console.log('handleCloseOffer called with confirmed:', confirmed);
     if (confirmed) {
       // User confirmed they want to throw away the offer
       setIsOpen(false);
@@ -53,6 +54,8 @@ export default function AutoEmailCaptureModal() {
     }
     // If they clicked "Keep my offer", modal stays open
   };
+  
+  console.log('AutoEmailCaptureModal render - handleCloseOffer:', typeof handleCloseOffer);
 
   const handleClaimed = () => {
     // User claimed the offer, close and mark as submitted
