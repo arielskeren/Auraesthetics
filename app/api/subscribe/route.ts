@@ -38,6 +38,13 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.BREVO_API_KEY;
     const listId = process.env.BREVO_LIST_ID;
 
+    console.log('Checking credentials:', { 
+      hasApiKey: !!apiKey, 
+      hasListId: !!listId,
+      apiKeyPrefix: apiKey?.substring(0, 10),
+      listId 
+    });
+
     if (!apiKey || !listId) {
       console.error('Missing Brevo credentials');
       return NextResponse.json(
@@ -93,6 +100,14 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
+      console.error('Brevo API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+        apiKeyLength: apiKey?.length,
+        requestBody: contactData
+      });
+      
       // If contact already exists, that's okay
       if (response.status === 400 && errorData.code === 'duplicate_parameter') {
         return NextResponse.json(
@@ -101,9 +116,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      console.error('Brevo API error:', errorData);
       return NextResponse.json(
-        { error: 'Failed to subscribe' },
+        { error: errorData.message || 'Failed to subscribe', details: errorData },
         { status: response.status }
       );
     }
