@@ -348,6 +348,7 @@ export default function HomeClient() {
         onClose={handleCloseEmailModal}
         isWelcomeOffer={false}
         showCloseButton={true}
+        signupSource="home-hero"
       />
     </>
   );

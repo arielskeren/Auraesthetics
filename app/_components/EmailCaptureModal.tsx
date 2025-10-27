@@ -13,6 +13,7 @@ interface EmailCaptureModalProps {
   isWelcomeOffer?: boolean;
   onCloseOffer?: (confirmed: boolean) => void;
   onClaimed?: () => void;
+  signupSource?: string;
 }
 
 export default function EmailCaptureModal({ 
@@ -21,7 +22,8 @@ export default function EmailCaptureModal({
   showCloseButton = true, 
   isWelcomeOffer = true,
   onCloseOffer,
-  onClaimed
+  onClaimed,
+  signupSource
 }: EmailCaptureModalProps) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
@@ -72,7 +74,7 @@ export default function EmailCaptureModal({
                     isWelcomeOffer={isWelcomeOffer}
                     onCloseOffer={onCloseOffer}
                     onSuccess={onClaimed}
-                    signupSource={isWelcomeOffer ? 'welcome-offer' : 'footer'}
+                    signupSource={signupSource || (isWelcomeOffer ? 'welcome-offer' : 'footer')}
                   />
                 </div>
               </div>
