@@ -72,6 +72,7 @@ export default function EmailCaptureModal({
                     isWelcomeOffer={isWelcomeOffer}
                     onCloseOffer={onCloseOffer}
                     onSuccess={onClaimed}
+                    signupSource={isWelcomeOffer ? 'welcome-offer' : 'footer'}
                   />
                 </div>
               </div>

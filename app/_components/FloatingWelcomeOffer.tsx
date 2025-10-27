@@ -123,6 +123,7 @@ export default function FloatingWelcomeOffer() {
                     onCloseLinkClick={() => {}}
                     isWelcomeOffer={true}
                     onSuccess={handleSuccess}
+                    signupSource="floating-bubble"
                   />
                 </div>
               </div>

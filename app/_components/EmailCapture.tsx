@@ -31,6 +31,7 @@ interface EmailCaptureProps {
   isWelcomeOffer?: boolean;
   onCloseOffer?: (confirmed: boolean) => void;
   onSuccess?: () => void;
+  signupSource?: string;
 }
 
 export default function EmailCapture({ 
@@ -41,7 +42,8 @@ export default function EmailCapture({
   onCloseLinkClick,
   isWelcomeOffer = false,
   onCloseOffer,
-  onSuccess
+  onSuccess,
+  signupSource = 'footer'
 }: EmailCaptureProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -98,6 +100,7 @@ export default function EmailCapture({
           phone,
           birthday: '',
           address: '',
+          signupSource: signupSource,
         }),
       });
 

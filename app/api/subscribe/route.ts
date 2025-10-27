@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Generate unique welcome offer code
+function generateWelcomeCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding 0, O, 1, I for clarity
+  let code = 'welcome15';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { firstName, lastName, email, phone, birthday, address } = await request.json();
+    const { firstName, lastName, email, phone, birthday, address, signupSource } = await request.json();
 
     // Validate required fields
     if (!firstName || firstName.trim() === '') {
@@ -91,6 +101,18 @@ export async function POST(request: NextRequest) {
     // Add optional PHYSICAL_ADDRESS field
     if (address && address.trim()) {
       attributes.PHYSICAL_ADDRESS = address.trim();
+    }
+
+    // Add SIGNUP_SOURCE if provided
+    if (signupSource && signupSource.trim()) {
+      attributes.SIGNUP_SOURCE = signupSource.trim();
+    }
+
+    // Generate and add welcome offer code if from welcome offer
+    if (signupSource === 'welcome-offer') {
+      const welcomeCode = generateWelcomeCode();
+      attributes.WELCOME_CODE = welcomeCode;
+      console.log('Generated welcome code:', welcomeCode);
     }
 
     // Log what we're sending
