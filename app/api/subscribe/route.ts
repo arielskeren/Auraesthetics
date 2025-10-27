@@ -93,6 +93,9 @@ export async function POST(request: NextRequest) {
       attributes.PHYSICAL_ADDRESS = address.trim();
     }
 
+    // Log what we're sending
+    console.log('Attributes being sent:', attributes);
+
     contactData.attributes = attributes;
 
     console.log('Sending to Brevo:', JSON.stringify(contactData, null, 2));
