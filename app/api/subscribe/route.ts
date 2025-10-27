@@ -110,16 +110,56 @@ export async function POST(request: NextRequest) {
       attributes.PHYSICAL_ADDRESS = address.trim();
     }
 
-    // Add SIGNUP_SOURCE if provided
-    if (signupSource && signupSource.trim()) {
-      attributes.SIGNUP_SOURCE = signupSource.trim();
+    // Check if contact already exists and preserve SIGNUP_SOURCE/WELCOME_CODE
+    let existingSIGNUP_SOURCE = null;
+    let existingWELCOME_CODE = null;
+    
+    try {
+      const existingContact = await fetch(`https://api.brevo.com/v3/contacts/${email}`, {
+        headers: {
+          'api-key': apiKey,
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (existingContact.ok) {
+        const existingData = await existingContact.json();
+        console.log('Existing contact found:', existingData);
+        
+        if (existingData.attributes?.SIGNUP_SOURCE) {
+          existingSIGNUP_SOURCE = existingData.attributes.SIGNUP_SOURCE;
+          console.log('Preserving existing SIGNUP_SOURCE:', existingSIGNUP_SOURCE);
+        }
+        
+        if (existingData.attributes?.WELCOME_CODE) {
+          existingWELCOME_CODE = existingData.attributes.WELCOME_CODE;
+          console.log('Preserving existing WELCOME_CODE:', existingWELCOME_CODE);
+        }
+      }
+    } catch (error) {
+      console.log('Could not fetch existing contact (may be new):', error);
     }
 
-    // Generate and add welcome offer code if from welcome offer
+    // Add SIGNUP_SOURCE only if it doesn't already exist
+    if (signupSource && signupSource.trim()) {
+      if (existingSIGNUP_SOURCE) {
+        console.log('Skipping SIGNUP_SOURCE update - already exists');
+        attributes.SIGNUP_SOURCE = existingSIGNUP_SOURCE;
+      } else {
+        attributes.SIGNUP_SOURCE = signupSource.trim();
+      }
+    }
+
+    // Generate and add welcome offer code only if it doesn't already exist
     if (signupSource === 'welcome-offer') {
-      const welcomeCode = generateWelcomeCode();
-      attributes.WELCOME_CODE = welcomeCode;
-      console.log('Generated welcome code:', welcomeCode);
+      if (existingWELCOME_CODE) {
+        console.log('Skipping WELCOME_CODE update - already exists');
+        attributes.WELCOME_CODE = existingWELCOME_CODE;
+      } else {
+        const welcomeCode = generateWelcomeCode();
+        attributes.WELCOME_CODE = welcomeCode;
+        console.log('Generated new welcome code:', welcomeCode);
+      }
     }
 
     // Log what we're sending
