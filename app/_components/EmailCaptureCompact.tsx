@@ -65,6 +65,7 @@ export default function EmailCaptureCompact({
           phone,
           birthday: '',
           address: '',
+          signupSource: 'footer',
         }),
       });
 
