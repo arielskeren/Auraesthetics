@@ -13,11 +13,7 @@ function generateWelcomeCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('📥 API received request with body:', body);
-    
     const { firstName, lastName, email, phone, birthday, address, signupSource } = body;
-    
-    console.log('📥 Extracted signupSource:', signupSource);
 
     // Validate required fields
     if (!firstName || firstName.trim() === '') {
@@ -53,12 +49,6 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.BREVO_API_KEY;
     const listId = process.env.BREVO_LIST_ID;
 
-    console.log('Checking credentials:', { 
-      hasApiKey: !!apiKey, 
-      hasListId: !!listId,
-      apiKeyPrefix: apiKey?.substring(0, 10),
-      listId 
-    });
 
     if (!apiKey || !listId) {
       console.error('Missing Brevo credentials');
@@ -124,26 +114,22 @@ export async function POST(request: NextRequest) {
       
       if (existingContact.ok) {
         const existingData = await existingContact.json();
-        console.log('Existing contact found:', existingData);
         
         if (existingData.attributes?.SIGNUP_SOURCE) {
           existingSIGNUP_SOURCE = existingData.attributes.SIGNUP_SOURCE;
-          console.log('Preserving existing SIGNUP_SOURCE:', existingSIGNUP_SOURCE);
         }
         
         if (existingData.attributes?.WELCOME_CODE) {
           existingWELCOME_CODE = existingData.attributes.WELCOME_CODE;
-          console.log('Preserving existing WELCOME_CODE:', existingWELCOME_CODE);
         }
       }
     } catch (error) {
-      console.log('Could not fetch existing contact (may be new):', error);
+      // Contact may be new, continue
     }
 
     // Add SIGNUP_SOURCE only if it doesn't already exist
     if (signupSource && signupSource.trim()) {
       if (existingSIGNUP_SOURCE) {
-        console.log('Skipping SIGNUP_SOURCE update - already exists');
         attributes.SIGNUP_SOURCE = existingSIGNUP_SOURCE;
       } else {
         attributes.SIGNUP_SOURCE = signupSource.trim();
@@ -153,21 +139,14 @@ export async function POST(request: NextRequest) {
     // Generate and add welcome offer code only if it doesn't already exist
     if (signupSource === 'welcome-offer') {
       if (existingWELCOME_CODE) {
-        console.log('Skipping WELCOME_CODE update - already exists');
         attributes.WELCOME_CODE = existingWELCOME_CODE;
       } else {
         const welcomeCode = generateWelcomeCode();
         attributes.WELCOME_CODE = welcomeCode;
-        console.log('Generated new welcome code:', welcomeCode);
       }
     }
 
-    // Log what we're sending
-    console.log('Attributes being sent:', attributes);
-
     contactData.attributes = attributes;
-
-    console.log('Sending to Brevo:', JSON.stringify(contactData, null, 2));
 
     // Send to Brevo API
     const response = await fetch('https://api.brevo.com/v3/contacts', {
@@ -180,31 +159,17 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(contactData),
     });
 
-    console.log('Brevo response status:', response.status);
-    
-    // Log response body for debugging
     const responseText = await response.text();
-    console.log('Brevo response body:', responseText);
-    
     const responseData = responseText ? JSON.parse(responseText) : {};
 
     // Handle response
     if (!response.ok) {
       const errorData = responseData;
       
-      console.error('Brevo API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData,
-        apiKeyLength: apiKey?.length,
-        requestBody: contactData
-      });
-      
       // Handle various Brevo errors
       if (response.status === 400) {
         // Duplicate contact (same email)
         if (errorData.code === 'duplicate_parameter') {
-          console.log('Contact already exists - updating...');
           return NextResponse.json(
             { message: 'Already subscribed - contact updated' },
             { status: 200 }
@@ -213,7 +178,6 @@ export async function POST(request: NextRequest) {
         
         // Invalid parameter
         if (errorData.message && errorData.message.includes('already exist')) {
-          console.log('Contact already in list');
           return NextResponse.json(
             { message: 'You are already subscribed!' },
             { status: 200 }
@@ -227,7 +191,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Brevo success response:', responseData);
     return NextResponse.json(
       { message: 'Successfully subscribed', data: responseData },
       { status: 200 }

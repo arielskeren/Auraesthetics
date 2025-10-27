@@ -97,9 +97,6 @@ export default function EmailCapture({
         signupSource: signupSource,
       };
       
-      console.log('📧 Submitting to API with signupSource:', signupSource);
-      console.log('📧 Full payload:', payload);
-      
       // Submit to Brevo API
       const response = await fetch('/api/subscribe', {
         method: 'POST',
