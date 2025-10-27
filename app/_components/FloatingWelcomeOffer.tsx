@@ -12,10 +12,26 @@ export default function FloatingWelcomeOffer() {
   useEffect(() => {
     // Check if user has already submitted the welcome offer
     const submitted = localStorage.getItem('welcomeOfferSubmitted');
+    const minimized = localStorage.getItem('welcomeOfferMinimized');
+    
+    console.log('FloatingWelcomeOffer - submitted:', submitted, 'minimized:', minimized);
     
     // Always show bubble unless they've submitted the form
+    // Show if they dismissed the initial popup OR if enough time has passed
     if (!submitted) {
-      setShowBubble(true);
+      if (minimized) {
+        // User dismissed the initial popup, show bubble after 2 seconds
+        const timer = setTimeout(() => {
+          setShowBubble(true);
+        }, 2000);
+        return () => clearTimeout(timer);
+      } else {
+        // No initial popup dismissed yet, show after 10 seconds (after initial popup would have shown)
+        const timer = setTimeout(() => {
+          setShowBubble(true);
+        }, 10000);
+        return () => clearTimeout(timer);
+      }
     }
   }, []);
 
