@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationDialog from './ConfirmationDialog';
 
 /**
  * TODO: Future Integration for 15% Off Automatic Application
@@ -47,6 +48,7 @@ export default function EmailCapture({
   const [consent, setConsent] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string }>({});
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -255,18 +257,29 @@ export default function EmailCapture({
       
       {/* Close Link - Shows below the form */}
       {showCloseLink && onCloseLinkClick && isWelcomeOffer && onCloseOffer && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => {
-              const confirmed = confirm('Are you sure you want to throw away your 15% off? This offer won\'t be shown again.');
-              onCloseOffer(confirmed);
+        <>
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => setShowConfirmDialog(true)}
+              className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
+              type="button"
+            >
+              Maybe later
+            </button>
+          </div>
+          
+          <ConfirmationDialog
+            isOpen={showConfirmDialog}
+            message="Are you sure you want to throw away your 15% off? This offer won't be shown again."
+            onConfirm={() => {
+              setShowConfirmDialog(false);
+              onCloseOffer(true);
             }}
-            className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
-            type="button"
-          >
-            Maybe later
-          </button>
-        </div>
+            onCancel={() => setShowConfirmDialog(false)}
+            confirmText="Yes, throw it away"
+            cancelText="Keep my offer"
+          />
+        </>
       )}
       
       {showCloseLink && onCloseLinkClick && !isWelcomeOffer && (
