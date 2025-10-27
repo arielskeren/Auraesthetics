@@ -30,6 +30,7 @@ interface EmailCaptureProps {
   onCloseLinkClick?: () => void;
   isWelcomeOffer?: boolean;
   onCloseOffer?: (confirmed: boolean) => void;
+  onSuccess?: () => void;
 }
 
 export default function EmailCapture({ 
@@ -39,7 +40,8 @@ export default function EmailCapture({
   showCloseLink = false,
   onCloseLinkClick,
   isWelcomeOffer = false,
-  onCloseOffer
+  onCloseOffer,
+  onSuccess
 }: EmailCaptureProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -106,6 +108,13 @@ export default function EmailCapture({
       // Clear errors and show success
       setErrors({});
       setShowSuccess(true);
+      
+      // Call onSuccess callback if provided (for floating bubble tracking)
+      if (onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 2000);
+      }
       
       // Reset form
       setFirstName('');
