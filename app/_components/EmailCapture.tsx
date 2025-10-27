@@ -301,11 +301,12 @@ export default function EmailCapture({
         </div>
       )}
       
+      {/* Maybe later button for non-welcome offers */}
       {showCloseLink && onCloseLinkClick && !isWelcomeOffer && (
         <div className="mt-4 text-center">
           <button
             onClick={onCloseLinkClick}
-            className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
+            className="text-sm text-warm-gray hover:text-charcoal transition-colors underline hover:no-underline font-medium"
             type="button"
           >
             Maybe later

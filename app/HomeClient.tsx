@@ -346,6 +346,8 @@ export default function HomeClient() {
       <EmailCaptureModal 
         isOpen={isEmailModalOpen}
         onClose={handleCloseEmailModal}
+        isWelcomeOffer={false}
+        showCloseButton={true}
       />
     </>
   );

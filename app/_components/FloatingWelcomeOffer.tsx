@@ -13,8 +13,8 @@ export default function FloatingWelcomeOffer() {
     // Check if user has already submitted the welcome offer
     const submitted = localStorage.getItem('welcomeOfferSubmitted');
     
-    // Only show bubble if they haven't submitted and haven't permanently dismissed it
-    if (!submitted && !localStorage.getItem('floatingOfferPermanentlyClosed')) {
+    // Always show bubble unless they've submitted the form
+    if (!submitted) {
       setShowBubble(true);
     }
   }, []);
@@ -25,12 +25,13 @@ export default function FloatingWelcomeOffer() {
 
   const handleClose = () => {
     setIsOpen(false);
+    // Don't hide the bubble, just minimize the form
   };
 
   const handlePermanentlyClose = () => {
     setIsOpen(false);
-    setShowBubble(false);
-    localStorage.setItem('floatingOfferPermanentlyClosed', 'true');
+    // Still keep the bubble visible - it's always persistent
+    // Don't set the flag to permanently close
   };
 
   const handleSuccess = () => {
