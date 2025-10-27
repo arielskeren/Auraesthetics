@@ -69,7 +69,7 @@ export default function EmailCaptureModal({
                     title={isWelcomeOffer ? "Welcome Offer" : "Join Our Waitlist"}
                     description={isWelcomeOffer ? "Join our waitlist and get 15% off your first service" : "Be the first to know when booking opens"}
                     includeSMS={true}
-                    showCloseLink={showCloseButton}
+                    showCloseLink={isWelcomeOffer ? true : showCloseButton}
                     onCloseLinkClick={onClose}
                     isWelcomeOffer={isWelcomeOffer}
                     onCloseOffer={onCloseOffer}
