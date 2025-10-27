@@ -56,18 +56,18 @@ export default function HomeClient() {
   return (
     <>
       {/* Hero Section */}
-      <Section className="relative overflow-hidden min-h-[40vh] flex items-center" background="sand">
+      <Section className="relative overflow-hidden min-h-[45vh] md:min-h-[40vh] flex items-center pt-8" background="sand">
         <div className="absolute inset-0 bg-gradient-to-br from-sand via-ivory to-taupe/20 opacity-60" />
         <motion.div
-          className="relative z-10 text-center max-w-4xl mx-auto"
+          className="relative z-10 text-center max-w-4xl mx-auto w-full"
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-4xl md:text-display font-serif text-charcoal mb-2 text-balance">
+          <h1 className="text-3xl md:text-4xl lg:text-display font-serif text-charcoal mb-3 md:mb-2 text-balance px-2">
             Skin rituals, done gently.
           </h1>
-          <p className="text-lg md:text-xl text-warm-gray mb-4 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-base md:text-lg lg:text-xl text-warm-gray mb-5 md:mb-4 leading-relaxed max-w-2xl mx-auto px-4 md:px-0">
             At Aura Wellness Aesthetics, Amy blends modern technique with a calming, bohemian touch to support healthy, luminous skin.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

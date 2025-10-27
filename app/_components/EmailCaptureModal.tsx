@@ -28,9 +28,9 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 max-h-screen overflow-hidden">
             <motion.div
-              className="bg-white rounded-xl max-w-md w-full shadow-2xl relative"
+              className="bg-white rounded-xl max-w-md w-full max-h-[90vh] shadow-2xl relative overflow-hidden"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -48,23 +48,25 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
                 </button>
               )}
 
-              {/* Content */}
-              <div className="p-5">
-                <EmailCapture 
-                  title={isWelcomeOffer ? "Welcome Offer" : "Join Our Waitlist"}
-                  description={isWelcomeOffer ? "Join our waitlist and get 15% off your first service" : "Be the first to know when booking opens"}
-                  includeSMS={true}
-                  showCloseLink={showCloseButton}
-                  onCloseLinkClick={onClose}
-                  isWelcomeOffer={isWelcomeOffer}
-                  onCloseOffer={(confirmed) => {
-                    // If user confirmed they want to throw away the offer, close the modal
-                    if (confirmed) {
-                      onClose();
-                    }
-                    // If they clicked "Keep my offer", do nothing (modal stays open)
-                  }}
-                />
+              {/* Scrollable Content */}
+              <div className="overflow-y-auto max-h-[90vh]">
+                <div className="p-5">
+                  <EmailCapture 
+                    title={isWelcomeOffer ? "Welcome Offer" : "Join Our Waitlist"}
+                    description={isWelcomeOffer ? "Join our waitlist and get 15% off your first service" : "Be the first to know when booking opens"}
+                    includeSMS={true}
+                    showCloseLink={showCloseButton}
+                    onCloseLinkClick={onClose}
+                    isWelcomeOffer={isWelcomeOffer}
+                    onCloseOffer={(confirmed) => {
+                      // If user confirmed they want to throw away the offer, close the modal
+                      if (confirmed) {
+                        onClose();
+                      }
+                      // If they clicked "Keep my offer", do nothing (modal stays open)
+                    }}
+                  />
+                </div>
               </div>
             </motion.div>
           </div>
