@@ -39,8 +39,8 @@ git push -u origin main
    - Click "Environment Variables"
    - Add:
      ```
-     BREVO_API_KEY=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
-     BREVO_LIST_ID=3
+     BREVO_API_KEY=INSERT API KEY
+     BREVO_LIST_ID=INSERT LIST ID
      ```
 7. **Click "Deploy"**
 
