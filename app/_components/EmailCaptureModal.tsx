@@ -51,18 +51,10 @@ export default function EmailCaptureModal({
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close Button - Trigger confirmation if welcome offer */}
-              {showCloseButton && (
+              {/* Close Button - Only show for non-welcome offers */}
+              {showCloseButton && !isWelcomeOffer && (
                 <button
-                  onClick={() => {
-                    // If it's a welcome offer and we have the handler, trigger confirmation dialog
-                    if (isWelcomeOffer && onCloseOffer) {
-                      setShowConfirmDialog(true);
-                    } else {
-                      // Regular close for non-welcome offers
-                      onClose();
-                    }
-                  }}
+                  onClick={onClose}
                   className="absolute top-3 right-3 z-10 p-1 text-warm-gray/40 hover:text-warm-gray transition-colors"
                   aria-label="Close modal"
                 >
