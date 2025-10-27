@@ -19,7 +19,6 @@ export default function FloatingWelcomeOffer() {
     console.log('🔵 FloatingWelcomeOffer - submitted:', submitted, 'minimized:', minimized);
     
     // Always show bubble unless they've submitted the form
-    // Show if they dismissed the initial popup OR if enough time has passed
     if (!submitted) {
       if (minimized) {
         // User dismissed the initial popup, show bubble after 2 seconds
@@ -67,10 +66,10 @@ export default function FloatingWelcomeOffer() {
     localStorage.setItem('userSubmittedWelcomeOffer', 'true');
   };
 
-  // TEMPORARY: Always show bubble for testing
-  // if (!showBubble) {
-  //   return null;
-  // }
+  if (!showBubble) {
+    console.log('🔵 Bubble hidden, not rendering');
+    return null;
+  }
 
   console.log('🔵 Rendering bubble, showBubble:', showBubble);
 
