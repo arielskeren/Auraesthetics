@@ -8,20 +8,16 @@ export default function AutoEmailCaptureModal() {
   const [showCloseButton, setShowCloseButton] = useState(false);
 
   useEffect(() => {
-    // Check if user has already dismissed the modal
-    const dismissed = localStorage.getItem('emailCaptureDismissed');
-    if (dismissed) {
-      return;
-    }
-
     // Open modal after 5 seconds
     const timer = setTimeout(() => {
       setIsOpen(true);
+      console.log('Modal opened after 5 seconds');
     }, 5000);
 
     // Show close button after 8 seconds (3 seconds after modal opens)
     const closeButtonTimer = setTimeout(() => {
       setShowCloseButton(true);
+      console.log('Close button enabled');
     }, 8000);
 
     return () => {
@@ -32,8 +28,7 @@ export default function AutoEmailCaptureModal() {
 
   const handleClose = () => {
     setIsOpen(false);
-    // Remember that user dismissed (optional - comment out if you want it to show again)
-    localStorage.setItem('emailCaptureDismissed', 'true');
+    // Modal will reappear next time user visits (no localStorage blocking)
   };
 
   return (
