@@ -8,30 +8,38 @@ import EmailCapture from './EmailCapture';
 export default function FloatingWelcomeOffer() {
   const [isOpen, setIsOpen] = useState(false);
   const [showBubble, setShowBubble] = useState(false);
+  
+  console.log('🔵 FloatingWelcomeOffer rendered, showBubble:', showBubble);
 
   useEffect(() => {
     // Check if user has already submitted the welcome offer
     const submitted = localStorage.getItem('welcomeOfferSubmitted');
     const minimized = localStorage.getItem('welcomeOfferMinimized');
     
-    console.log('FloatingWelcomeOffer - submitted:', submitted, 'minimized:', minimized);
+    console.log('🔵 FloatingWelcomeOffer - submitted:', submitted, 'minimized:', minimized);
     
     // Always show bubble unless they've submitted the form
     // Show if they dismissed the initial popup OR if enough time has passed
     if (!submitted) {
       if (minimized) {
         // User dismissed the initial popup, show bubble after 2 seconds
+        console.log('🔵 User dismissed popup, showing bubble in 2 seconds');
         const timer = setTimeout(() => {
+          console.log('🔵 Setting showBubble to true');
           setShowBubble(true);
         }, 2000);
         return () => clearTimeout(timer);
       } else {
         // No initial popup dismissed yet, show after 10 seconds (after initial popup would have shown)
+        console.log('🔵 Waiting 10 seconds to show bubble');
         const timer = setTimeout(() => {
+          console.log('🔵 Setting showBubble to true after 10 seconds');
           setShowBubble(true);
         }, 10000);
         return () => clearTimeout(timer);
       }
+    } else {
+      console.log('🔵 User already submitted, not showing bubble');
     }
   }, []);
 
@@ -59,9 +67,12 @@ export default function FloatingWelcomeOffer() {
     localStorage.setItem('userSubmittedWelcomeOffer', 'true');
   };
 
-  if (!showBubble) {
-    return null;
-  }
+  // TEMPORARY: Always show bubble for testing
+  // if (!showBubble) {
+  //   return null;
+  // }
+
+  console.log('🔵 Rendering bubble, showBubble:', showBubble);
 
   return (
     <>
