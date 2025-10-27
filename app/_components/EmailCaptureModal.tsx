@@ -1,20 +1,34 @@
 'use client';
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import EmailCapture from './EmailCapture';
+import ConfirmationDialog from './ConfirmationDialog';
 
 interface EmailCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
   showCloseButton?: boolean;
   isWelcomeOffer?: boolean;
+  onCloseOffer?: (confirmed: boolean) => void;
+  onClaimed?: () => void;
 }
 
-export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = true, isWelcomeOffer = true }: EmailCaptureModalProps) {
+export default function EmailCaptureModal({ 
+  isOpen, 
+  onClose, 
+  showCloseButton = true, 
+  isWelcomeOffer = true,
+  onCloseOffer,
+  onClaimed
+}: EmailCaptureModalProps) {
   console.log('EmailCaptureModal - isOpen:', isOpen, 'showCloseButton:', showCloseButton);
   
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <>
@@ -37,10 +51,18 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close Button - Subtle, only visible after delay */}
+              {/* Close Button - Trigger confirmation if welcome offer */}
               {showCloseButton && (
                 <button
-                  onClick={onClose}
+                  onClick={() => {
+                    // If it's a welcome offer and we have the handler, trigger confirmation dialog
+                    if (isWelcomeOffer && onCloseOffer) {
+                      setShowConfirmDialog(true);
+                    } else {
+                      // Regular close for non-welcome offers
+                      onClose();
+                    }
+                  }}
                   className="absolute top-3 right-3 z-10 p-1 text-warm-gray/40 hover:text-warm-gray transition-colors"
                   aria-label="Close modal"
                 >
@@ -58,13 +80,8 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
                     showCloseLink={showCloseButton}
                     onCloseLinkClick={onClose}
                     isWelcomeOffer={isWelcomeOffer}
-                    onCloseOffer={(confirmed) => {
-                      // If user confirmed they want to throw away the offer, close the modal
-                      if (confirmed) {
-                        onClose();
-                      }
-                      // If they clicked "Keep my offer", do nothing (modal stays open)
-                    }}
+                    onCloseOffer={onCloseOffer}
+                    onSuccess={onClaimed}
                   />
                 </div>
               </div>
@@ -73,6 +90,22 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
         </>
       )}
     </AnimatePresence>
+    
+    {/* Confirmation Dialog for Welcome Offer */}
+    <ConfirmationDialog
+      isOpen={showConfirmDialog}
+      message="Are you sure you want to throw away your 15% off? This offer won't be shown again."
+      onConfirm={() => {
+        setShowConfirmDialog(false);
+        if (onCloseOffer) {
+          onCloseOffer(true);
+        }
+      }}
+      onCancel={() => setShowConfirmDialog(false)}
+      confirmText="Yes, throw it away"
+      cancelText="Keep my offer"
+    />
+    </>
   );
 }
 
