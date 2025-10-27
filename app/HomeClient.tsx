@@ -1,16 +1,42 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Button from './_components/Button';
 import Section from './_components/Section';
 import ServiceCard from './_components/ServiceCard';
+import ServiceModal from './_components/ServiceModal';
+import EmailCaptureModal from './_components/EmailCaptureModal';
 import services from './_content/services.json';
 
 export default function HomeClient() {
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  
   const featuredServices = services.filter(s => 
     ['signature-aura-facial', 'hydrafacial', 'brow-lamination', 'lymphatic-drainage', 'buccal-massage', 'dermaplaning'].includes(s.slug)
   ).slice(0, 6);
+
+  const handleServiceClick = (service: any) => {
+    setSelectedService(service);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    // Delay clearing the service to allow animation to complete
+    setTimeout(() => setSelectedService(null), 300);
+  };
+
+  const handleOpenEmailModal = () => {
+    setIsEmailModalOpen(true);
+  };
+
+  const handleCloseEmailModal = () => {
+    setIsEmailModalOpen(false);
+  };
 
   const pillars = [
     {
@@ -50,11 +76,9 @@ export default function HomeClient() {
                 Book Online — Coming Soon
               </Button>
             </Link>
-            <Link href="#email-capture">
-              <Button variant="secondary">
-                Join the List
-              </Button>
-            </Link>
+            <Button variant="secondary" onClick={handleOpenEmailModal}>
+              Join the List
+            </Button>
           </div>
         </motion.div>
       </Section>
@@ -107,7 +131,7 @@ export default function HomeClient() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {featuredServices.map((service, index) => (
             <motion.div
               key={service.slug}
@@ -115,8 +139,11 @@ export default function HomeClient() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="h-full"
             >
-              <ServiceCard {...service} />
+              <div onClick={() => handleServiceClick(service)} className="cursor-pointer h-full">
+                <ServiceCard {...service} />
+              </div>
             </motion.div>
           ))}
         </div>
@@ -307,6 +334,19 @@ export default function HomeClient() {
           </p>
         </motion.div>
       </Section>
+
+      {/* Service Modal */}
+      <ServiceModal 
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        service={selectedService}
+      />
+
+      {/* Email Capture Modal */}
+      <EmailCaptureModal 
+        isOpen={isEmailModalOpen}
+        onClose={handleCloseEmailModal}
+      />
     </>
   );
 }

@@ -11,32 +11,32 @@ interface ServiceCardProps {
 }
 
 export default function ServiceCard({ name, summary, duration, price, category }: ServiceCardProps) {
-  // Create a unique gradient based on category
+  // Create a unique gradient based on category - more distinct from background
   const gradients = {
-    'Facials': 'from-sand via-taupe/30 to-ivory',
-    'Advanced': 'from-sage/40 via-sand to-ivory',
-    'Brows & Lashes': 'from-taupe/40 via-sand to-ivory',
-    'Waxing': 'from-ivory via-sand to-taupe/30',
+    'Facials': 'from-sage/60 via-taupe/40 to-sand',
+    'Advanced': 'from-taupe/60 via-sage/40 to-sand',
+    'Brows & Lashes': 'from-charcoal/20 via-taupe/50 to-sage/40',
+    'Waxing': 'from-sand via-taupe/50 to-sage/30',
   };
 
   const gradient = gradients[category as keyof typeof gradients] || gradients['Facials'];
 
   return (
     <motion.div
-      className="group cursor-pointer"
+      className="group h-full"
       whileHover={{ y: -4 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      <div className="bg-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-lg transition-shadow duration-200">
-        {/* Gradient placeholder */}
-        <div className={`h-48 bg-gradient-to-br ${gradient}`} />
+      <div className="bg-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-lg transition-shadow duration-200 h-full flex flex-col">
+        {/* Gradient placeholder - fixed height */}
+        <div className={`h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
         
-        {/* Content */}
-        <div className="p-6">
+        {/* Content - flex to fill remaining space */}
+        <div className="p-6 flex flex-col flex-grow">
           <h3 className="text-h3 text-charcoal mb-2">{name}</h3>
-          <p className="text-warm-gray text-sm mb-4 leading-relaxed">{summary}</p>
+          <p className="text-warm-gray text-sm mb-4 leading-relaxed flex-grow">{summary}</p>
           
-          <div className="flex justify-between items-center text-sm text-warm-gray pt-4 border-t border-sand">
+          <div className="flex justify-between items-center text-sm text-warm-gray pt-4 border-t border-sand mt-auto">
             <span>{duration}</span>
             <span className="font-medium">{price}</span>
           </div>

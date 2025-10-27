@@ -4,6 +4,7 @@
     "name": "Signature Aura Facial",
     "slug": "signature-aura-facial",
     "summary": "Customized facial for balanced, luminous skin.",
+    "description": "Our signature treatment combines gentle cleansing, extractions, and a customized mask tailored to your skin's needs. Each session includes calming massage techniques to reduce tension and support lymphatic flow.",
     "duration": "60–75 min",
     "price": "from $--"
   },
@@ -20,6 +21,7 @@
     "name": "HydraFacial",
     "slug": "hydrafacial",
     "summary": "Medical-grade hydration and exfoliation for instant glow.",
+    "description": "A multi-step treatment using the HydraFacial system to cleanse, extract, hydrate, and protect your skin. This gentle, no-downtime treatment leaves skin immediately glowing and plump with hydration.",
     "duration": "45–60 min",
     "price": "from $--"
   },
@@ -44,6 +46,7 @@
     "name": "Dermaplaning",
     "slug": "dermaplaning",
     "summary": "Ultra‑smooth exfoliation for instant radiance and texture refinement.",
+    "description": "A gentle exfoliation technique using a sterile blade to remove dead skin cells and peach fuzz. Results in instantly smoother, brighter skin with improved product absorption and makeup application.",
     "duration": "45 min",
     "price": "from $--"
   },
@@ -84,6 +87,7 @@
     "name": "Lymphatic Drainage Facial",
     "slug": "lymphatic-drainage",
     "summary": "Gentle massage to reduce puffiness and promote detoxification.",
+    "description": "A therapeutic facial combining specialized lymphatic massage techniques to reduce puffiness, improve circulation, and support skin's natural detoxification process. Ideal for sensitive or congested skin.",
     "duration": "60 min",
     "price": "from $--"
   },
@@ -92,6 +96,7 @@
     "name": "Buccal Facial Massage",
     "slug": "buccal-massage",
     "summary": "Intra-oral massage for jaw tension, sculpting, and lifted appearance.",
+    "description": "An advanced therapeutic massage working both inside and outside the mouth to release tension in jaw muscles, reduce TMJ symptoms, and create a more sculpted, lifted facial appearance.",
     "duration": "60–75 min",
     "price": "from $--"
   },
@@ -100,6 +105,7 @@
     "name": "Brow Lamination",
     "slug": "brow-lamination",
     "summary": "Lifted, fuller-looking brows that stay in place.",
+    "description": "A lifting and setting treatment that transforms unruly brows into structured, polished arches. The process creates the appearance of thicker brows while keeping them perfectly in place for 6–8 weeks.",
     "duration": "45–60 min",
     "price": "from $--"
   },

@@ -14,20 +14,36 @@ export default function EmailCapture({
   description = "Be the first to know when online booking goes live and receive launch‑week perks.",
   includeSMS = true 
 }: EmailCaptureProps) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [sms, setSms] = useState('');
+  const [phone, setPhone] = useState('');
+  const [birthday, setBirthday] = useState('');
+  const [address, setAddress] = useState('');
   const [consent, setConsent] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; consent?: string }>({});
+  const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string }>({});
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
     // Basic validation
-    const newErrors: { email?: string; consent?: string } = {};
+    const newErrors: { firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string } = {};
+    
+    if (!firstName || firstName.trim() === '') {
+      newErrors.firstName = 'Please enter your first name';
+    }
+    
+    if (!lastName || lastName.trim() === '') {
+      newErrors.lastName = 'Please enter your last name';
+    }
     
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = 'Please enter a valid email address';
+    }
+    
+    if (!phone || phone.trim() === '') {
+      newErrors.phone = 'Please enter your phone number';
     }
     
     if (!consent) {
@@ -39,25 +55,95 @@ export default function EmailCapture({
       return;
     }
     
-    // Clear errors and show success
-    setErrors({});
-    setShowSuccess(true);
-    
-    // Reset form
-    setEmail('');
-    setSms('');
-    setConsent(false);
-    
-    // Hide success message after 5 seconds
-    setTimeout(() => setShowSuccess(false), 5000);
+    try {
+      // Submit to Brevo API
+      const response = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          firstName,
+          lastName,
+          email, 
+          phone,
+          birthday,
+          address,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to subscribe');
+      }
+
+      // Clear errors and show success
+      setErrors({});
+      setShowSuccess(true);
+      
+      // Reset form
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      setPhone('');
+      setBirthday('');
+      setAddress('');
+      setConsent(false);
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => setShowSuccess(false), 5000);
+    } catch (error) {
+      console.error('Subscription error:', error);
+      setErrors({ email: error instanceof Error ? error.message : 'Something went wrong. Please try again.' });
+    }
   };
 
   return (
-    <div className="bg-white p-6 md:p-8 rounded-lg shadow-sm max-w-2xl mx-auto">
+    <div className="bg-white max-w-2xl mx-auto">
       <h3 className="text-h2 text-charcoal mb-2 text-center font-serif">{title}</h3>
       <p className="text-warm-gray text-center mb-6 leading-relaxed">{description}</p>
       
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="firstName" className="block text-sm font-medium text-charcoal mb-2">
+              First Name <span className="text-sage">*</span>
+            </label>
+            <input
+              type="text"
+              id="firstName"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className={`w-full px-4 py-3 border ${errors.firstName ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
+              placeholder="Jane"
+              aria-invalid={!!errors.firstName}
+              aria-describedby={errors.firstName ? "firstname-error" : undefined}
+            />
+            {errors.firstName && (
+              <p id="firstname-error" className="text-red-600 text-sm mt-1">{errors.firstName}</p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="lastName" className="block text-sm font-medium text-charcoal mb-2">
+              Last Name <span className="text-sage">*</span>
+            </label>
+            <input
+              type="text"
+              id="lastName"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className={`w-full px-4 py-3 border ${errors.lastName ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
+              placeholder="Smith"
+              aria-invalid={!!errors.lastName}
+              aria-describedby={errors.lastName ? "lastname-error" : undefined}
+            />
+            {errors.lastName && (
+              <p id="lastname-error" className="text-red-600 text-sm mt-1">{errors.lastName}</p>
+            )}
+          </div>
+        </div>
+
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-charcoal mb-2">
             Email <span className="text-sage">*</span>
@@ -76,22 +162,52 @@ export default function EmailCapture({
             <p id="email-error" className="text-red-600 text-sm mt-1">{errors.email}</p>
           )}
         </div>
-        
-        {includeSMS && (
-          <div>
-            <label htmlFor="sms" className="block text-sm font-medium text-charcoal mb-2">
-              Phone (optional, for SMS updates)
-            </label>
-            <input
-              type="tel"
-              id="sms"
-              value={sms}
-              onChange={(e) => setSms(e.target.value)}
-              className="w-full px-4 py-3 border border-sand rounded focus:outline-none focus:ring-2 focus:ring-sage"
-              placeholder="(555) 123-4567"
-            />
-          </div>
-        )}
+
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-charcoal mb-2">
+            Phone Number <span className="text-sage">*</span>
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className={`w-full px-4 py-3 border ${errors.phone ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
+            placeholder="(555) 123-4567"
+            aria-invalid={!!errors.phone}
+            aria-describedby={errors.phone ? "phone-error" : undefined}
+          />
+          {errors.phone && (
+            <p id="phone-error" className="text-red-600 text-sm mt-1">{errors.phone}</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="birthday" className="block text-sm font-medium text-charcoal mb-2">
+            Birthday <span className="text-warm-gray/60 text-xs">(optional)</span>
+          </label>
+          <input
+            type="date"
+            id="birthday"
+            value={birthday}
+            onChange={(e) => setBirthday(e.target.value)}
+            className="w-full px-4 py-3 border border-sand rounded focus:outline-none focus:ring-2 focus:ring-sage"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="address" className="block text-sm font-medium text-charcoal mb-2">
+            Address <span className="text-warm-gray/60 text-xs">(optional)</span>
+          </label>
+          <input
+            type="text"
+            id="address"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="w-full px-4 py-3 border border-sand rounded focus:outline-none focus:ring-2 focus:ring-sage"
+            placeholder="123 Main St, City, State, ZIP"
+          />
+        </div>
         
         <div className="flex items-start">
           <input
