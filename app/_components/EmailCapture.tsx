@@ -12,8 +12,8 @@ interface EmailCaptureProps {
 }
 
 export default function EmailCapture({ 
-  title = "Booking opens soon.",
-  description = "Be the first to know when online booking goes live and receive launch‑week perks.",
+  title = "Join the Waitlist",
+  description = "Be the first to book when we launch. Exclusive perks for early signups.",
   includeSMS = true,
   showCloseLink = false,
   onCloseLinkClick
@@ -22,8 +22,6 @@ export default function EmailCapture({
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [birthday, setBirthday] = useState('');
-  const [address, setAddress] = useState('');
   const [consent, setConsent] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string }>({});
@@ -71,8 +69,8 @@ export default function EmailCapture({
           lastName,
           email, 
           phone,
-          birthday,
-          address,
+          birthday: '',
+          address: '',
         }),
       });
 
@@ -90,8 +88,6 @@ export default function EmailCapture({
       setLastName('');
       setEmail('');
       setPhone('');
-      setBirthday('');
-      setAddress('');
       setConsent(false);
       
       // Hide success message after 5 seconds
@@ -103,140 +99,106 @@ export default function EmailCapture({
   };
 
   return (
-    <div className="bg-white max-w-2xl mx-auto">
-      <h3 className="text-h2 text-charcoal mb-2 text-center font-serif">{title}</h3>
-      <p className="text-warm-gray text-center mb-6 leading-relaxed">{description}</p>
+    <div className="max-w-md mx-auto">
+      <div className="text-center mb-6">
+        <h3 className="text-2xl font-serif text-charcoal mb-2">{title}</h3>
+        <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
+      </div>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label htmlFor="firstName" className="block text-sm font-medium text-charcoal mb-2">
-              First Name <span className="text-sage">*</span>
-            </label>
+            <label htmlFor="firstName" className="sr-only">First Name</label>
             <input
               type="text"
               id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className={`w-full px-4 py-3 border ${errors.firstName ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
-              placeholder="Jane"
+              className={`w-full px-3 py-2.5 text-sm border ${errors.firstName ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+              placeholder="First name *"
               aria-invalid={!!errors.firstName}
               aria-describedby={errors.firstName ? "firstname-error" : undefined}
             />
             {errors.firstName && (
-              <p id="firstname-error" className="text-red-600 text-sm mt-1">{errors.firstName}</p>
+              <p id="firstname-error" className="text-red-600 text-xs mt-0.5">{errors.firstName}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="lastName" className="block text-sm font-medium text-charcoal mb-2">
-              Last Name <span className="text-sage">*</span>
-            </label>
+            <label htmlFor="lastName" className="sr-only">Last Name</label>
             <input
               type="text"
               id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className={`w-full px-4 py-3 border ${errors.lastName ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
-              placeholder="Smith"
+              className={`w-full px-3 py-2.5 text-sm border ${errors.lastName ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+              placeholder="Last name *"
               aria-invalid={!!errors.lastName}
               aria-describedby={errors.lastName ? "lastname-error" : undefined}
             />
             {errors.lastName && (
-              <p id="lastname-error" className="text-red-600 text-sm mt-1">{errors.lastName}</p>
+              <p id="lastname-error" className="text-red-600 text-xs mt-0.5">{errors.lastName}</p>
             )}
           </div>
         </div>
 
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-charcoal mb-2">
-            Email <span className="text-sage">*</span>
-          </label>
+          <label htmlFor="email" className="sr-only">Email</label>
           <input
             type="email"
             id="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={`w-full px-4 py-3 border ${errors.email ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
-            placeholder="you@example.com"
+            className={`w-full px-3 py-2.5 text-sm border ${errors.email ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+            placeholder="your@email.com *"
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "email-error" : undefined}
           />
           {errors.email && (
-            <p id="email-error" className="text-red-600 text-sm mt-1">{errors.email}</p>
+            <p id="email-error" className="text-red-600 text-xs mt-0.5">{errors.email}</p>
           )}
         </div>
 
         <div>
-          <label htmlFor="phone" className="block text-sm font-medium text-charcoal mb-2">
-            Phone Number <span className="text-sage">*</span>
-          </label>
+          <label htmlFor="phone" className="sr-only">Phone</label>
           <input
             type="tel"
             id="phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className={`w-full px-4 py-3 border ${errors.phone ? 'border-red-400' : 'border-sand'} rounded focus:outline-none focus:ring-2 focus:ring-sage`}
-            placeholder="(555) 123-4567"
+            className={`w-full px-3 py-2.5 text-sm border ${errors.phone ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+            placeholder="(555) 123-4567 *"
             aria-invalid={!!errors.phone}
             aria-describedby={errors.phone ? "phone-error" : undefined}
           />
           {errors.phone && (
-            <p id="phone-error" className="text-red-600 text-sm mt-1">{errors.phone}</p>
+            <p id="phone-error" className="text-red-600 text-xs mt-0.5">{errors.phone}</p>
           )}
         </div>
-
-        <div>
-          <label htmlFor="birthday" className="block text-sm font-medium text-charcoal mb-2">
-            Birthday <span className="text-warm-gray/60 text-xs">(optional)</span>
-          </label>
-          <input
-            type="date"
-            id="birthday"
-            value={birthday}
-            onChange={(e) => setBirthday(e.target.value)}
-            className="w-full px-4 py-3 border border-sand rounded focus:outline-none focus:ring-2 focus:ring-sage"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="address" className="block text-sm font-medium text-charcoal mb-2">
-            Address <span className="text-warm-gray/60 text-xs">(optional)</span>
-          </label>
-          <input
-            type="text"
-            id="address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            className="w-full px-4 py-3 border border-sand rounded focus:outline-none focus:ring-2 focus:ring-sage"
-            placeholder="123 Main St, City, State, ZIP"
-          />
-        </div>
         
-        <div className="flex items-start">
+        <div className="flex items-center">
           <input
             type="checkbox"
             id="consent"
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
-            className="mt-1 w-4 h-4 text-sage border-sand rounded focus:ring-sage"
+            className="w-3.5 h-3.5 text-sage border-charcoal/20 rounded focus:ring-sage"
             aria-invalid={!!errors.consent}
             aria-describedby={errors.consent ? "consent-error" : undefined}
           />
-          <label htmlFor="consent" className="ml-3 text-sm text-warm-gray">
-            I agree to receive email updates about booking availability and launch perks. 
-            <span className="text-sage"> *</span>
+          <label htmlFor="consent" className="ml-2 text-xs text-warm-gray">
+            I agree to receive updates <span className="text-sage">*</span>
           </label>
         </div>
         {errors.consent && (
-          <p id="consent-error" className="text-red-600 text-sm">{errors.consent}</p>
+          <p id="consent-error" className="text-red-600 text-xs">{errors.consent}</p>
         )}
         
         <button
           type="submit"
-          className="w-full bg-charcoal text-ivory py-3 rounded font-medium hover:bg-sage hover:text-charcoal transition-colors duration-200"
+          className="w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md"
         >
-          Join the List
+          Secure My Spot
         </button>
       </form>
       

@@ -1,12 +1,12 @@
 'use client';
 
-import AutoEmailCaptureModal from './_components/AutoEmailCaptureModal';
+import SimpleAutoModal from './_components/SimpleAutoModal';
 
 export default function ClientLayout() {
-  console.log('ClientLayout rendered');
+  console.log('🔥 ClientLayout rendering!');
   return (
     <>
-      <AutoEmailCaptureModal />
+      <SimpleAutoModal />
     </>
   );
 }

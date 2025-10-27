@@ -29,7 +29,7 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl relative"
+              className="bg-white rounded-xl max-w-md w-full shadow-2xl relative"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -48,10 +48,10 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
               )}
 
               {/* Content */}
-              <div className="p-6 md:p-8">
+              <div className="p-5">
                 <EmailCapture 
                   title="Join Our Waitlist"
-                  description="Be the first to know when booking opens and receive exclusive launch-week perks."
+                  description="Be the first to book when we launch. Exclusive perks for early signups."
                   includeSMS={true}
                   showCloseLink={showCloseButton}
                   onCloseLinkClick={onClose}
