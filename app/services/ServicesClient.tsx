@@ -23,7 +23,7 @@ export default function ServicesClient() {
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto"
+          className="text-center max-w-3xl mx-auto pt-16 md:pt-0"
         >
           <h1 className="text-h1 md:text-display font-serif text-charcoal mb-4">
             Services
