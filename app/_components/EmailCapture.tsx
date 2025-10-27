@@ -259,23 +259,10 @@ export default function EmailCapture({
         </motion.button>
       </form>
       
-      {/* Terms & Conditions - Compact Link */}
-      {isWelcomeOffer && (
-        <div className="mt-3 text-center">
-          <a 
-            href="/terms" 
-            target="_blank"
-            className="text-xs text-warm-gray hover:text-charcoal underline"
-          >
-            Terms & Conditions
-          </a>
-        </div>
-      )}
-      
-      {/* Close Link - Shows below the form for welcome offers */}
+      {/* Maybe Later Button - Shows below the form for welcome offers */}
       {isWelcomeOffer && onCloseOffer && (
         <>
-          <div className="mt-6 text-center">
+          <div className="mt-4 text-center">
             <button
               onClick={() => setShowConfirmDialog(true)}
               className="text-sm text-warm-gray hover:text-charcoal transition-colors underline hover:no-underline font-medium"
@@ -297,6 +284,19 @@ export default function EmailCapture({
             cancelText="Keep my offer"
           />
         </>
+      )}
+      
+      {/* Terms & Conditions - Compact Link */}
+      {isWelcomeOffer && (
+        <div className="mt-2 text-center">
+          <a 
+            href="/terms" 
+            target="_blank"
+            className="text-xs text-warm-gray hover:text-charcoal underline"
+          >
+            Terms & Conditions
+          </a>
+        </div>
       )}
       
       {showCloseLink && onCloseLinkClick && !isWelcomeOffer && (
