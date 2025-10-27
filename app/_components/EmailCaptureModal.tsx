@@ -23,8 +23,6 @@ export default function EmailCaptureModal({
   onCloseOffer,
   onClaimed
 }: EmailCaptureModalProps) {
-  console.log('EmailCaptureModal - isOpen:', isOpen, 'showCloseButton:', showCloseButton, 'isWelcomeOffer:', isWelcomeOffer, 'onCloseOffer:', !!onCloseOffer);
-  
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
   return (

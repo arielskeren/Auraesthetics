@@ -52,7 +52,6 @@ export default function EmailCapture({
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string }>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
-  console.log('EmailCapture render - isWelcomeOffer:', isWelcomeOffer, 'onCloseOffer:', !!onCloseOffer);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

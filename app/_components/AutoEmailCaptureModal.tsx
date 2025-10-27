@@ -8,11 +8,7 @@ export default function AutoEmailCaptureModal() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [showCloseButton, setShowCloseButton] = useState(false);
 
-  console.log('AutoEmailCaptureModal rendered, isOpen:', isOpen);
-
   useEffect(() => {
-    console.log('useEffect triggered');
-    
     // Check if modal was minimized - if so, show it again
     const minimized = localStorage.getItem('welcomeOfferMinimized');
     if (minimized && !localStorage.getItem('welcomeOfferSubmitted')) {
@@ -23,13 +19,11 @@ export default function AutoEmailCaptureModal() {
     if (!minimized) {
       const timer = setTimeout(() => {
         setIsOpen(true);
-        console.log('Modal opened after 5 seconds');
       }, 5000);
 
       // Show close button after 8 seconds (3 seconds after modal opens)
       const closeButtonTimer = setTimeout(() => {
         setShowCloseButton(true);
-        console.log('Close button enabled');
       }, 8000);
 
       return () => {
@@ -46,7 +40,6 @@ export default function AutoEmailCaptureModal() {
   };
 
   const handleCloseOffer = (confirmed: boolean) => {
-    console.log('handleCloseOffer called with confirmed:', confirmed);
     if (confirmed) {
       // User confirmed they want to throw away the offer
       setIsOpen(false);
@@ -54,8 +47,6 @@ export default function AutoEmailCaptureModal() {
     }
     // If they clicked "Keep my offer", modal stays open
   };
-  
-  console.log('AutoEmailCaptureModal render - handleCloseOffer:', typeof handleCloseOffer);
 
   const handleClaimed = () => {
     // User claimed the offer, close and mark as submitted
