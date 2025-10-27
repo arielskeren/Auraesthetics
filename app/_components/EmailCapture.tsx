@@ -3,6 +3,24 @@
 import { FormEvent, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/**
+ * TODO: Future Integration for 15% Off Automatic Application
+ * 
+ * When Cal.com + Stripe integration is complete:
+ * 1. Store signup date in Brevo contact attributes (timestamp when user submitted this form)
+ * 2. When user books through Cal.com, check their signup date in Brevo via API
+ * 3. If signup date is within 3 months:
+ *    - Check if they've used the discount before (track in Brevo custom attribute)
+ *    - Apply 15% discount (capped at $30) via Stripe Coupon API
+ *    - Mark discount as "used" in Brevo
+ * 4. If over 3 months or already used: Show error message
+ * 
+ * Key Integration Points:
+ * - Brevo API: Retrieve contact by email, check signup date and discount status
+ * - Stripe API: Create/apply discount code or coupon
+ * - Cal.com API: Pass discount code to booking session
+ */
+
 interface EmailCaptureProps {
   title?: string;
   description?: string;
@@ -12,8 +30,8 @@ interface EmailCaptureProps {
 }
 
 export default function EmailCapture({ 
-  title = "Join the Waitlist",
-  description = "Be the first to book when we launch. Exclusive perks for early signups.",
+  title = "Welcome Offer",
+  description = "Join our waitlist and get 15% off your first service",
   includeSMS = true,
   showCloseLink = false,
   onCloseLinkClick
@@ -100,9 +118,14 @@ export default function EmailCapture({
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="text-center mb-6">
+      <div className="text-center mb-5">
+        <div className="inline-block bg-sage/20 text-sage px-4 py-1 rounded-full text-xs font-semibold mb-3">
+          🎁 SPECIAL OFFER
+        </div>
         <h3 className="text-2xl font-serif text-charcoal mb-2">{title}</h3>
+        <p className="text-base font-semibold text-sage mb-1">15% OFF</p>
         <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
+        <p className="text-xs text-warm-gray/80 mt-2">New clients only • Up to $30 value</p>
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-2">
@@ -198,9 +221,26 @@ export default function EmailCapture({
           type="submit"
           className="w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md"
         >
-          Secure My Spot
+          Claim 15% Off
         </button>
       </form>
+      
+      {/* Terms & Conditions */}
+      <div className="mt-4 p-3 bg-sand/40 rounded-lg border border-taupe/20">
+        <p className="text-xs text-warm-gray leading-relaxed mb-2">
+          <strong className="text-charcoal">Terms & Conditions:</strong>
+        </p>
+        <ul className="text-xs text-warm-gray space-y-1 list-disc list-inside">
+          <li>Valid for new clients only</li>
+          <li>Discount up to $30 value</li>
+          <li>Must be used within 3 months of sign-up</li>
+          <li>Cannot be combined with other offers</li>
+          <li>One-time use only</li>
+        </ul>
+        <p className="text-[10px] text-warm-gray/60 mt-2 italic">
+          *Note: Discount will be automatically applied at checkout when booking through our site. Signup date will be verified in our system.
+        </p>
+      </div>
       
       {/* Close Link - Shows below the form */}
       {showCloseLink && onCloseLinkClick && (
@@ -210,7 +250,7 @@ export default function EmailCapture({
             className="text-sm text-warm-gray hover:text-charcoal transition-colors underline"
             type="button"
           >
-            Close
+            Maybe later
           </button>
         </div>
       )}
@@ -221,10 +261,11 @@ export default function EmailCapture({
             initial={{ opacity: 1, y: 0 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="mt-4 p-4 bg-sage/20 text-charcoal rounded text-center"
+            className="mt-4 p-4 bg-sage/20 text-charcoal rounded-lg text-center"
             role="alert"
           >
-            You&apos;re in. We&apos;ll email you when booking opens.
+            <p className="text-sm font-semibold text-sage mb-1">🎉 You&apos;re all set!</p>
+            <p className="text-xs text-warm-gray">Check your email for your 15% off code.</p>
           </motion.div>
         )}
       </AnimatePresence>

@@ -50,8 +50,8 @@ export default function EmailCaptureModal({ isOpen, onClose, showCloseButton = t
               {/* Content */}
               <div className="p-5">
                 <EmailCapture 
-                  title="Join Our Waitlist"
-                  description="Be the first to book when we launch. Exclusive perks for early signups."
+                  title="Welcome Offer"
+                  description="Join our waitlist and get 15% off your first service"
                   includeSMS={true}
                   showCloseLink={showCloseButton}
                   onCloseLinkClick={onClose}
