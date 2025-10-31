@@ -9,6 +9,9 @@
   --ivory: #F8F6F2;
   --taupe: #B6A999;
   --sage: #C9D2C0;
+  --dark-sage: #B7C8B1;
+  --sage-dark: #9FAA9A;
+  --sage-light: #D5DFD0;
   --charcoal: #3F3A37;
   --warm-gray: #6B635B;
   
@@ -38,7 +41,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Focus styles for accessibility */
 *:focus-visible {
-  outline: 2px solid var(--sage);
+  outline: 2px solid var(--dark-sage);
   outline-offset: 2px;
   border-radius: 2px;
 }

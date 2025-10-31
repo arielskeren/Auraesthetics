@@ -5,9 +5,14 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-sand">
+    <footer className="bg-sand relative overflow-hidden">
+      {/* Green background accents */}
+      <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/10 via-transparent to-sage-dark/8" />
+      {/* Top decorative line */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
+      
       {/* Footer Content */}
-      <div className="container mx-auto px-6 md:px-12 max-w-7xl py-6">
+      <div className="container mx-auto px-6 md:px-12 max-w-7xl py-6 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Email Capture - Compact Version */}
           <div>

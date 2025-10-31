@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import DisabledNotice from './DisabledNotice';
+import Button from './Button';
 
 export default function Nav() {
   const pathname = usePathname();
@@ -41,10 +41,12 @@ export default function Nav() {
         animate={{ y: 0 }}
         transition={{ duration: 0.3 }}
       >
+        {/* Subtle green accent line at top */}
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-dark-sage/30 to-transparent" />
         <div className="container mx-auto px-6 md:px-12 max-w-7xl">
           <div className="flex justify-between items-center py-2">
             {/* Logo/Brand */}
-            <Link href="/" className="text-2xl md:text-3xl font-serif text-charcoal hover:text-sage transition-colors">
+            <Link href="/" className="text-2xl md:text-3xl font-serif text-charcoal hover:text-dark-sage transition-colors">
               Aura Wellness Aesthetics
             </Link>
 
@@ -59,20 +61,24 @@ export default function Nav() {
                   }`}
                 >
                   {link.label}
-                  <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-sage transform origin-left transition-transform ${
+                  <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-dark-sage transform origin-left transition-transform ${
                     pathname === link.href ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                   }`} />
                 </Link>
               ))}
               <Link href="/book">
-                <DisabledNotice label="Book" />
+                <Button variant="primary">
+                  Book
+                </Button>
               </Link>
             </div>
 
             {/* Mobile Nav */}
             <div className="md:hidden flex items-center space-x-4">
               <Link href="/book">
-                <DisabledNotice label="Book" />
+                <Button variant="primary">
+                  Book
+                </Button>
               </Link>
             </div>
           </div>

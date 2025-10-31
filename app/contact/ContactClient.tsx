@@ -8,7 +8,10 @@ export default function ContactClient() {
   return (
     <>
       {/* Hero */}
-      <Section background="sand">
+      <Section background="sand" className="relative">
+        {/* Green decorative elements */}
+        <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/10 via-transparent to-sage-dark/8" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
@@ -77,7 +80,9 @@ export default function ContactClient() {
       </Section>
 
       {/* Map Placeholder */}
-      <Section background="sand">
+      <Section background="sand" className="relative">
+        {/* Background accents */}
+        <div className="absolute inset-0 bg-gradient-to-r from-dark-sage/8 via-transparent to-sage-dark/8" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -89,7 +94,7 @@ export default function ContactClient() {
             Find Us
           </h2>
           
-          <div className="aspect-video rounded-lg bg-gradient-to-br from-sand via-taupe/30 to-ivory flex items-center justify-center">
+          <div className="aspect-video rounded-lg bg-gradient-to-br from-sand via-dark-sage/20 to-taupe/30 flex items-center justify-center">
             <div className="text-center">
               <div className="w-16 h-16 rounded-full bg-white/60 mx-auto mb-4 flex items-center justify-center">
                 <svg className="w-8 h-8 text-warm-gray" fill="none" viewBox="0 0 24 24" stroke="currentColor">

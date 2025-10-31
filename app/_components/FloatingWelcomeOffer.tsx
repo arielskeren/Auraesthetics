@@ -71,7 +71,7 @@ export default function FloatingWelcomeOffer() {
       >
         <button
           onClick={handleBubbleClick}
-          className="relative bg-sage text-charcoal rounded-full p-4 shadow-lg hover:shadow-xl transition-shadow"
+          className="relative bg-dark-sage text-charcoal rounded-full p-4 shadow-lg hover:shadow-xl transition-shadow"
           aria-label="Get your 15% welcome discount"
         >
           <svg 

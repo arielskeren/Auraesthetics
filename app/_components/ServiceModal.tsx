@@ -16,6 +16,7 @@ interface ServiceModalProps {
     price: string;
     category: string;
     slug: string;
+    calBookingUrl?: string | null;
   } | null;
 }
 
@@ -31,6 +32,26 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
   };
 
   const placeholders = placeholderImages[service.category as keyof typeof placeholderImages] || ['🖼️', '✨'];
+
+  const handleBookingClick = () => {
+    if (service.calBookingUrl) {
+      // Open Cal.com in a same-window modal/iframe to keep user on site
+      const iframeContainer = document.createElement('div');
+      iframeContainer.className = 'fixed inset-0 z-[60] bg-charcoal/80 flex items-center justify-center p-4';
+      iframeContainer.innerHTML = `
+        <div class="relative w-full max-w-4xl h-[90vh]">
+          <button onclick="this.closest('.fixed').remove()" class="absolute -top-12 right-0 bg-white text-charcoal px-4 py-2 rounded">
+            Close
+          </button>
+          <iframe src="${service.calBookingUrl}" class="w-full h-full rounded-lg" frameborder="0"></iframe>
+        </div>
+      `;
+      document.body.appendChild(iframeContainer);
+      onClose();
+    } else {
+      alert('Booking for this service is being set up. Please check back soon!');
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -68,7 +89,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
               {/* Content */}
               <div className="overflow-hidden">
                 {/* Hero Image Placeholder */}
-                <div className="h-32 bg-gradient-to-br from-sage/60 via-taupe/40 to-sand relative">
+                <div className="h-32 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand relative">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-4xl opacity-30">{placeholders[0]}</span>
                   </div>
@@ -80,7 +101,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                   <div className="mb-3">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                       <div className="flex-1">
-                        <span className="inline-block px-2 py-0.5 bg-sage/20 text-sage text-[10px] font-medium rounded-full mb-1">
+                        <span className="inline-block px-2 py-0.5 bg-dark-sage/20 text-dark-sage text-[10px] font-medium rounded-full mb-1">
                           {service.category}
                         </span>
                         <h2 className="text-xl md:text-2xl font-serif text-charcoal mb-1">{service.name}</h2>
@@ -106,39 +127,28 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
 
                   {/* Desktop: Side-by-side Layout */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                    {/* Left: Calendar */}
+                    {/* Left: Booking CTA */}
                     <div className="order-2 lg:order-1">
-                      <div className="p-2.5 bg-sand/30 rounded-lg border border-taupe/20">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <h4 className="text-[10px] font-semibold text-charcoal">Select a Date</h4>
-                          <svg className="w-3.5 h-3.5 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      <div className="p-4 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
+                        <div className="flex items-center gap-2 mb-3">
+                          <svg className="w-5 h-5 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
+                          <h4 className="text-sm font-semibold text-charcoal">Book This Treatment</h4>
                         </div>
-                        <div className="grid grid-cols-7 gap-0.5 mb-1.5">
-                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                            <div key={i} className="text-center text-[9px] font-medium text-warm-gray py-0.5">
-                              {day}
-                            </div>
-                          ))}
-                          {Array.from({ length: 28 }, (_, i) => i + 1).slice(0, 14).map((day) => (
-                            <div
-                              key={day}
-                              className="aspect-square flex items-center justify-center text-[10px] text-warm-gray hover:bg-sage/20 rounded cursor-pointer transition-colors"
-                            >
-                              {day}
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-[9px] text-warm-gray/70 text-center italic mb-2">
-                          Calendar integration coming soon
+                        <p className="text-xs text-warm-gray mb-4">
+                          Click the button below to view available times and complete your booking in our secure booking system.
                         </p>
-                        {/* Book Now Button Below Calendar */}
-                        <Link href="/book" onClick={onClose} className="block">
-                          <Button variant="primary" className="w-full text-xs py-1.5">
-                            Book Now
-                          </Button>
-                        </Link>
+                        <Button 
+                          variant="primary" 
+                          className="w-full"
+                          onClick={handleBookingClick}
+                        >
+                          Book Now on Cal.com
+                        </Button>
+                        <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
+                          Opens in a new window
+                        </p>
                       </div>
                     </div>
 
@@ -167,7 +177,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                         <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
                       </motion.div>
                       <motion.div
-                        className="aspect-[4/3] bg-gradient-to-br from-sage/30 via-taupe/20 to-sand rounded overflow-hidden relative group cursor-pointer"
+                        className="aspect-[4/3] bg-gradient-to-br from-dark-sage/30 via-taupe/20 to-sand rounded overflow-hidden relative group cursor-pointer"
                         whileHover={{ scale: 1.02 }}
                       >
                         <div className="absolute inset-0 flex flex-col items-center justify-center">

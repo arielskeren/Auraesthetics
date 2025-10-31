@@ -23,9 +23,9 @@ export default function Button({
   const baseClasses = "px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center";
   
   const variantClasses = {
-    primary: "bg-charcoal text-ivory hover:bg-sage hover:text-charcoal",
-    secondary: "border-2 border-warm-gray text-warm-gray hover:border-charcoal hover:text-charcoal",
-    disabled: "bg-taupe/40 text-warm-gray/60 cursor-not-allowed relative group"
+    primary: "bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg transition-all duration-200",
+    secondary: "bg-white border-2 border-dark-sage text-dark-sage hover:bg-sage-light hover:shadow-md transition-all duration-200",
+    disabled: "bg-sage-dark/50 text-sage-dark/80 cursor-not-allowed relative group"
   };
 
   if (variant === 'disabled') {

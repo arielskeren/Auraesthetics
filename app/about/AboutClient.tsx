@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import Section from '../_components/Section';
 
 export default function AboutClient() {
@@ -22,7 +23,11 @@ export default function AboutClient() {
   return (
     <>
       {/* Hero */}
-      <Section background="sand">
+      <Section background="sand" className="relative">
+        {/* Decorative green line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
+        {/* Background accents */}
+        <div className="absolute top-20 right-10 w-48 h-48 bg-dark-sage/15 rounded-full blur-3xl" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
@@ -39,8 +44,10 @@ export default function AboutClient() {
       </Section>
 
       {/* Portrait + Bio */}
-      <Section background="ivory">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
+      <Section background="ivory" className="relative">
+        {/* Subtle green background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-r from-dark-sage/6 via-transparent to-sage-light/8" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center relative z-10">
           <motion.div
             initial={{ opacity: 1, x: 0 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -48,7 +55,16 @@ export default function AboutClient() {
             transition={{ duration: 0.6 }}
             className="order-2 md:order-1"
           >
-            <div className="aspect-[3/4] rounded-lg bg-gradient-to-br from-taupe/50 via-sand to-sage/30" />
+            <div className="aspect-[3/4] rounded-lg overflow-hidden relative shadow-lg">
+              <Image
+                src="/amy-photo.jpg"
+                alt="Amy - Aura Wellness Aesthetics"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+                priority
+              />
+            </div>
           </motion.div>
 
           <motion.div
@@ -82,7 +98,9 @@ export default function AboutClient() {
       </Section>
 
       {/* Philosophy & Approach */}
-      <Section background="sage">
+      <Section background="sage" className="relative">
+        {/* Decorative top line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/60 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -106,7 +124,7 @@ export default function AboutClient() {
               transition={{ duration: 0.5, delay: index * 0.1 }}
               className="bg-white p-8 rounded-lg"
             >
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sage to-taupe/30 mb-6" />
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-dark-sage to-dark-sage/60 mb-6" />
               <h3 className="text-h3 font-serif text-charcoal mb-4">{approach.title}</h3>
               <p className="text-warm-gray leading-relaxed">{approach.description}</p>
             </motion.div>
@@ -115,7 +133,11 @@ export default function AboutClient() {
       </Section>
 
       {/* Brand Values */}
-      <Section background="ivory">
+      <Section background="ivory" className="relative">
+        {/* Subtle green accents */}
+        <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/8 via-transparent to-sage-dark/10" />
+        {/* Decorative bottom line */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}

@@ -2,13 +2,21 @@
 
 A modern, elegant website for Aura Wellness Aesthetics — a serene skincare studio by Amy in Fort Lauderdale, FL.
 
+## ✅ Current Status
+
+**Design:** Complete with green color scheme and dark sage accents  
+**Services:** 17 services configured with correct pricing  
+**Booking:** Infrastructure ready, waiting for Cal.com access  
+**Email:** Brevo integration active  
+**Dev Server:** Running at http://localhost:5555
+
 ## 🌟 Features
 
-- Service catalog with detailed treatment information
-- Responsive design with bohemian aesthetic
-- Email capture with Brevo integration
-- Booking system with Cal.com + Stripe
-- Fast, modern Next.js architecture
+- ✅ 17 services with detailed treatment information
+- ✅ Responsive design with bohemian aesthetic + green accents
+- ✅ Email capture with Brevo integration
+- ⏳ Booking system (Cal.com + Stripe ready, waiting on account access)
+- ✅ Fast, modern Next.js architecture
 
 ## 🛠 Tech Stack
 
@@ -30,15 +38,24 @@ npm run dev
 ### Environment Variables
 Create `.env.local`:
 ```env
+# Brevo Email Integration
 BREVO_API_KEY=your_brevo_api_key
 BREVO_LIST_ID=your_list_id
+
+# Cal.com Booking (for when access is restored)
+CAL_COM_API_KEY=your_api_key
+CAL_COM_USERNAME=theauraesthetics
 ```
 
 ### Development
 ```bash
-npm run dev        # Start dev server at http://localhost:4000
-npm run build      # Build for production
-npm start          # Start production server
+npm run dev                    # Start dev server at http://localhost:5555
+npm run build                  # Build for production
+npm start                      # Start production server
+
+# Cal.com Integration (when access is restored)
+npm run create-cal-events      # Create events in Cal.com via API
+npm run update-cal-events      # Update pricing/duration in Cal.com
 ```
 
 ## 📝 Content Management
@@ -70,9 +87,15 @@ The site is deployed to Vercel and automatically updates on push to `main` branc
 ## 📧 Email Integration
 
 - **Provider:** Brevo
-- **Setup:** See `DEPLOYMENT.md`
 - **Contact Form:** Footer signup on all pages
 - **API Route:** `/api/subscribe`
+
+## 📅 Booking Integration (In Progress)
+
+- **Provider:** Cal.com
+- **Payment:** Stripe
+- **Status:** Waiting for Cal.com to restore account access
+- **Next Steps:** See `CAL_COM_SETUP_WHEN_READY.md`
 
 ## 💻 Project Structure
 

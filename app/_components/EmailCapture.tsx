@@ -141,14 +141,14 @@ export default function EmailCapture({
     <div className="max-w-md mx-auto">
       <div className="text-center mb-5">
         {isWelcomeOffer && (
-          <div className="inline-block bg-sage/20 text-sage px-6 py-2 rounded-full text-sm font-bold mb-3">
+          <div className="inline-block bg-dark-sage/20 text-dark-sage px-6 py-2 rounded-full text-sm font-bold mb-3">
             🎁 SPECIAL OFFER
           </div>
         )}
         <h3 className="text-2xl font-serif text-charcoal mb-2">{title}</h3>
         {isWelcomeOffer && (
           <>
-            <p className="text-2xl font-bold text-sage mb-1">15% OFF</p>
+            <p className="text-2xl font-bold text-dark-sage mb-1">15% OFF</p>
             <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
             <p className="text-xs text-warm-gray/80 mt-2">New clients only • Up to $30 value</p>
           </>
@@ -167,7 +167,7 @@ export default function EmailCapture({
               id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className={`w-full px-3 py-2.5 text-sm border ${errors.firstName ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+              className={`w-full px-3 py-2.5 text-sm border ${errors.firstName ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage transition-all`}
               placeholder="First name *"
               aria-invalid={!!errors.firstName}
               aria-describedby={errors.firstName ? "firstname-error" : undefined}
@@ -184,7 +184,7 @@ export default function EmailCapture({
               id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className={`w-full px-3 py-2.5 text-sm border ${errors.lastName ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+              className={`w-full px-3 py-2.5 text-sm border ${errors.lastName ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage transition-all`}
               placeholder="Last name *"
               aria-invalid={!!errors.lastName}
               aria-describedby={errors.lastName ? "lastname-error" : undefined}
@@ -202,7 +202,7 @@ export default function EmailCapture({
             id="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={`w-full px-3 py-2.5 text-sm border ${errors.email ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+            className={`w-full px-3 py-2.5 text-sm border ${errors.email ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage transition-all`}
             placeholder="your@email.com *"
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "email-error" : undefined}
@@ -219,7 +219,7 @@ export default function EmailCapture({
             id="phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className={`w-full px-3 py-2.5 text-sm border ${errors.phone ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage transition-all`}
+            className={`w-full px-3 py-2.5 text-sm border ${errors.phone ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage transition-all`}
             placeholder="(555) 123-4567 *"
             aria-invalid={!!errors.phone}
             aria-describedby={errors.phone ? "phone-error" : undefined}
@@ -235,12 +235,12 @@ export default function EmailCapture({
             id="consent"
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
-            className="w-3.5 h-3.5 text-sage border-charcoal/20 rounded focus:ring-sage"
+            className="w-3.5 h-3.5 text-dark-sage border-charcoal/20 rounded focus:ring-dark-sage"
             aria-invalid={!!errors.consent}
             aria-describedby={errors.consent ? "consent-error" : undefined}
           />
           <label htmlFor="consent" className="ml-2 text-xs text-warm-gray">
-            I agree to receive updates <span className="text-sage">*</span>
+            I agree to receive updates <span className="text-dark-sage">*</span>
           </label>
         </div>
         {errors.consent && (
@@ -249,7 +249,7 @@ export default function EmailCapture({
         
         <motion.button
           type="submit"
-          className="w-full bg-charcoal text-ivory py-2.5 rounded-lg text-sm font-semibold hover:bg-sage hover:text-charcoal transition-all duration-200 shadow-sm hover:shadow-md"
+          className="w-full bg-dark-sage text-charcoal py-2.5 rounded-lg text-sm font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200 shadow-sm"
           animate={isWelcomeOffer ? {
             scale: [1, 1.05, 1],
           } : {}}
@@ -322,10 +322,10 @@ export default function EmailCapture({
             initial={{ opacity: 1, y: 0 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="mt-4 p-4 bg-sage/20 text-charcoal rounded-lg text-center"
+            className="mt-4 p-4 bg-dark-sage/20 text-charcoal rounded-lg text-center"
             role="alert"
           >
-            <p className="text-sm font-semibold text-sage mb-1">🎉 You&apos;re all set!</p>
+            <p className="text-sm font-semibold text-dark-sage mb-1">🎉 You&apos;re all set!</p>
             <p className="text-xs text-warm-gray">Check your email for your 15% off code.</p>
           </motion.div>
         )}

@@ -16,7 +16,7 @@ export default function HomeClient() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   
   const featuredServices = services.filter(s => 
-    ['signature-aura-facial', 'hydrafacial', 'brow-lamination', 'lymphatic-drainage', 'buccal-massage', 'dermaplaning'].includes(s.slug)
+    ['aura-facial', 'hydrafacial', 'brow-lamination', 'lymphatic-drainage-facial', 'dermaplaning', 'biorepeel'].includes(s.slug)
   ).slice(0, 6);
 
   const handleServiceClick = (service: any) => {
@@ -57,7 +57,9 @@ export default function HomeClient() {
     <>
       {/* Hero Section */}
       <Section className="relative overflow-hidden min-h-[45vh] md:min-h-[40vh] flex items-center pt-16 md:pt-8" background="sand">
-        <div className="absolute inset-0 bg-gradient-to-br from-sand via-ivory to-taupe/20 opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/15 via-sand via-dark-sage/10 to-taupe/20 opacity-60" />
+        <div className="absolute top-20 right-10 w-40 h-40 bg-dark-sage/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-10 left-5 w-32 h-32 bg-sage-dark/15 rounded-full blur-2xl" />
         <motion.div
           className="relative z-10 text-center max-w-4xl mx-auto w-full"
           initial={{ opacity: 1, y: 0 }}
@@ -72,8 +74,8 @@ export default function HomeClient() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link href="/book">
-              <Button variant="disabled" tooltip="Booking opens soon">
-                Book Online — Coming Soon
+              <Button variant="primary">
+                Book Online
               </Button>
             </Link>
             <Button variant="secondary" onClick={handleOpenEmailModal}>
@@ -84,7 +86,10 @@ export default function HomeClient() {
       </Section>
 
       {/* Why Aura Aesthetics */}
-      <Section background="ivory">
+      <Section background="ivory" className="relative">
+        {/* Decorative green lines on left and right */}
+        <div className="absolute left-6 top-1/4 bottom-1/4 w-0.5 bg-gradient-to-b from-dark-sage/30 via-dark-sage/50 to-dark-sage/30 hidden md:block" />
+        <div className="absolute right-6 top-1/4 bottom-1/4 w-0.5 bg-gradient-to-b from-dark-sage/30 via-dark-sage/50 to-dark-sage/30 hidden md:block" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -99,25 +104,69 @@ export default function HomeClient() {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-          {pillars.map((pillar, index) => (
-            <motion.div
-              key={pillar.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="text-center"
-            >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-sage/40 to-sand mx-auto mb-6" />
-              <h3 className="text-h3 font-serif text-charcoal mb-3">{pillar.title}</h3>
-              <p className="text-warm-gray leading-relaxed">{pillar.description}</p>
-            </motion.div>
-          ))}
+          {/* Calm First - Lotus Petal (1C) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0 }}
+            className="text-center"
+          >
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-dark-sage/60 to-sand mx-auto mb-6 flex items-center justify-center transition-transform duration-300 hover:scale-110 cursor-pointer">
+              {/* Heart/Care icon */}
+              <svg viewBox="0 0 24 24" fill="none" stroke="#9FAA9A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-14 h-14">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </div>
+            <h3 className="text-h3 font-serif text-charcoal mb-3">Calm First</h3>
+            <p className="text-warm-gray leading-relaxed">A serene, sensory experience that lowers stress for happier skin.</p>
+          </motion.div>
+
+          {/* Skin-Health Focused - Harmonic Balance (2C) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="text-center"
+          >
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-dark-sage/60 to-sand mx-auto mb-6 flex items-center justify-center transition-transform duration-300 hover:scale-110 cursor-pointer">
+              {/* Shield with medical cross */}
+              <svg viewBox="0 0 24 24" fill="none" stroke="#B7C8B1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-14 h-14">
+                <path d="M12 2L4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3z"/>
+                <line x1="12" y1="8" x2="12" y2="16" stroke="#B7C8B1" strokeWidth="3"/>
+                <line x1="8" y1="12" x2="16" y2="12" stroke="#B7C8B1" strokeWidth="3"/>
+              </svg>
+            </div>
+            <h3 className="text-h3 font-serif text-charcoal mb-3">Skin‑Health Focused</h3>
+            <p className="text-warm-gray leading-relaxed">Ingredient‑smart treatments tailored to your goals.</p>
+          </motion.div>
+
+          {/* Thoughtful Craft - Knowledge Branch (3A) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-center"
+          >
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-dark-sage/60 to-sand mx-auto mb-6 flex items-center justify-center transition-transform duration-300 hover:scale-110 cursor-pointer">
+              {/* Open book icon - simpler and clearer */}
+              <svg viewBox="0 0 24 24" fill="none" stroke="#9FAA9A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-14 h-14">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+              </svg>
+            </div>
+            <h3 className="text-h3 font-serif text-charcoal mb-3">Thoughtful Craft</h3>
+            <p className="text-warm-gray leading-relaxed">Small‑studio care, never rushed.</p>
+          </motion.div>
         </div>
       </Section>
 
       {/* Featured Services */}
       <Section background="sand">
+        {/* Decorative green line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -159,6 +208,10 @@ export default function HomeClient() {
 
       {/* Amy Intro Teaser */}
       <Section background="ivory">
+        <div className="relative">
+          {/* Decorative green bar on the left */}
+          <div className="absolute left-0 top-10 bottom-10 w-1 bg-gradient-to-b from-dark-sage/40 via-sage-dark/50 to-dark-sage/40 hidden md:block" />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <motion.div
           initial={{ opacity: 1, x: 0 }}
@@ -166,7 +219,7 @@ export default function HomeClient() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <div className="aspect-square rounded-lg bg-gradient-to-br from-taupe/40 via-sand to-ivory" />
+            <div className="aspect-square rounded-lg bg-gradient-to-br from-taupe/40 via-dark-sage/20 to-sand" />
           </motion.div>
 
           <motion.div
@@ -193,6 +246,9 @@ export default function HomeClient() {
 
       {/* Reviews Section */}
       <Section background="sand">
+        {/* Decorative green accents */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-dark-sage/5 via-transparent to-dark-sage/5 opacity-40" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -216,7 +272,7 @@ export default function HomeClient() {
               transition={{ duration: 0.5 }}
               className="bg-white p-8 rounded-lg shadow-sm text-center"
             >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-sage/40 to-taupe/30 mx-auto mb-4 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-dark-sage/60 to-taupe/30 mx-auto mb-4 flex items-center justify-center">
                 <svg className="w-8 h-8 text-charcoal" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
@@ -225,7 +281,7 @@ export default function HomeClient() {
               <p className="text-warm-gray text-sm mb-4">See what clients are saying</p>
               <a 
                 href="#" 
-                className="text-sage hover:text-charcoal transition-colors text-sm font-medium"
+                className="text-dark-sage hover:text-charcoal transition-colors text-sm font-medium"
               >
                 Coming Soon
               </a>
@@ -239,7 +295,7 @@ export default function HomeClient() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="bg-white p-8 rounded-lg shadow-sm text-center"
             >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-taupe/40 to-sage/30 mx-auto mb-4 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-taupe/40 to-dark-sage/50 mx-auto mb-4 flex items-center justify-center">
                 <svg className="w-8 h-8 text-charcoal" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                 </svg>
@@ -248,7 +304,7 @@ export default function HomeClient() {
               <p className="text-warm-gray text-sm mb-4">Read client experiences</p>
               <a 
                 href="#" 
-                className="text-sage hover:text-charcoal transition-colors text-sm font-medium"
+                className="text-dark-sage hover:text-charcoal transition-colors text-sm font-medium"
               >
                 Coming Soon
               </a>
@@ -269,6 +325,8 @@ export default function HomeClient() {
 
       {/* Social Media Feed */}
       <Section background="ivory">
+        {/* Subtle green background tint */}
+        <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/8 via-transparent to-sage-light/8" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -285,7 +343,7 @@ export default function HomeClient() {
               href="https://instagram.com/auraesthetics" 
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-2 bg-charcoal text-ivory rounded hover:bg-sage hover:text-charcoal transition-colors"
+              className="px-6 py-2 bg-dark-sage text-charcoal rounded hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
             >
               @auraesthetics on Instagram
             </a>
@@ -293,7 +351,7 @@ export default function HomeClient() {
               href="https://tiktok.com/@auraesthetics" 
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-2 border-2 border-warm-gray text-warm-gray rounded hover:border-charcoal hover:text-charcoal transition-colors"
+              className="px-6 py-2 bg-white border-2 border-dark-sage text-dark-sage rounded hover:bg-sage-light hover:shadow-md transition-all duration-200"
             >
               @auraesthetics on TikTok
             </a>
@@ -316,10 +374,10 @@ export default function HomeClient() {
           whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="aspect-square rounded-lg bg-gradient-to-br from-sand via-taupe/20 to-sage/20 flex items-center justify-center group cursor-pointer hover:shadow-lg transition-shadow"
+                className="aspect-square rounded-lg bg-gradient-to-br from-sand via-taupe/20 to-dark-sage/40 flex items-center justify-center group cursor-pointer hover:shadow-lg transition-shadow"
               >
                 <svg 
-                  className="w-12 h-12 text-warm-gray/40 group-hover:text-sage transition-colors" 
+                  className="w-12 h-12 text-warm-gray/40 group-hover:text-dark-sage transition-colors" 
                   fill="none" 
                   viewBox="0 0 24 24" 
                   stroke="currentColor"

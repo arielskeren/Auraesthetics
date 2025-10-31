@@ -19,6 +19,8 @@ export default function ServicesClient() {
     <>
       {/* Hero */}
       <Section background="sand">
+        {/* Decorative green line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
@@ -35,8 +37,10 @@ export default function ServicesClient() {
       </Section>
 
       {/* Category Filter */}
-      <Section background="ivory" className="!py-8">
-        <div className="flex flex-wrap justify-center gap-3">
+      <Section background="ivory" className="!py-8 relative">
+        {/* Subtle green background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-dark-sage/6 to-transparent" />
+        <div className="flex flex-wrap justify-center gap-3 relative z-10">
           {categories.map((category) => (
             <button
               key={category}
@@ -44,7 +48,7 @@ export default function ServicesClient() {
               className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px] ${
                 activeCategory === category
                   ? 'bg-charcoal text-ivory'
-                  : 'bg-white text-warm-gray hover:bg-sage/20 hover:text-charcoal'
+                  : 'bg-white text-warm-gray hover:bg-dark-sage/20 hover:text-charcoal'
               }`}
             >
               {category}
@@ -76,8 +80,11 @@ export default function ServicesClient() {
       </Section>
 
       {/* Pre/Post Care */}
-      <Section background="sand">
-        <div className="max-w-4xl mx-auto">
+      <Section background="sand" className="relative">
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-l from-dark-sage/8 via-transparent to-dark-sage/8 opacity-40" />
+        <div className="max-w-4xl mx-auto relative z-10">
           <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -134,7 +141,7 @@ export default function ServicesClient() {
               </div>
             </div>
 
-            <div className="mt-8 p-6 bg-sage/30 rounded-lg border-l-4 border-sage">
+            <div className="mt-8 p-6 bg-dark-sage/40 rounded-lg border-l-4 border-dark-sage">
               <h4 className="text-lg font-serif text-charcoal mb-3">Contraindications</h4>
               <p className="text-sm text-warm-gray leading-relaxed">
                 Some services are not appropriate during pregnancy, while using isotretinoin (Accutane), 

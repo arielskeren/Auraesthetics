@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import BookClient from './BookClient';
 
 export const metadata: Metadata = {
-  title: 'Book Online — Aura Wellness Aesthetics',
-  description: 'Online booking opens soon in Fort Lauderdale. Join the list to be notified when appointments become available and receive launch-week perks.',
+  title: 'Book Your Treatment | Aura Wellness Aesthetics',
+  description: 'Browse services and book your appointment online with Amy. Choose from facials, advanced treatments, brows & lashes, and waxing services.',
 };
 
 export default function Book() {

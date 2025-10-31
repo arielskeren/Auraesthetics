@@ -16,7 +16,7 @@ export default function Section({
   const bgClasses = {
     ivory: 'bg-ivory',
     sand: 'bg-sand',
-    sage: 'bg-sage/20'
+    sage: 'bg-dark-sage/20'
   };
 
   return (
