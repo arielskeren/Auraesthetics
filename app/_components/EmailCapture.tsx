@@ -32,6 +32,8 @@ interface EmailCaptureProps {
   onCloseOffer?: (confirmed: boolean) => void;
   onSuccess?: () => void;
   signupSource?: string;
+  includeAddressAndBirthday?: boolean;
+  showThankYouMessage?: boolean;
 }
 
 export default function EmailCapture({ 
@@ -43,15 +45,19 @@ export default function EmailCapture({
   isWelcomeOffer = false,
   onCloseOffer,
   onSuccess,
-  signupSource = 'footer'
+  signupSource = 'footer',
+  includeAddressAndBirthday = false,
+  showThankYouMessage = false
 }: EmailCaptureProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [consent, setConsent] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string }>({});
+  const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; birthday?: string; consent?: string }>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
 
@@ -59,7 +65,7 @@ export default function EmailCapture({
     e.preventDefault();
     
     // Basic validation
-    const newErrors: { firstName?: string; lastName?: string; email?: string; phone?: string; consent?: string } = {};
+    const newErrors: { firstName?: string; lastName?: string; email?: string; phone?: string; birthday?: string; consent?: string } = {};
     
     if (!firstName || firstName.trim() === '') {
       newErrors.firstName = 'Please enter your first name';
@@ -77,6 +83,11 @@ export default function EmailCapture({
       newErrors.phone = 'Please enter your phone number';
     }
     
+    // Birthday is required when includeAddressAndBirthday is true
+    if (includeAddressAndBirthday && (!birthday || birthday.trim() === '')) {
+      newErrors.birthday = 'Please enter your birthday';
+    }
+    
     if (!consent) {
       newErrors.consent = 'Please agree to receive updates';
     }
@@ -92,8 +103,8 @@ export default function EmailCapture({
         lastName,
         email, 
         phone,
-        birthday: '',
-        address: '',
+        birthday: includeAddressAndBirthday ? birthday : '',
+        address: includeAddressAndBirthday ? address : '',
         signupSource: signupSource,
       };
       
@@ -115,22 +126,33 @@ export default function EmailCapture({
       setErrors({});
       setShowSuccess(true);
       
-      // Call onSuccess callback if provided (for floating bubble tracking)
-      if (onSuccess) {
-        setTimeout(() => {
-          onSuccess();
-        }, 2000);
-      }
-      
       // Reset form
       setFirstName('');
       setLastName('');
       setEmail('');
       setPhone('');
+      if (includeAddressAndBirthday) {
+        setAddress('');
+        setBirthday('');
+      }
       setConsent(false);
       
-      // Hide success message after 5 seconds
-      setTimeout(() => setShowSuccess(false), 5000);
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        if (showThankYouMessage) {
+          // For landing page, don't auto-hide, let onSuccess handle it
+          // The thank you message will be shown instead
+        } else {
+          // For other cases, hide after 5 seconds
+          setTimeout(() => {
+            setShowSuccess(false);
+            onSuccess();
+          }, 2000);
+        }
+      } else {
+        // Hide success message after 5 seconds if no callback
+        setTimeout(() => setShowSuccess(false), 5000);
+      }
     } catch (error) {
       console.error('Subscription error:', error);
       setErrors({ email: error instanceof Error ? error.message : 'Something went wrong. Please try again.' });
@@ -139,26 +161,46 @@ export default function EmailCapture({
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="text-center mb-5">
-        {isWelcomeOffer && (
-          <div className="inline-block bg-dark-sage/20 text-dark-sage px-6 py-2 rounded-full text-sm font-bold mb-3">
-            🎁 SPECIAL OFFER
-          </div>
-        )}
-        <h3 className="text-2xl font-serif text-charcoal mb-2">{title}</h3>
-        {isWelcomeOffer && (
-          <>
-            <p className="text-2xl font-bold text-dark-sage mb-1">15% OFF</p>
-            <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
-            <p className="text-xs text-warm-gray/80 mt-2">New clients only • Up to $30 value</p>
-          </>
-        )}
-        {!isWelcomeOffer && (
-          <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
-        )}
-      </div>
-      
-      <form onSubmit={handleSubmit} className="space-y-2">
+      {!showSuccess ? (
+        <>
+          {showThankYouMessage && isWelcomeOffer ? (
+            <div className="text-center mb-8">
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                className="inline-block bg-gradient-to-r from-dark-sage/20 to-sage-light/20 text-dark-sage px-8 py-3 rounded-full text-base font-bold mb-4"
+              >
+                🎁 SPECIAL WELCOME OFFER
+              </motion.div>
+              <h1 className="text-4xl md:text-5xl font-serif text-charcoal mb-4">
+                Welcome to Aura Wellness Aesthetics
+              </h1>
+              <p className="text-warm-gray text-lg leading-relaxed">
+                Join our waitlist and get <span className="text-3xl font-bold text-dark-sage">15% OFF</span> your first service
+              </p>
+              <p className="text-sm text-warm-gray/80 mt-3">New clients only • Up to $30 value • Valid for 3 months</p>
+            </div>
+          ) : (
+            <div className="text-center mb-5">
+              {isWelcomeOffer && (
+                <>
+                  <div className="inline-block bg-dark-sage/20 text-dark-sage px-6 py-2 rounded-full text-sm font-bold mb-3">
+                    🎁 SPECIAL OFFER
+                  </div>
+                  <p className="text-2xl font-bold text-dark-sage mb-1">15% OFF</p>
+                  {description && <p className="text-sm text-warm-gray leading-relaxed">{description}</p>}
+                  <p className="text-xs text-warm-gray/80 mt-2">New clients only • Up to $30 value</p>
+                </>
+              )}
+              {!isWelcomeOffer && title && <h3 className="text-2xl font-serif text-charcoal mb-2">{title}</h3>}
+              {!isWelcomeOffer && description && (
+                <p className="text-sm text-warm-gray leading-relaxed">{description}</p>
+              )}
+            </div>
+          )}
+          
+          <form onSubmit={handleSubmit} className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label htmlFor="firstName" className="sr-only">First Name</label>
@@ -228,6 +270,53 @@ export default function EmailCapture({
             <p id="phone-error" className="text-red-600 text-xs mt-0.5">{errors.phone}</p>
           )}
         </div>
+
+        {includeAddressAndBirthday && (
+          <>
+            <div>
+              <label htmlFor="address" className="sr-only">Address</label>
+              <input
+                type="text"
+                id="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className={`w-full px-3 py-2.5 text-sm border ${errors.address ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage transition-all`}
+                placeholder="Address (optional)"
+                aria-invalid={!!errors.address}
+                aria-describedby={errors.address ? "address-error" : undefined}
+              />
+              {errors.address && (
+                <p id="address-error" className="text-red-600 text-xs mt-0.5">{errors.address}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="birthday" className="sr-only">Birthday</label>
+              <input
+                type="date"
+                id="birthday"
+                value={birthday}
+                onChange={(e) => {
+                  setBirthday(e.target.value);
+                  if (errors.birthday) {
+                    setErrors({ ...errors, birthday: undefined });
+                  }
+                }}
+                className={`w-full px-3 py-2.5 text-sm border ${errors.birthday ? 'border-red-400' : 'border-charcoal/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage transition-all`}
+                placeholder="Birthday *"
+                aria-invalid={!!errors.birthday}
+                aria-required="true"
+                aria-describedby={errors.birthday ? "birthday-error" : "birthday-required"}
+              />
+              {errors.birthday && (
+                <p id="birthday-error" className="text-red-600 text-xs mt-0.5">{errors.birthday}</p>
+              )}
+              {!errors.birthday && (
+                <p id="birthday-required" className="text-xs text-warm-gray/70 mt-1">Birthday <span className="text-dark-sage">*</span></p>
+              )}
+            </div>
+          </>
+        )}
         
         <div className="flex items-center">
           <input
@@ -264,7 +353,7 @@ export default function EmailCapture({
       </form>
       
       {/* Maybe Later Button - Shows below the form for welcome offers */}
-      {isWelcomeOffer && onCloseOffer && (
+      {isWelcomeOffer && onCloseOffer && !showThankYouMessage && (
         <>
           <div className="mt-4 text-center">
             <button
@@ -315,21 +404,56 @@ export default function EmailCapture({
           </button>
         </div>
       )}
-      
-      <AnimatePresence>
-        {showSuccess && (
-          <motion.div
-            initial={{ opacity: 1, y: 0 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="mt-4 p-4 bg-dark-sage/20 text-charcoal rounded-lg text-center"
-            role="alert"
-          >
-            <p className="text-sm font-semibold text-dark-sage mb-1">🎉 You&apos;re all set!</p>
-            <p className="text-xs text-warm-gray">Check your email for your 15% off code.</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </>
+      ) : (
+        <AnimatePresence>
+          {showSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="text-center"
+              role="alert"
+            >
+              {showThankYouMessage ? (
+                <>
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                    className="inline-block bg-gradient-to-r from-dark-sage/20 to-sage-light/20 text-dark-sage px-8 py-3 rounded-full text-base font-bold mb-6"
+                  >
+                    🎉 SUCCESS
+                  </motion.div>
+                  <h1 className="text-4xl md:text-5xl font-serif text-charcoal mb-4">
+                    Thank You!
+                  </h1>
+                  <p className="text-warm-gray text-lg leading-relaxed mb-6">
+                    You&apos;ve successfully signed up!
+                  </p>
+                  <div className="bg-dark-sage/20 rounded-lg p-6 mb-6">
+                    <p className="text-base text-charcoal mb-3 font-semibold">
+                      We&apos;ll keep you posted with updates
+                    </p>
+                    <p className="text-sm text-warm-gray leading-relaxed">
+                      Your exclusive 15% off discount will be sent to your email shortly.
+                    </p>
+                  </div>
+                  <p className="text-xs text-warm-gray/70 leading-relaxed">
+                    By joining, you agree to receive updates from Aura Wellness Aesthetics. 
+                    We respect your privacy and never share your information.
+                  </p>
+                </>
+              ) : (
+                <div className="mt-4 p-6 bg-dark-sage/20 text-charcoal rounded-lg text-center">
+                  <p className="text-sm font-semibold text-dark-sage mb-1">🎉 You&apos;re all set!</p>
+                  <p className="text-xs text-warm-gray">Check your email for your 15% off code.</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }

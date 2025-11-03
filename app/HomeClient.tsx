@@ -8,6 +8,7 @@ import Section from './_components/Section';
 import ServiceCard from './_components/ServiceCard';
 import ServiceModal from './_components/ServiceModal';
 import EmailCaptureModal from './_components/EmailCaptureModal';
+import InstagramFeed from './_components/InstagramFeed';
 import services from './_content/services.json';
 
 export default function HomeClient() {
@@ -143,13 +144,13 @@ export default function HomeClient() {
           </motion.div>
 
           {/* Thoughtful Craft - Knowledge Branch (3A) */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-center"
-          >
+              className="text-center"
+            >
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-dark-sage/60 to-sand mx-auto mb-6 flex items-center justify-center transition-transform duration-300 hover:scale-110 cursor-pointer">
               {/* Open book icon - simpler and clearer */}
               <svg viewBox="0 0 24 24" fill="none" stroke="#9FAA9A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-14 h-14">
@@ -159,7 +160,7 @@ export default function HomeClient() {
             </div>
             <h3 className="text-h3 font-serif text-charcoal mb-3">Thoughtful Craft</h3>
             <p className="text-warm-gray leading-relaxed">Small‑studio care, never rushed.</p>
-          </motion.div>
+            </motion.div>
         </div>
       </Section>
 
@@ -358,7 +359,7 @@ export default function HomeClient() {
           </div>
         </motion.div>
 
-        {/* Instagram Feed Placeholder */}
+        {/* Instagram Feed */}
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -366,30 +367,7 @@ export default function HomeClient() {
           transition={{ duration: 0.6 }}
           className="max-w-6xl mx-auto"
         >
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((item, index) => (
-              <motion.div
-                key={item}
-          initial={{ opacity: 1, scale: 1 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="aspect-square rounded-lg bg-gradient-to-br from-sand via-taupe/20 to-dark-sage/40 flex items-center justify-center group cursor-pointer hover:shadow-lg transition-shadow"
-              >
-                <svg 
-                  className="w-12 h-12 text-warm-gray/40 group-hover:text-dark-sage transition-colors" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </motion.div>
-            ))}
-          </div>
-          <p className="text-center text-warm-gray text-sm mt-8">
-            Instagram feed coming soon! Follow us to see treatment highlights, skincare education, and studio vibes.
-          </p>
+          <InstagramFeed />
         </motion.div>
       </Section>
 

@@ -48,7 +48,7 @@ export default function ServiceCard({ name, summary, duration, price, category, 
             />
           </div>
         ) : (
-          <div className={`h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
+        <div className={`h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
         )}
         
         {/* Content - flex to fill remaining space */}

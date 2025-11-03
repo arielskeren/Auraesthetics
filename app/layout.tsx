@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Nav from "./_components/Nav";
-import Footer from "./_components/Footer";
+import ConditionalLayout from "./_components/ConditionalLayout";
 import ClientLayout from "./ClientLayout";
 
 export const metadata: Metadata = {
@@ -22,11 +21,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Nav />
-        <main id="main-content">
+        <ConditionalLayout>
           {children}
-        </main>
-        <Footer />
+        </ConditionalLayout>
         <ClientLayout />
       </body>
     </html>

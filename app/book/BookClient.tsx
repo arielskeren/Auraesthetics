@@ -118,13 +118,13 @@ export default function BookClient() {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
           >
             {filteredServices.map((service, index) => (
-              <motion.div
+        <motion.div
                 key={service.slug}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.05 }}
                 className="h-full"
-              >
+        >
                 <div 
                   onClick={() => handleBookingClick(service)}
                   className="h-full bg-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col"
@@ -150,7 +150,7 @@ export default function BookClient() {
                 </div>
               </motion.div>
             ))}
-          </motion.div>
+        </motion.div>
         )}
 
         {filteredServices.length === 0 && (
@@ -167,46 +167,46 @@ export default function BookClient() {
         <div className="absolute inset-0 bg-gradient-to-l from-dark-sage/8 via-transparent to-dark-sage/8 opacity-40" />
         
         <div className="max-w-4xl mx-auto relative z-10">
-          <motion.div
-            initial={{ opacity: 1, y: 0 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-h2 font-serif text-charcoal mb-8 text-center">
+        <motion.div
+          initial={{ opacity: 1, y: 0 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          <h2 className="text-h2 font-serif text-charcoal mb-8 text-center">
               How It Works
-            </h2>
-
+          </h2>
+          
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-white p-8 rounded-lg">
                 <h3 className="text-h3 font-serif text-charcoal mb-4">1. Choose Your Service</h3>
-                <p className="text-warm-gray">
+              <p className="text-warm-gray">
                   Browse our services and click &quot;Book Now&quot; on your preferred treatment. You&apos;ll be taken to our secure Cal.com booking page.
-                </p>
-              </div>
+              </p>
+            </div>
 
               <div className="bg-white p-8 rounded-lg">
                 <h3 className="text-h3 font-serif text-charcoal mb-4">2. Select Your Time</h3>
-                <p className="text-warm-gray">
+              <p className="text-warm-gray">
                   View real-time availability and choose a date and time that works for your schedule. Times are synced with Amy&apos;s calendar.
-                </p>
-              </div>
+              </p>
+            </div>
 
               <div className="bg-white p-8 rounded-lg">
                 <h3 className="text-h3 font-serif text-charcoal mb-4">3. Complete Intake Form</h3>
-                <p className="text-warm-gray">
+              <p className="text-warm-gray">
                   Fill out a brief intake form with your skin concerns, goals, and any allergies. This helps Amy customize your treatment.
-                </p>
-              </div>
+              </p>
+            </div>
 
               <div className="bg-white p-8 rounded-lg">
                 <h3 className="text-h3 font-serif text-charcoal mb-4">4. Confirm & Arrive</h3>
-                <p className="text-warm-gray">
+              <p className="text-warm-gray">
                   Receive confirmation with all the details you need. Then just show up on time and let us take care of the rest.
-                </p>
-              </div>
+              </p>
             </div>
-          </motion.div>
+          </div>
+        </motion.div>
         </div>
       </Section>
 

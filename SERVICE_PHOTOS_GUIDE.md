@@ -81,3 +81,4 @@ After adding photos:
 
 That's it! The site will automatically pick up the photos and display them.
 
+
