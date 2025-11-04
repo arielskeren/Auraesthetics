@@ -129,8 +129,27 @@ export default function BookClient() {
                   onClick={() => handleBookingClick(service)}
                   className="h-full bg-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col"
                 >
-                  {/* Gradient placeholder - fixed height */}
-                  <div className="h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand" />
+                  {/* Service image or gradient placeholder */}
+                  {service.slug ? (
+                    <div className="h-48 flex-shrink-0 bg-gray-200 relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
+                        src={`/services/${service.slug}.jpg`} 
+                        alt={service.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to gradient if image doesn't exist
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          if (target.parentElement) {
+                            target.parentElement.className = 'h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand';
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand" />
+                  )}
                   
                   {/* Content - consistent structure */}
                   <div className="p-6 flex flex-col h-full">
