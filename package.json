@@ -9,6 +9,7 @@
     "lint": "next lint",
     "create-cal-events": "tsx scripts/create-cal-events-safe.ts",
     "update-cal-events": "tsx scripts/update-cal-events.ts",
+    "update-cal-deposits": "tsx scripts/update-cal-deposits.ts",
     "update-cal-names-safe": "tsx scripts/update-cal-names-safe.ts",
     "verify-cal-events": "tsx scripts/verify-cal-events.ts",
     "check-stripe": "tsx scripts/check-stripe-integration.ts"
