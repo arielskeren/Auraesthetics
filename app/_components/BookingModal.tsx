@@ -2,7 +2,8 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -14,28 +15,29 @@ interface BookingModalProps {
     duration: string;
     price: string;
     category: string;
+    slug?: string;
     calBookingUrl?: string | null;
   } | null;
 }
 
 export default function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
-  const [showBooking, setShowBooking] = useState(false);
+  useCalEmbed();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const calLink = service ? extractCalLink(service.calBookingUrl) : null;
+  const namespace = service?.slug || 'booking';
+
+  // Initialize Cal.com when modal opens and service is available
+  useEffect(() => {
+    if (isOpen && service && calLink) {
+      // Small delay to ensure Cal script is loaded
+      const timer = setTimeout(() => {
+        initCalService(namespace, calLink);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, service, calLink, namespace]);
 
   if (!service) return null;
-
-  const handleBookClick = () => {
-    if (service.calBookingUrl) {
-      // Show Cal.com iframe embed
-      setShowBooking(true);
-    } else {
-      alert('Booking for this service is being set up. Please check back soon!');
-    }
-  };
-
-  const handleClose = () => {
-    setShowBooking(false);
-    onClose();
-  };
 
   return (
     <AnimatePresence>
@@ -104,33 +106,15 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                   </div>
 
                   {/* Description */}
-                  {service.description && !showBooking && (
+                  {service.description && (
                     <div className="mb-6">
                       <h3 className="text-lg font-serif text-charcoal mb-2">About This Treatment</h3>
                       <p className="text-sm text-warm-gray leading-relaxed">{service.description}</p>
                     </div>
                   )}
 
-                  {/* Cal.com Embed or Book Button */}
-                  {showBooking && service.calBookingUrl ? (
-                    <div className="mb-6">
-                      <div className="bg-white rounded-lg border-2 border-dark-sage/30 overflow-hidden" style={{ minHeight: '600px' }}>
-                        <iframe
-                          src={service.calBookingUrl}
-                          className="w-full border-0"
-                          style={{ width: '100%', height: '600px', minHeight: '600px' }}
-                          title={`Book ${service.name}`}
-                          allow="camera; microphone; geolocation"
-                        />
-                      </div>
-                      <button
-                        onClick={() => setShowBooking(false)}
-                        className="mt-4 w-full bg-sand/50 text-charcoal py-2 rounded-lg text-sm font-medium hover:bg-sand/70 transition-colors"
-                      >
-                        ← Back to Service Details
-                      </button>
-                    </div>
-                  ) : (
+                  {/* Cal.com Element-Click Embed Button */}
+                  {calLink ? (
                     <div className="mb-6">
                       <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
                         <div className="flex items-center justify-center gap-2 mb-3">
@@ -143,23 +127,32 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                           Click below to view available times and complete your booking in our secure booking system.
                         </p>
                         <button
-                          onClick={handleBookClick}
+                          ref={buttonRef}
+                          data-cal-link={calLink}
+                          data-cal-namespace={namespace}
+                          data-cal-config='{"layout":"month_view"}'
                           className="w-full bg-dark-sage text-charcoal py-3 rounded-lg font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
                         >
                           View Calendar & Book Now
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <div className="mb-6">
+                      <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
+                        <p className="text-sm text-warm-gray">
+                          Booking for this service is being set up. Please check back soon!
+                        </p>
+                      </div>
+                    </div>
                   )}
 
                   {/* Info */}
-                  {!showBooking && (
-                    <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
-                      <p className="text-xs text-warm-gray">
-                        <strong className="text-dark-sage">Note:</strong> Booking is embedded securely through Cal.com with Stripe payment integration.
-                      </p>
-                    </div>
-                  )}
+                  <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
+                    <p className="text-xs text-warm-gray">
+                      <strong className="text-dark-sage">Note:</strong> Booking opens in a popup calendar through Cal.com with Stripe payment integration.
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
