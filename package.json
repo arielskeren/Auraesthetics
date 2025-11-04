@@ -10,6 +10,8 @@
     "create-cal-events": "tsx scripts/create-cal-events-safe.ts",
     "update-cal-events": "tsx scripts/update-cal-events.ts",
     "update-cal-names-safe": "tsx scripts/update-cal-names-safe.ts",
+    "update-cal-locations": "tsx scripts/update-cal-locations.ts",
+    "update-cal-buffer": "tsx scripts/update-cal-buffer.ts",
     "verify-cal-events": "tsx scripts/verify-cal-events.ts",
     "check-stripe": "tsx scripts/check-stripe-integration.ts"
   },

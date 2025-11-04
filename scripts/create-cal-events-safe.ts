@@ -170,7 +170,8 @@ async function createEventTypeSafe(service: Service, delayMs: number = 8000): Pr
       const eventType = response.data.event_type;
       const eventId = eventType.id;
       // Ensure username is correct (should be 'auraesthetics' not 'theauraesthetics')
-      const username = CAL_COM_USERNAME.replace('theauraesthetics', 'auraesthetics');
+      // CAL_COM_USERNAME is guaranteed to be defined due to early exit check above
+      const username = (CAL_COM_USERNAME || 'auraesthetics').replace('theauraesthetics', 'auraesthetics');
       const bookingUrl = `https://cal.com/${username}/${service.slug}`;
 
       console.log(`   ✅ Success! Event created:`);
