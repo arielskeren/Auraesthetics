@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import Button from './Button';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
 
 interface ServiceModalProps {
   isOpen: boolean;
@@ -22,7 +23,21 @@ interface ServiceModalProps {
 }
 
 export default function ServiceModal({ isOpen, onClose, service }: ServiceModalProps) {
-  const [showBooking, setShowBooking] = useState(false);
+  useCalEmbed();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const calLink = service ? extractCalLink(service.calBookingUrl) : null;
+  const namespace = service?.slug || 'booking';
+
+  // Initialize Cal.com when modal opens and service is available
+  useEffect(() => {
+    if (isOpen && service && calLink) {
+      // Small delay to ensure Cal script is loaded
+      const timer = setTimeout(() => {
+        initCalService(namespace, calLink);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, service, calLink, namespace]);
 
   if (!service) return null;
 
@@ -36,17 +51,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
 
   const placeholders = placeholderImages[service.category as keyof typeof placeholderImages] || ['🖼️', '✨'];
 
-  const handleBookingClick = () => {
-    if (service.calBookingUrl) {
-      // Show Cal.com iframe embed
-      setShowBooking(true);
-    } else {
-      alert('Booking for this service is being set up. Please check back soon!');
-    }
-  };
-
   const handleClose = () => {
-    setShowBooking(false);
     onClose();
   };
 
@@ -122,51 +127,43 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                     </div>
                   </div>
 
-                  {/* Cal.com Embed or Service Details */}
-                  {showBooking && service.calBookingUrl ? (
-                    <div className="mb-3">
-                      <div className="bg-white rounded-lg border-2 border-dark-sage/30 overflow-hidden" style={{ minHeight: '700px' }}>
-                        <iframe
-                          src={service.calBookingUrl}
-                          className="w-full border-0"
-                          style={{ width: '100%', height: '700px', minHeight: '700px' }}
-                          title={`Book ${service.name}`}
-                          allow="camera; microphone; geolocation"
-                        />
-                      </div>
-                      <button
-                        onClick={() => setShowBooking(false)}
-                        className="mt-4 w-full bg-sand/50 text-charcoal py-2 rounded-lg text-sm font-medium hover:bg-sand/70 transition-colors"
-                      >
-                        ← Back to Service Details
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                      {/* Left: Booking CTA */}
-                      <div className="order-2 lg:order-1">
-                        <div className="p-4 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
-                          <div className="flex items-center gap-2 mb-3">
-                            <svg className="w-5 h-5 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <h4 className="text-sm font-semibold text-charcoal">Book This Treatment</h4>
-                          </div>
-                          <p className="text-xs text-warm-gray mb-4">
-                            Click the button below to view available times and complete your booking in our secure booking system.
-                          </p>
-                          <Button 
-                            variant="primary" 
-                            className="w-full"
-                            onClick={handleBookingClick}
+                  {/* Service Details */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
+                    {/* Left: Booking CTA */}
+                    <div className="order-2 lg:order-1">
+                      <div className="p-4 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
+                        <div className="flex items-center gap-2 mb-3">
+                          <svg className="w-5 h-5 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <h4 className="text-sm font-semibold text-charcoal">Book This Treatment</h4>
+                        </div>
+                        <p className="text-xs text-warm-gray mb-4">
+                          Click the button below to view available times and complete your booking in our secure booking system.
+                        </p>
+                        {calLink ? (
+                          <button
+                            ref={buttonRef}
+                            data-cal-link={calLink}
+                            data-cal-namespace={namespace}
+                            data-cal-config='{"layout":"month_view"}'
+                            className="w-full bg-dark-sage text-charcoal py-2.5 rounded-lg text-sm font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
                           >
                             Book Now on Cal.com
+                          </button>
+                        ) : (
+                          <Button 
+                            variant="disabled" 
+                            className="w-full"
+                          >
+                            Booking Coming Soon
                           </Button>
-                          <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
-                            Embedded booking calendar
-                          </p>
-                        </div>
+                        )}
+                        <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
+                          Opens in popup calendar
+                        </p>
                       </div>
+                    </div>
 
                       {/* Right: Before/After & Description */}
                       <div className="order-1 lg:order-2">
@@ -209,7 +206,6 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                         </div>
                       </div>
                     </div>
-                  )}
 
                 </div>
               </div>
