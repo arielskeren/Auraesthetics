@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import Button from './Button';
 import Link from 'next/link';
+import { useState } from 'react';
 
 interface ServiceModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ interface ServiceModalProps {
 }
 
 export default function ServiceModal({ isOpen, onClose, service }: ServiceModalProps) {
+  const [showBooking, setShowBooking] = useState(false);
+
   if (!service) return null;
 
   // Generate before/after placeholder images based on service category
@@ -35,12 +38,16 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
 
   const handleBookingClick = () => {
     if (service.calBookingUrl) {
-      // Open Cal.com in a new window/tab
-      window.open(service.calBookingUrl, '_blank', 'noopener,noreferrer');
-      onClose();
+      // Show Cal.com iframe embed
+      setShowBooking(true);
     } else {
       alert('Booking for this service is being set up. Please check back soon!');
     }
+  };
+
+  const handleClose = () => {
+    setShowBooking(false);
+    onClose();
   };
 
   return (
@@ -68,7 +75,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
               {/* Top Bar with Close */}
               <div className="flex justify-end items-center p-3 border-b border-sand">
                 <button
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="p-1.5 bg-white rounded-full hover:bg-sand/30 transition-colors"
                   aria-label="Close modal"
                 >
@@ -115,74 +122,94 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                     </div>
                   </div>
 
-                  {/* Desktop: Side-by-side Layout */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                    {/* Left: Booking CTA */}
-                    <div className="order-2 lg:order-1">
-                      <div className="p-4 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
-                        <div className="flex items-center gap-2 mb-3">
-                          <svg className="w-5 h-5 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <h4 className="text-sm font-semibold text-charcoal">Book This Treatment</h4>
+                  {/* Cal.com Embed or Service Details */}
+                  {showBooking && service.calBookingUrl ? (
+                    <div className="mb-3">
+                      <div className="bg-white rounded-lg border-2 border-dark-sage/30 overflow-hidden" style={{ minHeight: '700px' }}>
+                        <iframe
+                          src={service.calBookingUrl}
+                          className="w-full border-0"
+                          style={{ width: '100%', height: '700px', minHeight: '700px' }}
+                          title={`Book ${service.name}`}
+                          allow="camera; microphone; geolocation"
+                        />
+                      </div>
+                      <button
+                        onClick={() => setShowBooking(false)}
+                        className="mt-4 w-full bg-sand/50 text-charcoal py-2 rounded-lg text-sm font-medium hover:bg-sand/70 transition-colors"
+                      >
+                        ← Back to Service Details
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
+                      {/* Left: Booking CTA */}
+                      <div className="order-2 lg:order-1">
+                        <div className="p-4 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
+                          <div className="flex items-center gap-2 mb-3">
+                            <svg className="w-5 h-5 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <h4 className="text-sm font-semibold text-charcoal">Book This Treatment</h4>
+                          </div>
+                          <p className="text-xs text-warm-gray mb-4">
+                            Click the button below to view available times and complete your booking in our secure booking system.
+                          </p>
+                          <Button 
+                            variant="primary" 
+                            className="w-full"
+                            onClick={handleBookingClick}
+                          >
+                            Book Now on Cal.com
+                          </Button>
+                          <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
+                            Embedded booking calendar
+                          </p>
                         </div>
-                        <p className="text-xs text-warm-gray mb-4">
-                          Click the button below to view available times and complete your booking in our secure booking system.
-                        </p>
-                        <Button 
-                          variant="primary" 
-                          className="w-full"
-                          onClick={handleBookingClick}
+                      </div>
+
+                      {/* Right: Before/After & Description */}
+                      <div className="order-1 lg:order-2">
+                        {/* Description */}
+                        {service.description && (
+                          <div className="mb-2">
+                            <h3 className="text-sm font-serif text-charcoal mb-1">About This Treatment</h3>
+                            <p className="text-xs text-warm-gray leading-tight">{service.description}</p>
+                          </div>
+                        )}
+
+                        {/* Before & After Grid */}
+                        <div>
+                          <h3 className="text-sm font-serif text-charcoal mb-1.5">Before & After</h3>
+                          <div className="grid grid-cols-2 gap-1.5">
+                        <motion.div
+                          className="aspect-[4/3] bg-gradient-to-br from-warm-gray/20 via-taupe/30 to-sand rounded overflow-hidden relative group cursor-pointer"
+                          whileHover={{ scale: 1.02 }}
                         >
-                          Book Now on Cal.com
-                        </Button>
-                        <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
-                          Opens in a new tab
-                        </p>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-2xl mb-0.5 opacity-40">{placeholders[0]}</span>
+                            <p className="text-[10px] text-warm-gray font-medium">Before</p>
+                          </div>
+                          <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
+                        </motion.div>
+                        <motion.div
+                          className="aspect-[4/3] bg-gradient-to-br from-dark-sage/30 via-taupe/20 to-sand rounded overflow-hidden relative group cursor-pointer"
+                          whileHover={{ scale: 1.02 }}
+                        >
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-2xl mb-0.5 opacity-40">{placeholders[1]}</span>
+                            <p className="text-[10px] text-warm-gray font-medium">After</p>
+                          </div>
+                          <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
+                        </motion.div>
+                          </div>
+                          <p className="text-[9px] text-warm-gray/70 mt-1 text-center italic">
+                            Results may vary
+                          </p>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Right: Before/After & Description */}
-                    <div className="order-1 lg:order-2">
-                      {/* Description */}
-                      {service.description && (
-                        <div className="mb-2">
-                          <h3 className="text-sm font-serif text-charcoal mb-1">About This Treatment</h3>
-                          <p className="text-xs text-warm-gray leading-tight">{service.description}</p>
-                        </div>
-                      )}
-
-                      {/* Before & After Grid */}
-                      <div>
-                        <h3 className="text-sm font-serif text-charcoal mb-1.5">Before & After</h3>
-                        <div className="grid grid-cols-2 gap-1.5">
-                      <motion.div
-                        className="aspect-[4/3] bg-gradient-to-br from-warm-gray/20 via-taupe/30 to-sand rounded overflow-hidden relative group cursor-pointer"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-2xl mb-0.5 opacity-40">{placeholders[0]}</span>
-                          <p className="text-[10px] text-warm-gray font-medium">Before</p>
-                        </div>
-                        <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
-                      </motion.div>
-                      <motion.div
-                        className="aspect-[4/3] bg-gradient-to-br from-dark-sage/30 via-taupe/20 to-sand rounded overflow-hidden relative group cursor-pointer"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-2xl mb-0.5 opacity-40">{placeholders[1]}</span>
-                          <p className="text-[10px] text-warm-gray font-medium">After</p>
-                        </div>
-                        <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
-                      </motion.div>
-                        </div>
-                        <p className="text-[9px] text-warm-gray/70 mt-1 text-center italic">
-                          Results may vary
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                 </div>
               </div>

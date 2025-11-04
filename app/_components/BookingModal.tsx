@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useState } from 'react';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -18,16 +19,22 @@ interface BookingModalProps {
 }
 
 export default function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
+  const [showBooking, setShowBooking] = useState(false);
+
   if (!service) return null;
 
   const handleBookClick = () => {
     if (service.calBookingUrl) {
-      // Open Cal.com in a new window/tab
-      window.open(service.calBookingUrl, '_blank', 'noopener,noreferrer');
-      onClose();
+      // Show Cal.com iframe embed
+      setShowBooking(true);
     } else {
       alert('Booking for this service is being set up. Please check back soon!');
     }
+  };
+
+  const handleClose = () => {
+    setShowBooking(false);
+    onClose();
   };
 
   return (
@@ -54,7 +61,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
             >
               {/* Close Button */}
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="absolute top-4 right-4 z-10 p-2 hover:bg-sand/30 rounded-full transition-colors"
                 aria-label="Close modal"
               >
@@ -97,40 +104,62 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                   </div>
 
                   {/* Description */}
-                  {service.description && (
+                  {service.description && !showBooking && (
                     <div className="mb-6">
                       <h3 className="text-lg font-serif text-charcoal mb-2">About This Treatment</h3>
                       <p className="text-sm text-warm-gray leading-relaxed">{service.description}</p>
                     </div>
                   )}
 
-                  {/* Cal.com Embed Area */}
-                  <div className="mb-6">
-                    <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
-                      <div className="flex items-center justify-center gap-2 mb-3">
-                        <svg className="w-6 h-6 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <h4 className="text-lg font-semibold text-charcoal">Book Your Appointment</h4>
+                  {/* Cal.com Embed or Book Button */}
+                  {showBooking && service.calBookingUrl ? (
+                    <div className="mb-6">
+                      <div className="bg-white rounded-lg border-2 border-dark-sage/30 overflow-hidden" style={{ minHeight: '600px' }}>
+                        <iframe
+                          src={service.calBookingUrl}
+                          className="w-full border-0"
+                          style={{ width: '100%', height: '600px', minHeight: '600px' }}
+                          title={`Book ${service.name}`}
+                          allow="camera; microphone; geolocation"
+                        />
                       </div>
-                      <p className="text-sm text-warm-gray mb-4">
-                        Click below to view available times and complete your booking in our secure booking system.
-                      </p>
                       <button
-                        onClick={handleBookClick}
-                        className="w-full bg-dark-sage text-charcoal py-3 rounded-lg font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
+                        onClick={() => setShowBooking(false)}
+                        className="mt-4 w-full bg-sand/50 text-charcoal py-2 rounded-lg text-sm font-medium hover:bg-sand/70 transition-colors"
                       >
-                        View Calendar & Book Now
+                        ← Back to Service Details
                       </button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="mb-6">
+                      <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
+                        <div className="flex items-center justify-center gap-2 mb-3">
+                          <svg className="w-6 h-6 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <h4 className="text-lg font-semibold text-charcoal">Book Your Appointment</h4>
+                        </div>
+                        <p className="text-sm text-warm-gray mb-4">
+                          Click below to view available times and complete your booking in our secure booking system.
+                        </p>
+                        <button
+                          onClick={handleBookClick}
+                          className="w-full bg-dark-sage text-charcoal py-3 rounded-lg font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
+                        >
+                          View Calendar & Book Now
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Info */}
-                  <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
-                    <p className="text-xs text-warm-gray">
-                      <strong className="text-dark-sage">Note:</strong> Booking opens in a new tab. Your information is secure and processed through Cal.com with Stripe payment integration.
-                    </p>
-                  </div>
+                  {!showBooking && (
+                    <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
+                      <p className="text-xs text-warm-gray">
+                        <strong className="text-dark-sage">Note:</strong> Booking is embedded securely through Cal.com with Stripe payment integration.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

@@ -4,16 +4,42 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Section from '../_components/Section';
 import ServiceCard from '../_components/ServiceCard';
+import BookingModal from '../_components/BookingModal';
 import services from '../_content/services.json';
+
+interface Service {
+  category: string;
+  name: string;
+  slug: string;
+  summary: string;
+  description?: string;
+  duration: string;
+  price: string;
+  calEventId?: number | null;
+  calBookingUrl?: string | null;
+  testPricing?: boolean;
+}
 
 export default function ServicesClient() {
   const [activeCategory, setActiveCategory] = useState('All');
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   const categories = ['All', 'Facials', 'Advanced', 'Brows & Lashes', 'Waxing'];
   
   const filteredServices = activeCategory === 'All' 
     ? services 
     : services.filter(s => s.category === activeCategory);
+
+  const handleServiceClick = (service: Service) => {
+    setSelectedService(service);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => setSelectedService(null), 300);
+  };
 
   return (
     <>
@@ -72,8 +98,14 @@ export default function ServicesClient() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: index * 0.05 }}
+              className="h-full"
             >
-              <ServiceCard {...service} />
+              <div 
+                onClick={() => handleServiceClick(service as Service)}
+                className="cursor-pointer h-full"
+              >
+                <ServiceCard {...service} />
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -153,6 +185,13 @@ export default function ServicesClient() {
           </motion.div>
         </div>
       </Section>
+
+      {/* Booking Modal */}
+      <BookingModal 
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        service={selectedService}
+      />
     </>
   );
 }
