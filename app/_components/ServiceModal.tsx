@@ -35,18 +35,8 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
 
   const handleBookingClick = () => {
     if (service.calBookingUrl) {
-      // Open Cal.com in a same-window modal/iframe to keep user on site
-      const iframeContainer = document.createElement('div');
-      iframeContainer.className = 'fixed inset-0 z-[60] bg-charcoal/80 flex items-center justify-center p-4';
-      iframeContainer.innerHTML = `
-        <div class="relative w-full max-w-4xl h-[90vh]">
-          <button onclick="this.closest('.fixed').remove()" class="absolute -top-12 right-0 bg-white text-charcoal px-4 py-2 rounded">
-            Close
-          </button>
-          <iframe src="${service.calBookingUrl}" class="w-full h-full rounded-lg" frameborder="0"></iframe>
-        </div>
-      `;
-      document.body.appendChild(iframeContainer);
+      // Open Cal.com in a new window/tab
+      window.open(service.calBookingUrl, '_blank', 'noopener,noreferrer');
       onClose();
     } else {
       alert('Booking for this service is being set up. Please check back soon!');
@@ -147,7 +137,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                           Book Now on Cal.com
                         </Button>
                         <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
-                          Opens in a new window
+                          Opens in a new tab
                         </p>
                       </div>
                     </div>

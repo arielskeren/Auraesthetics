@@ -54,7 +54,7 @@ export default function Footer() {
         <div className="mt-6 pt-4 border-t border-taupe/30 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           <div className="flex space-x-6">
             <a 
-              href="https://instagram.com/auraesthetics" 
+              href="https://instagram.com/wellnessesthetics_" 
               target="_blank"
               rel="noopener noreferrer"
               className="text-warm-gray hover:text-charcoal transition-colors text-sm"
@@ -63,7 +63,7 @@ export default function Footer() {
               Instagram
             </a>
             <a 
-              href="https://tiktok.com/@auraesthetics" 
+              href="https://tiktok.com/@wellnessaesthetics_" 
               target="_blank"
               rel="noopener noreferrer"
               className="text-warm-gray hover:text-charcoal transition-colors text-sm"

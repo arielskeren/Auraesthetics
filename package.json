@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "create-cal-events": "tsx scripts/create-cal-events.ts",
-    "update-cal-events": "tsx scripts/update-cal-events.ts"
+    "create-cal-events": "tsx scripts/create-cal-events-safe.ts",
+    "update-cal-events": "tsx scripts/update-cal-events.ts",
+    "update-cal-names-safe": "tsx scripts/update-cal-names-safe.ts",
+    "verify-cal-events": "tsx scripts/verify-cal-events.ts",
+    "check-stripe": "tsx scripts/check-stripe-integration.ts"
   },
   "dependencies": {
     "axios": "^1.13.0",

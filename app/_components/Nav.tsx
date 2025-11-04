@@ -35,7 +35,7 @@ export default function Nav() {
       
       <motion.nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
-          isScrolled ? 'bg-ivory/95 backdrop-blur-sm shadow-sm' : 'bg-ivory'
+          isScrolled ? 'bg-sand/98 backdrop-blur-md shadow-lg border-b border-taupe/20' : 'bg-ivory'
         }`}
         initial={{ y: 0 }}
         animate={{ y: 0 }}

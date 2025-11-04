@@ -22,18 +22,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
   const handleBookClick = () => {
     if (service.calBookingUrl) {
-      // Open Cal.com in a same-window modal to keep user on site
-      const iframeContainer = document.createElement('div');
-      iframeContainer.className = 'fixed inset-0 z-[60] bg-charcoal/90 flex items-center justify-center p-4';
-      iframeContainer.innerHTML = `
-        <div class="relative w-full max-w-4xl h-[90vh] flex flex-col">
-          <button onclick="this.closest('.fixed').remove()" class="absolute -top-12 right-0 bg-dark-sage text-charcoal px-4 py-2 rounded-lg hover:bg-sage-dark transition-colors">
-            Close Booking
-          </button>
-          <iframe src="${service.calBookingUrl}" class="w-full h-full rounded-lg bg-white" frameborder="0"></iframe>
-        </div>
-      `;
-      document.body.appendChild(iframeContainer);
+      // Open Cal.com in a new window/tab
+      window.open(service.calBookingUrl, '_blank', 'noopener,noreferrer');
       onClose();
     } else {
       alert('Booking for this service is being set up. Please check back soon!');
@@ -138,7 +128,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                   {/* Info */}
                   <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
                     <p className="text-xs text-warm-gray">
-                      <strong className="text-dark-sage">Note:</strong> Booking opens in a new window. Your information is secure and processed through Cal.com with Stripe payment integration.
+                      <strong className="text-dark-sage">Note:</strong> Booking opens in a new tab. Your information is secure and processed through Cal.com with Stripe payment integration.
                     </p>
                   </div>
                 </div>

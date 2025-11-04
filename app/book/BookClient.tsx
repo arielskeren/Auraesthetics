@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Section from '../_components/Section';
 import ServiceCard from '../_components/ServiceCard';
@@ -28,11 +28,11 @@ export default function BookClient() {
   const [services, setServices] = useState<Service[]>([]);
 
   // Load services on mount
-  useState(() => {
+  useEffect(() => {
     import('../_content/services.json').then((module) => {
       setServices(module.default);
     });
-  });
+  }, []);
 
   const categories = ['All', 'Facials', 'Advanced', 'Brows & Lashes', 'Waxing'];
   

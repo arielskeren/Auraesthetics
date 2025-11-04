@@ -72,15 +72,16 @@ async function updateEventType(service: Service): Promise<boolean> {
     };
 
     // Only add price if it's not zero
+    // Cal.com API expects price in cents, so multiply by 100
     if (price > 0) {
-      updateData.price = price;
+      updateData.price = price * 100;
       updateData.currency = 'USD';
     }
 
     console.log(`📝 Updating: ${service.name}`);
     console.log(`   Duration: ${durationMinutes} min`);
     if (price > 0) {
-      console.log(`   Price: $${price}`);
+      console.log(`   Price: $${price} (${price * 100} cents)`);
     }
     
     const response = await axios.patch(
@@ -105,40 +106,90 @@ async function updateEventType(service: Service): Promise<boolean> {
   }
 }
 
+// Maximum 3 concurrent API calls
+const MAX_CONCURRENT = 3;
+
+// Batch process with max 5 concurrent calls
+async function processBatch<T, R>(
+  items: T[],
+  processor: (item: T) => Promise<R>,
+  maxConcurrent: number = MAX_CONCURRENT
+): Promise<R[]> {
+  const results: R[] = [];
+  
+  for (let i = 0; i < items.length; i += maxConcurrent) {
+    const batch = items.slice(i, i + maxConcurrent);
+    console.log(`\n📦 Processing batch ${Math.floor(i / maxConcurrent) + 1} (${batch.length} items)...`);
+    
+    const batchResults = await Promise.all(
+      batch.map(item => processor(item))
+    );
+    
+    results.push(...batchResults);
+    
+    // Wait 4 seconds between batches to be safe with rate limits
+    if (i + maxConcurrent < items.length) {
+      console.log('⏳ Waiting 4 seconds before next batch...');
+      await new Promise(resolve => setTimeout(resolve, 4000));
+    }
+  }
+  
+  return results;
+}
+
 // Main function
 async function main() {
   console.log('🚀 Starting Cal.com event update...\n');
+  console.log(`⚠️  Respecting 3 concurrent API call limit with 4-second delays\n`);
 
   // Read services.json
   const servicesPath = path.join(process.cwd(), 'app', '_content', 'services.json');
   const servicesContent = fs.readFileSync(servicesPath, 'utf-8');
   const services: Service[] = JSON.parse(servicesContent);
 
-  console.log(`Found ${services.length} services to check\n`);
+  // Filter to only services that have event IDs
+  const servicesToUpdate = services.filter(s => s.calEventId);
 
-  const updated: number[] = [];
+  console.log(`Found ${services.length} total services`);
+  console.log(`${servicesToUpdate.length} have event IDs and can be updated\n`);
+
+  if (servicesToUpdate.length === 0) {
+    console.log('⚠️  No services have event IDs to update!');
+    console.log('Run "npm run create-cal-events" to create events first');
+    return;
+  }
+
+  const updated: string[] = [];
   const failed: string[] = [];
 
-  // Process each service
-  for (let i = 0; i < services.length; i++) {
-    const service = services[i];
-    
-    const success = await updateEventType(service);
-    
+  // Process in batches of 5
+  const results = await processBatch(
+    servicesToUpdate,
+    async (service) => {
+      const success = await updateEventType(service);
+      return { service, success };
+    },
+    MAX_CONCURRENT
+  );
+
+  // Categorize results
+  for (const { service, success } of results) {
     if (success) {
-      updated.push(i);
+      updated.push(service.name);
     } else {
       failed.push(service.name);
     }
-
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 300));
   }
 
   // Summary
   console.log('\n📊 Summary:');
-  console.log(`   Updated: ${updated.length} events`);
-  console.log(`   Failed: ${failed.length}`);
+  console.log(`   ✅ Updated: ${updated.length} events`);
+  console.log(`   ❌ Failed: ${failed.length}`);
+  
+  if (updated.length > 0) {
+    console.log('\n✅ Successfully Updated:');
+    updated.forEach(name => console.log(`   - ${name}`));
+  }
   
   if (failed.length > 0) {
     console.log('\n⚠️  Failed services:');
