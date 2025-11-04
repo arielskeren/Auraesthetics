@@ -63,7 +63,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
             >
               {/* Close Button */}
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="absolute top-4 right-4 z-10 p-2 hover:bg-sand/30 rounded-full transition-colors"
                 aria-label="Close modal"
               >
