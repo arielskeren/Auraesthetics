@@ -3,7 +3,7 @@ import AboutClient from './AboutClient';
 
 export const metadata: Metadata = {
   title: 'About Amy — Aura Wellness Aesthetics',
-  description: 'Meet Amy, Fort Lauderdale aesthetician with a calm, intuitive approach to skin health blending modern modalities with bohemian design.',
+  description: 'Meet Amy, Fort Lauderdale aesthetician with a calm, intuitive approach to skin health blending modern aesthetics with natural warmth.',
 };
 
 export default function About() {

@@ -5,10 +5,10 @@ import ClientLayout from "./ClientLayout";
 
 export const metadata: Metadata = {
   title: "Aura Wellness Aesthetics — Amy",
-  description: "Bohemian, serene skincare studio by Amy in Fort Lauderdale, FL. Customized facials, brows, and gentle advanced treatments. Servicing all of South Florida.",
+  description: "Wellness to your aura skincare studio by Amy in Fort Lauderdale, FL. Customized facials, brows, and gentle advanced treatments. Servicing all of South Florida.",
   openGraph: {
     title: "Aura Wellness Aesthetics — Amy",
-    description: "Bohemian, serene skincare studio by Amy. Customized facials, brows, and gentle advanced treatments in Fort Lauderdale, FL.",
+    description: "Wellness to your aura skincare studio by Amy. Customized facials, brows, and gentle advanced treatments in Fort Lauderdale, FL.",
     type: "website",
   },
 };

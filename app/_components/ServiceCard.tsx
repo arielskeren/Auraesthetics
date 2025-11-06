@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
 interface ServiceCardProps {
   name: string;
@@ -21,6 +22,7 @@ export default function ServiceCard({ name, summary, duration, price, category, 
   };
 
   const gradient = gradients[category as keyof typeof gradients] || gradients['Facials'];
+  const photoPaths = slug ? getServicePhotoPaths(slug) : [];
 
   return (
     <motion.div
@@ -30,19 +32,28 @@ export default function ServiceCard({ name, summary, duration, price, category, 
     >
       <div className="bg-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-lg transition-shadow duration-200 h-full flex flex-col">
         {/* Service image or gradient placeholder */}
-        {slug ? (
+        {slug && photoPaths.length > 0 ? (
           <div className="h-48 flex-shrink-0 bg-gray-200 relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
-              src={`/services/${slug}.jpg`} 
+              src={photoPaths[0]} 
               alt={name}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // Fallback to gradient if image doesn't exist
                 const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                if (target.parentElement) {
-                  target.parentElement.className = `h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`;
+                // Try fallback paths if available
+                const currentSrc = target.src;
+                const currentIndex = photoPaths.findIndex(path => currentSrc.includes(path.split('/').pop() || ''));
+                
+                if (currentIndex < photoPaths.length - 1) {
+                  // Try next fallback path
+                  target.src = photoPaths[currentIndex + 1];
+                } else {
+                  // No more fallbacks, show gradient
+                  target.style.display = 'none';
+                  if (target.parentElement) {
+                    target.parentElement.className = `h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`;
+                  }
                 }
               }}
             />

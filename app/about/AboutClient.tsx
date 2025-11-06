@@ -77,7 +77,7 @@ export default function AboutClient() {
             <h2 className="text-h2 font-serif text-charcoal mb-6">About Amy</h2>
             <div className="space-y-4 text-warm-gray leading-relaxed">
               <p>
-                Amy is an aesthetician with a calm, intuitive approach to skin health. Her studio blends modern modalities with grounded, bohemian design—soft light, natural textures, and unhurried care.
+                Amy takes a thoughtful, intuitive approach to skin care, focusing on balance, calm, and long-term skin health. Her studio blends modern aesthetics with natural warmth — soft light, earthy tones, and a sense of calm that defines every treatment.
               </p>
               <p>
                 Sessions are tailored to your skin&apos;s needs with ingredient‑mindful products and gentle technique. She believes that healthy skin begins with understanding what your skin actually needs, not what trends dictate.

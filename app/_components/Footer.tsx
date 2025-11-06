@@ -23,7 +23,7 @@ export default function Footer() {
           <div>
             <h3 className="text-2xl font-serif text-charcoal mb-2">Aura Wellness Aesthetics</h3>
             <p className="text-warm-gray text-sm leading-relaxed">
-              Bohemian, serene skincare studio by Amy. Customized facials, brows, and gentle advanced treatments.
+              Wellness to your aura skincare studio by Amy. Customized facials, brows, and gentle advanced treatments.
             </p>
           </div>
 

@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import Button from './Button';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
+import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
 interface ServiceModalProps {
   isOpen: boolean;
@@ -27,6 +28,10 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
   const buttonRef = useRef<HTMLButtonElement>(null);
   const calLink = service ? extractCalLink(service.calBookingUrl) : null;
   const namespace = service?.slug || 'booking';
+  
+  // Hooks must be called before any early returns
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [showPlaceholder, setShowPlaceholder] = useState(false);
 
   // Initialize Cal.com when modal opens and service is available
   useEffect(() => {
@@ -39,17 +44,34 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
     }
   }, [isOpen, service, calLink, namespace]);
 
+  // Reset photo state when service changes
+  useEffect(() => {
+    setPhotoIndex(0);
+    setShowPlaceholder(false);
+  }, [service?.slug]);
+
   if (!service) return null;
 
-  // Generate before/after placeholder images based on service category
+  // Generate placeholder emoji for gradient fallback
   const placeholderImages = {
-    'Facials': ['🥑', '✨'],
-    'Advanced': ['🔬', '🌟'],
-    'Brows & Lashes': ['🎨', '💫'],
-    'Waxing': ['🌈', '✨'],
+    'Facials': '🥑',
+    'Advanced': '🔬',
+    'Brows & Lashes': '🎨',
+    'Waxing': '🌈',
   };
 
-  const placeholders = placeholderImages[service.category as keyof typeof placeholderImages] || ['🖼️', '✨'];
+  const placeholderEmoji = placeholderImages[service.category as keyof typeof placeholderImages] || '🖼️';
+  const photoPaths = getServicePhotoPaths(service.slug);
+
+  const handlePhotoError = () => {
+    if (photoIndex < photoPaths.length - 1) {
+      // Try next fallback path
+      setPhotoIndex(photoIndex + 1);
+    } else {
+      // No more fallbacks, show gradient placeholder
+      setShowPlaceholder(true);
+    }
+  };
 
   const handleClose = () => {
     onClose();
@@ -90,35 +112,47 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
 
               {/* Content */}
               <div className="overflow-hidden">
-                {/* Hero Image Placeholder */}
-                <div className="h-32 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand relative">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-4xl opacity-30">{placeholders[0]}</span>
+                {/* Service Photo Banner - 18:9 aspect ratio */}
+                {showPlaceholder || photoPaths.length === 0 ? (
+                  <div className="relative w-full bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand" style={{ aspectRatio: '18/9' }}>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-4xl opacity-30">{placeholderEmoji}</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="relative w-full max-w-5xl mx-auto" style={{ aspectRatio: '18/9', maxHeight: '50vh' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={photoPaths[photoIndex]} 
+                      alt={service.name}
+                      className="w-full h-full object-cover object-center"
+                      onError={handlePhotoError}
+                    />
+                  </div>
+                )}
 
                 {/* Service Details */}
-                <div className="p-4">
+                <div className="p-6">
                   {/* Header with Duration/Price on Right */}
-                  <div className="mb-3">
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div className="mb-4">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                       <div className="flex-1">
-                        <span className="inline-block px-2 py-0.5 bg-dark-sage/20 text-dark-sage text-[10px] font-medium rounded-full mb-1">
+                        <span className="inline-block px-3 py-1 bg-dark-sage/20 text-dark-sage text-xs font-medium rounded-full mb-2">
                           {service.category}
                         </span>
-                        <h2 className="text-xl md:text-2xl font-serif text-charcoal mb-1">{service.name}</h2>
-                        <p className="text-sm text-warm-gray leading-tight">{service.summary}</p>
+                        <h2 className="text-2xl md:text-3xl font-serif text-charcoal mb-2">{service.name}</h2>
+                        <p className="text-base text-warm-gray leading-relaxed">{service.summary}</p>
                       </div>
                       {/* Duration & Price */}
-                      <div className="flex flex-col gap-1.5 text-xs text-warm-gray">
+                      <div className="flex flex-col gap-2 text-sm text-warm-gray">
                         <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span className="font-medium">{service.duration}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span className="font-medium">{service.price}</span>
@@ -128,17 +162,17 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                   </div>
 
                   {/* Service Details */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Left: Booking CTA */}
                     <div className="order-2 lg:order-1">
-                      <div className="p-4 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
-                        <div className="flex items-center gap-2 mb-3">
-                          <svg className="w-5 h-5 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="p-5 bg-dark-sage/10 rounded-lg border-2 border-dark-sage/30">
+                        <div className="flex items-center gap-2 mb-4">
+                          <svg className="w-6 h-6 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <h4 className="text-sm font-semibold text-charcoal">Book This Treatment</h4>
+                          <h4 className="text-base font-semibold text-charcoal">Book This Treatment</h4>
                         </div>
-                        <p className="text-xs text-warm-gray mb-4">
+                        <p className="text-sm text-warm-gray mb-4">
                           Click the button below to view available times and complete your booking in our secure booking system.
                         </p>
                         {calLink ? (
@@ -147,7 +181,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                             data-cal-link={calLink}
                             data-cal-namespace={namespace}
                             data-cal-config='{"layout":"month_view"}'
-                            className="w-full bg-dark-sage text-charcoal py-2.5 rounded-lg text-sm font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
+                            className="w-full bg-dark-sage text-charcoal py-3 rounded-lg text-base font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
                           >
                             Book Now on Cal.com
                           </button>
@@ -159,54 +193,22 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                             Booking Coming Soon
                           </Button>
                         )}
-                        <p className="text-[9px] text-warm-gray/70 text-center italic mt-3">
+                        <p className="text-xs text-warm-gray/70 text-center italic mt-3">
                           Opens in popup calendar
                         </p>
                       </div>
                     </div>
 
-                      {/* Right: Before/After & Description */}
-                      <div className="order-1 lg:order-2">
-                        {/* Description */}
-                        {service.description && (
-                          <div className="mb-2">
-                            <h3 className="text-sm font-serif text-charcoal mb-1">About This Treatment</h3>
-                            <p className="text-xs text-warm-gray leading-tight">{service.description}</p>
-                          </div>
-                        )}
-
-                        {/* Before & After Grid */}
+                    {/* Right: Description */}
+                    <div className="order-1 lg:order-2">
+                      {service.description && (
                         <div>
-                          <h3 className="text-sm font-serif text-charcoal mb-1.5">Before & After</h3>
-                          <div className="grid grid-cols-2 gap-1.5">
-                        <motion.div
-                          className="aspect-[4/3] bg-gradient-to-br from-warm-gray/20 via-taupe/30 to-sand rounded overflow-hidden relative group cursor-pointer"
-                          whileHover={{ scale: 1.02 }}
-                        >
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-2xl mb-0.5 opacity-40">{placeholders[0]}</span>
-                            <p className="text-[10px] text-warm-gray font-medium">Before</p>
-                          </div>
-                          <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
-                        </motion.div>
-                        <motion.div
-                          className="aspect-[4/3] bg-gradient-to-br from-dark-sage/30 via-taupe/20 to-sand rounded overflow-hidden relative group cursor-pointer"
-                          whileHover={{ scale: 1.02 }}
-                        >
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-2xl mb-0.5 opacity-40">{placeholders[1]}</span>
-                            <p className="text-[10px] text-warm-gray font-medium">After</p>
-                          </div>
-                          <div className="absolute inset-0 bg-charcoal/0 group-hover:bg-charcoal/5 transition-colors" />
-                        </motion.div>
-                          </div>
-                          <p className="text-[9px] text-warm-gray/70 mt-1 text-center italic">
-                            Results may vary
-                          </p>
+                          <h3 className="text-lg font-serif text-charcoal mb-3">About This Treatment</h3>
+                          <p className="text-sm text-warm-gray leading-relaxed">{service.description}</p>
                         </div>
-                      </div>
+                      )}
                     </div>
-
+                  </div>
                 </div>
               </div>
             </motion.div>

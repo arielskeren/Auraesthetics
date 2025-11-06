@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import Section from '../_components/Section';
 import ServiceCard from '../_components/ServiceCard';
 import BookingModal from '../_components/BookingModal';
+import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
 interface Service {
   category: string;
@@ -134,15 +135,25 @@ export default function BookClient() {
                     <div className="h-48 flex-shrink-0 bg-gray-200 relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
-                        src={`/services/${service.slug}.jpg`} 
+                        src={getServicePhotoPaths(service.slug)[0]} 
                         alt={service.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           // Fallback to gradient if image doesn't exist
                           const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          if (target.parentElement) {
-                            target.parentElement.className = 'h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand';
+                          const photoPaths = getServicePhotoPaths(service.slug);
+                          const currentSrc = target.src;
+                          const currentIndex = photoPaths.findIndex(path => currentSrc.includes(path.split('/').pop() || ''));
+                          
+                          if (currentIndex < photoPaths.length - 1) {
+                            // Try next fallback path
+                            target.src = photoPaths[currentIndex + 1];
+                          } else {
+                            // No more fallbacks, show gradient
+                            target.style.display = 'none';
+                            if (target.parentElement) {
+                              target.parentElement.className = 'h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand';
+                            }
                           }
                         }}
                       />

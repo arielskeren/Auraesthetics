@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import Link from 'next/link';
 import Button from './_components/Button';
 import Section from './_components/Section';
@@ -70,7 +71,7 @@ export default function HomeClient() {
             Skin rituals, done gently.
           </h1>
           <p className="text-base md:text-lg lg:text-xl text-warm-gray mb-5 md:mb-4 leading-relaxed max-w-2xl mx-auto px-4 md:px-0">
-            At Aura Wellness Aesthetics, Amy blends modern technique with a calming, bohemian touch to support healthy, luminous skin.
+            At Aura Wellness Aesthetics, Amy blends modern technique with a calming touch to support healthy, luminous skin.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link href="/book">
@@ -219,7 +220,15 @@ export default function HomeClient() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <div className="aspect-square rounded-lg bg-gradient-to-br from-taupe/40 via-dark-sage/20 to-sand" />
+            <div className="aspect-square rounded-lg overflow-hidden relative shadow-lg">
+              <Image
+                src="/amy-photo.jpg"
+                alt="Amy - Aura Wellness Aesthetics"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            </div>
           </motion.div>
 
           <motion.div
@@ -230,7 +239,7 @@ export default function HomeClient() {
           >
             <h2 className="text-h1 font-serif text-charcoal mb-6">Meet Amy</h2>
             <p className="text-warm-gray leading-relaxed mb-6">
-              Amy is an aesthetician with a calm, intuitive approach to skin health. Her studio blends modern modalities with grounded, bohemian design—soft light, natural textures, and unhurried care.
+              Amy takes a thoughtful, intuitive approach to skin care, focusing on balance, calm, and long-term skin health. Her studio blends modern aesthetics with natural warmth — soft light, earthy tones, and a sense of calm that defines every treatment.
             </p>
             <p className="text-warm-gray leading-relaxed mb-8">
               Sessions are tailored to your skin&apos;s needs with ingredient‑mindful products and gentle technique.
@@ -244,85 +253,6 @@ export default function HomeClient() {
         </div>
       </Section>
 
-      {/* Reviews Section */}
-      <Section background="sand">
-        {/* Decorative green accents */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-dark-sage/5 via-transparent to-dark-sage/5 opacity-40" />
-        <motion.div
-          initial={{ opacity: 1, y: 0 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-4"
-        >
-          <h2 className="text-h1 font-serif text-charcoal mb-4">Client Love</h2>
-          <p className="text-warm-gray max-w-2xl mx-auto">
-            Hear what our clients have to say about their experience at Aura Wellness Aesthetics.
-          </p>
-        </motion.div>
-
-        <div className="max-w-5xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-            {/* Google Reviews Placeholder */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="bg-white p-8 rounded-lg shadow-sm text-center"
-            >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-dark-sage/60 to-taupe/30 mx-auto mb-4 flex items-center justify-center">
-                <svg className="w-8 h-8 text-charcoal" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
-              <h3 className="text-xl font-serif text-charcoal mb-2">Google Reviews</h3>
-              <p className="text-warm-gray text-sm mb-4">See what clients are saying</p>
-              <a 
-                href="#" 
-                className="text-dark-sage hover:text-charcoal transition-colors text-sm font-medium"
-              >
-                Coming Soon
-              </a>
-            </motion.div>
-
-            {/* Yelp Reviews Placeholder */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-white p-8 rounded-lg shadow-sm text-center"
-            >
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-taupe/40 to-dark-sage/50 mx-auto mb-4 flex items-center justify-center">
-                <svg className="w-8 h-8 text-charcoal" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                </svg>
-              </div>
-              <h3 className="text-xl font-serif text-charcoal mb-2">Yelp Reviews</h3>
-              <p className="text-warm-gray text-sm mb-4">Read client experiences</p>
-              <a 
-                href="#" 
-                className="text-dark-sage hover:text-charcoal transition-colors text-sm font-medium"
-              >
-                Coming Soon
-              </a>
-            </motion.div>
-          </div>
-
-          <motion.p
-          initial={{ opacity: 1 }}
-          whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-center text-warm-gray text-sm"
-          >
-            Reviews will be available after our official launch. Join the list to be among our first clients!
-          </motion.p>
-        </div>
-      </Section>
-
       {/* Social Media Feed */}
       <Section background="ivory">
         {/* Subtle green background tint */}
@@ -332,13 +262,13 @@ export default function HomeClient() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-4"
+          className="text-center"
         >
-          <h2 className="text-h1 font-serif text-charcoal mb-4">Follow Our Journey</h2>
-          <p className="text-warm-gray max-w-2xl mx-auto mb-6">
+          <h2 className="text-h1 font-serif text-charcoal mb-4">Follow My Journey</h2>
+          <p className="text-warm-gray max-w-2xl mx-auto mb-8">
             Stay connected on Instagram and TikTok for skincare tips, behind-the-scenes, and client transformations.
           </p>
-          <div className="flex justify-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
             <a 
               href="https://instagram.com/wellnessesthetics_" 
               target="_blank"
@@ -356,49 +286,6 @@ export default function HomeClient() {
               @wellnessaesthetics_ on TikTok
             </a>
           </div>
-        </motion.div>
-
-        {/* Instagram Feed Placeholder */}
-        <motion.div
-          initial={{ opacity: 1, y: 0 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="max-w-6xl mx-auto"
-        >
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((item, index) => (
-              <motion.div
-                key={item}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="aspect-square rounded-lg bg-gradient-to-br from-sand via-taupe/20 to-dark-sage/40 flex items-center justify-center group cursor-pointer hover:shadow-lg transition-shadow"
-              >
-                <svg 
-                  className="w-12 h-12 text-warm-gray/40 group-hover:text-dark-sage transition-colors" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </motion.div>
-            ))}
-          </div>
-          <p className="text-center text-warm-gray text-sm mt-8">
-            Instagram feed coming soon! Follow us{' '}
-            <a 
-              href="https://instagram.com/wellnessesthetics_"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-dark-sage hover:underline font-medium"
-            >
-              @wellnessesthetics_
-            </a>
-            {' '}to see treatment highlights, skincare education, and studio vibes.
-          </p>
         </motion.div>
       </Section>
 

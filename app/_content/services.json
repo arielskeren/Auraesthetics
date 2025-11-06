@@ -133,18 +133,6 @@
   },
   {
     "category": "Brows & Lashes",
-    "name": "Brow Lamination",
-    "slug": "brow-lamination",
-    "summary": "Lifted, fuller-looking brows that stay in place.",
-    "description": "A lifting and setting treatment that transforms unruly brows into structured, polished arches. The process creates the appearance of thicker brows while keeping them perfectly in place for 6–8 weeks.",
-    "duration": "60 min",
-    "price": "from $80",
-    "calEventId": 3815429,
-    "calBookingUrl": "https://cal.com/auraesthetics/brow-lamination",
-    "testPricing": false
-  },
-  {
-    "category": "Brows & Lashes",
     "name": "Brow Tint",
     "slug": "brow-tint",
     "summary": "Tint for natural definition.",
@@ -167,6 +155,18 @@
   },
   {
     "category": "Brows & Lashes",
+    "name": "Brow Lamination",
+    "slug": "brow-lamination",
+    "summary": "Lifted, fuller-looking brows that stay in place.",
+    "description": "A lifting and setting treatment that transforms unruly brows into structured, polished arches. The process creates the appearance of thicker brows while keeping them perfectly in place for 6–8 weeks.",
+    "duration": "60 min",
+    "price": "from $80",
+    "calEventId": 3815429,
+    "calBookingUrl": "https://cal.com/auraesthetics/brow-lamination",
+    "testPricing": false
+  },
+  {
+    "category": "Brows & Lashes",
     "name": "Lash lift + tint",
     "slug": "lash-lift-tint",
     "summary": "Low‑maintenance curl and depth for natural lashes.",
@@ -178,7 +178,7 @@
   },
   {
     "category": "Brows & Lashes",
-    "name": "Brow Lamination & Lash lift and tint",
+    "name": "Brow Lamination + Lash Lift & Tint",
     "slug": "brow-lamination-lash-lift-combo",
     "summary": "Full brow and lash transformation.",
     "description": "Complete transformation combining brow lamination and lash lift for maximum impact.",
