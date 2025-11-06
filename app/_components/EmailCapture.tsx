@@ -38,7 +38,7 @@ interface EmailCaptureProps {
 
 export default function EmailCapture({ 
   title = "Welcome Offer",
-  description = "Join our waitlist and get 15% off your first service",
+  description = "Join our exclusive mailing list and get 15% off your first service",
   includeSMS = true,
   showCloseLink = false,
   onCloseLinkClick,
@@ -177,7 +177,7 @@ export default function EmailCapture({
                 Welcome to Aura Wellness Aesthetics
               </h1>
               <p className="text-warm-gray text-lg leading-relaxed">
-                Join our waitlist and get <span className="text-3xl font-bold text-dark-sage">15% OFF</span> your first service
+                Join our exclusive mailing list and get <span className="text-3xl font-bold text-dark-sage">15% OFF</span> your first service
               </p>
               <p className="text-sm text-warm-gray/80 mt-3">New clients only • Up to $30 value • Valid for 3 months</p>
             </div>

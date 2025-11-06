@@ -66,8 +66,8 @@ export default function EmailCaptureModal({
               <div className="overflow-y-auto max-h-[90vh]">
                 <div className="p-5">
                   <EmailCapture 
-                    title={isWelcomeOffer ? "Welcome Offer" : "Join Our Waitlist"}
-                    description={isWelcomeOffer ? "Join our waitlist and get 15% off your first service" : "Be the first to know when booking opens"}
+                    title={isWelcomeOffer ? "Welcome Offer" : "Join Our Exclusive List"}
+                    description={isWelcomeOffer ? "Join our exclusive mailing list and get 15% off your first service" : "Be the first to know when booking opens"}
                     includeSMS={true}
                     showCloseLink={isWelcomeOffer ? true : showCloseButton}
                     onCloseLinkClick={onClose}

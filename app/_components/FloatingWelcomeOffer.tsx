@@ -131,7 +131,7 @@ export default function FloatingWelcomeOffer() {
                 <div className="p-6">
                   <EmailCapture 
                     title="Welcome Offer"
-                    description="Join our waitlist and get 15% off your first service"
+                    description="Join our exclusive mailing list and get 15% off your first service"
                     includeSMS={true}
                     showCloseLink={false}
                     onCloseLinkClick={() => {}}

@@ -48,7 +48,7 @@ export default function AdminSignIn() {
     // Remove cookie
     document.cookie = 'auraAdminAuth=; path=/; max-age=0';
     setIsAuthenticated(false);
-    window.location.href = '/landing';
+    window.location.href = '/';
   };
 
   if (isAuthenticated) {
