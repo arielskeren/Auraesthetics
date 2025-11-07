@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { calRequest } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -43,8 +43,7 @@ async function verifyEvent(service: Service): Promise<{ exists: boolean; eventId
   // If we have an event ID, try to fetch it
   if (service.calEventId) {
     try {
-      const client = getCalClient();
-      const response = await client.get(`event-types/${service.calEventId}`);
+      const response = await calRequest<any>('get', `event-types/${service.calEventId}`);
       
       return {
         exists: true,

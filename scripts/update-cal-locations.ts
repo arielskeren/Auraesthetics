@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient, getCalRateLimitInfo } from '../lib/calClient';
+import { calRequest, getCalRateLimitInfo } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -115,8 +115,7 @@ async function updateEventLocation(service: Service, delayMs: number = 8000): Pr
     console.log(`   Address: ${LOCATION_ADDRESS}`);
     console.log(`   Making API call...`);
 
-    const client = getCalClient();
-    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
+    const response = await calRequest<any>('patch', `event-types/${service.calEventId}`, updateData);
 
     // Check response status
     if (response.status === 200 || response.status === 204) {

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { calRequest } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -150,8 +150,7 @@ async function createEventTypeSafe(service: Service, delayMs: number = 8000): Pr
     
     // Cal.com API v1 endpoint
     // Try different authentication methods - Cal.com might require only one or both
-    const client = getCalClient();
-    const response = await client.post('event-types', eventTypeData);
+    const response = await calRequest<any>('post', 'event-types', eventTypeData);
 
     // Check response status
     if (response.status === 200 || response.status === 201) {

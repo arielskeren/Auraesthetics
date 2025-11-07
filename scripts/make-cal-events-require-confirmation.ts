@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient, getCalRateLimitInfo, getCalRateLimitRemaining } from '../lib/calClient';
+import { calRequest, getCalRateLimitInfo, getCalRateLimitRemaining } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -42,8 +42,7 @@ async function setRequireConfirmation(service: Service): Promise<{ success: bool
 
     console.log(`📝 Setting requiresConfirmation for: ${service.name} (Event ID: ${service.calEventId})`);
     
-    const client = getCalClient();
-    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
+    const response = await calRequest<any>('patch', `event-types/${service.calEventId}`, updateData);
 
     // Check and display rate limits
     const rateLimit = getCalRateLimitInfo(response.headers ?? {});

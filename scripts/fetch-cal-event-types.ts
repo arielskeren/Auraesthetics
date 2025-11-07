@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient, getCalRateLimitInfo } from '../lib/calClient';
+import { calRequest, getCalRateLimitInfo } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -20,8 +20,7 @@ function sleep(ms: number) {
 async function fetchEventTypes() {
   console.log('🔍 Fetching Cal.com event types...');
   try {
-    const client = getCalClient();
-    const response = await client.get('event-types', {
+    const response = await calRequest<any>('get', 'event-types', {
       params: {
         take: 100,
         skip: 0,

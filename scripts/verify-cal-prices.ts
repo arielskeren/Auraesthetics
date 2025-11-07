@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { calRequest } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -19,8 +19,7 @@ interface Service {
 
 async function verifyEventPrice(eventId: number): Promise<{ price: number; currency: string | null }> {
   try {
-    const client = getCalClient();
-    const response = await client.get(`event-types/${eventId}`);
+    const response = await calRequest<any>('get', `event-types/${eventId}`);
 
     return {
       price: response.data?.price || 0,

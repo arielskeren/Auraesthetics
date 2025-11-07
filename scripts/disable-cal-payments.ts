@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient, getCalRateLimitRemaining } from '../lib/calClient';
+import { calRequest, getCalRateLimitRemaining } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -46,8 +46,7 @@ async function disablePayment(service: Service): Promise<{ success: boolean; wai
 
     console.log(`📝 Disabling payment for: ${service.name} (Event ID: ${service.calEventId})`);
     
-    const client = getCalClient();
-    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
+    const response = await calRequest<any>('patch', `event-types/${service.calEventId}`, updateData);
 
     // Check rate limits
     const waitTime = checkRateLimit(response.headers);

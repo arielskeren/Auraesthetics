@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { HiOutlineArrowNarrowRight } from 'react-icons/hi';
 import Section from '../_components/Section';
-import ServiceCard from '../_components/ServiceCard';
 import BookingModal from '../_components/BookingModal';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
@@ -51,8 +51,75 @@ export default function BookClient() {
     setTimeout(() => setSelectedService(null), 300);
   };
 
+  const steps = [
+    {
+      title: 'Choose Your Service',
+      description:
+        'Browse our services and click "Book Now" on your preferred treatment. You\'ll be taken to our secure Cal.com booking page.',
+    },
+    {
+      title: 'Select Your Time',
+      description:
+        "View real-time availability and choose a date and time that works for your schedule. Times are synced with Amy's calendar.",
+    },
+    {
+      title: 'Complete Intake Form',
+      description:
+        'Fill out a brief intake form with your skin concerns, goals, and any allergies. This helps Amy customize your treatment.',
+    },
+    {
+      title: 'Confirm & Arrive',
+      description:
+        'Receive confirmation with all the details you need. Then just show up on time and let us take care of the rest.',
+    },
+  ];
+
   return (
     <>
+      {/* How It Works */}
+      <Section background="sand" className="relative !pb-16">
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-l from-dark-sage/8 via-transparent to-dark-sage/8 opacity-40" />
+
+        <div className="max-w-5xl mx-auto relative z-10">
+          <motion.div
+            initial={{ opacity: 1, y: 0 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-h2 font-serif text-charcoal mb-8 text-center">How It Works</h2>
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-center gap-8">
+              {steps.map((step, index) => (
+                <Fragment key={step.title}>
+                  <div className="bg-white p-6 rounded-lg shadow-sm flex-1 min-w-[220px]">
+                    <div className="flex items-center gap-4 mb-4">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-dark-sage text-charcoal font-semibold">
+                        {index + 1}
+                      </span>
+                      <h3 className="text-h3 font-serif text-charcoal">{step.title}</h3>
+                    </div>
+                    <p className="text-warm-gray text-sm leading-relaxed">{step.description}</p>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <>
+                      <div className="hidden md:flex justify-center">
+                        <HiOutlineArrowNarrowRight className="h-8 w-8 text-dark-sage" />
+                      </div>
+                      <div className="md:hidden flex justify-center">
+                        <HiOutlineArrowNarrowRight className="h-6 w-6 text-dark-sage rotate-90" />
+                      </div>
+                    </>
+                  )}
+                </Fragment>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </Section>
+
       {/* Hero */}
       <Section background="sand" className="relative">
         {/* Decorative green line */}
@@ -72,13 +139,6 @@ export default function BookClient() {
           <p className="text-lg text-warm-gray leading-relaxed mb-8">
             Choose your service below and you&apos;ll be redirected to our secure booking system to select your time and complete your appointment.
           </p>
-          
-          {/* Test Mode Banner */}
-          <div className="inline-block px-6 py-3 bg-dark-sage/30 rounded-lg border-2 border-dark-sage mb-4">
-            <p className="text-sm text-charcoal font-medium">
-              ⚙️ Booking in test mode - pricing will be set soon
-            </p>
-          </div>
         </motion.div>
       </Section>
 
@@ -188,56 +248,6 @@ export default function BookClient() {
             <p className="text-warm-gray">No services found in this category.</p>
           </div>
         )}
-      </Section>
-
-      {/* Booking Instructions */}
-      <Section background="sand" className="relative">
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-l from-dark-sage/8 via-transparent to-dark-sage/8 opacity-40" />
-        
-        <div className="max-w-4xl mx-auto relative z-10">
-        <motion.div
-          initial={{ opacity: 1, y: 0 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-h2 font-serif text-charcoal mb-8 text-center">
-              How It Works
-          </h2>
-          
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white p-8 rounded-lg">
-                <h3 className="text-h3 font-serif text-charcoal mb-4">1. Choose Your Service</h3>
-              <p className="text-warm-gray">
-                  Browse our services and click &quot;Book Now&quot; on your preferred treatment. You&apos;ll be taken to our secure Cal.com booking page.
-              </p>
-            </div>
-
-              <div className="bg-white p-8 rounded-lg">
-                <h3 className="text-h3 font-serif text-charcoal mb-4">2. Select Your Time</h3>
-              <p className="text-warm-gray">
-                  View real-time availability and choose a date and time that works for your schedule. Times are synced with Amy&apos;s calendar.
-              </p>
-            </div>
-
-              <div className="bg-white p-8 rounded-lg">
-                <h3 className="text-h3 font-serif text-charcoal mb-4">3. Complete Intake Form</h3>
-              <p className="text-warm-gray">
-                  Fill out a brief intake form with your skin concerns, goals, and any allergies. This helps Amy customize your treatment.
-              </p>
-            </div>
-
-              <div className="bg-white p-8 rounded-lg">
-                <h3 className="text-h3 font-serif text-charcoal mb-4">4. Confirm & Arrive</h3>
-              <p className="text-warm-gray">
-                  Receive confirmation with all the details you need. Then just show up on time and let us take care of the rest.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-        </div>
       </Section>
 
       {/* Booking Modal */}

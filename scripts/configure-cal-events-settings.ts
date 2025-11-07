@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { calRequest } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -57,8 +57,7 @@ async function configureEventSettings(service: Service): Promise<{ success: bool
     console.log(`   - Booking Window: ${daysInFuture} days`);
     console.log(`   - Minimum Notice: 120 minutes`);
     
-    const client = getCalClient();
-    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
+    const response = await calRequest<any>('patch', `event-types/${service.calEventId}`, updateData);
 
     // Check and display rate limits
     const rateLimit = {

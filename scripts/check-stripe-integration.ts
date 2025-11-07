@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { calRequest } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -45,8 +45,7 @@ async function checkEventStripe(service: Service): Promise<{ hasStripe: boolean;
   }
 
   try {
-    const client = getCalClient();
-    const response = await client.get(`event-types/${service.calEventId}`);
+    const response = await calRequest<any>('get', `event-types/${service.calEventId}`);
 
     const eventType = response.data?.event_type || response.data?.data || response.data;
     const hasPrice = eventType.price && eventType.price > 0;

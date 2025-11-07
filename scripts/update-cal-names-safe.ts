@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient, getCalRateLimitInfo } from '../lib/calClient';
+import { calRequest, getCalRateLimitInfo } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -135,8 +135,7 @@ async function updateEventTypeSafe(service: Service, delayMs: number = 5000): Pr
       console.log(`   Price: $${price} (${price * 100} cents)`);
     }
     
-    const client = getCalClient();
-    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
+    const response = await calRequest<any>('patch', `event-types/${service.calEventId}`, updateData);
 
     const rateLimit = getRateLimitInfo(response.headers);
     
