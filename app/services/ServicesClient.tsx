@@ -62,6 +62,69 @@ export default function ServicesClient() {
         </motion.div>
       </Section>
 
+      {/* Pre/Post Care Banner */}
+      <Section background="sand" className="relative !py-10">
+        <div className="absolute inset-0 bg-gradient-to-r from-dark-sage/10 via-transparent to-dark-sage/10 opacity-50" />
+        <div className="max-w-5xl mx-auto relative z-10">
+          <div className="rounded-2xl border border-dark-sage/30 bg-white/80 backdrop-blur-sm shadow-sm">
+            <div className="flex flex-col gap-6 p-6 md:flex-row md:items-start md:gap-8 md:p-8">
+              <div className="flex-1">
+                <h2 className="text-h4 font-serif text-charcoal mb-4">Before Your Service</h2>
+                <ul className="space-y-2 text-sm text-warm-gray">
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Avoid retinoids, exfoliants, or acids 48–72 hours prior</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Minimize sun exposure and tanning</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Arrive with clean, makeup‑free skin when possible</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Communicate any new medications or skin concerns</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="flex-1">
+                <h2 className="text-h4 font-serif text-charcoal mb-4">After Your Service</h2>
+                <ul className="space-y-2 text-sm text-warm-gray">
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Wear SPF daily (non‑negotiable!)</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Skip heat, intense workouts, and actives for 24–48 hours</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Keep skin hydrated and avoid picking</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mr-2">•</span>
+                    <span>Follow any customized aftercare instructions provided</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="rounded-xl bg-dark-sage/20 p-5 md:max-w-xs md:self-stretch">
+                <h3 className="text-base font-serif text-charcoal mb-3">Contraindications</h3>
+                <p className="text-sm text-warm-gray leading-relaxed">
+                  Some services are not appropriate during pregnancy, while using isotretinoin (Accutane), or with
+                  active infections, open lesions, or medical devices (pacemakers, etc.). Share your full health history
+                  during intake so Amy can recommend the safest, most effective options for you.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Section>
+
       {/* Category Filter */}
       <Section background="ivory" className="!py-8 relative">
         {/* Subtle green background */}
@@ -109,81 +172,6 @@ export default function ServicesClient() {
             </motion.div>
           ))}
         </motion.div>
-      </Section>
-
-      {/* Pre/Post Care */}
-      <Section background="sand" className="relative">
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-l from-dark-sage/8 via-transparent to-dark-sage/8 opacity-40" />
-        <div className="max-w-4xl mx-auto relative z-10">
-          <motion.div
-          initial={{ opacity: 1, y: 0 }}
-          whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-h2 font-serif text-charcoal mb-6 text-center">
-              Pre‑ & Post‑Care Guidelines
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white p-8 rounded-lg">
-                <h3 className="text-h3 font-serif text-charcoal mb-4">Before Your Service</h3>
-                <ul className="space-y-3 text-warm-gray">
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Avoid retinoids, exfoliants, or acids 48–72 hours prior</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Minimize sun exposure and tanning</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Arrive with clean, makeup‑free skin when possible</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Communicate any new medications or skin concerns</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="bg-white p-8 rounded-lg">
-                <h3 className="text-h3 font-serif text-charcoal mb-4">After Your Service</h3>
-                <ul className="space-y-3 text-warm-gray">
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Wear SPF daily (non‑negotiable!)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Skip heat, intense workouts, and actives for 24–48 hours</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Keep skin hydrated and avoid picking</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>Follow any customized aftercare instructions provided</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="mt-8 p-6 bg-dark-sage/40 rounded-lg border-l-4 border-dark-sage">
-              <h4 className="text-lg font-serif text-charcoal mb-3">Contraindications</h4>
-              <p className="text-sm text-warm-gray leading-relaxed">
-                Some services are not appropriate during pregnancy, while using isotretinoin (Accutane), 
-                or with active infections, open lesions, or medical devices (pacemakers, etc.). Please share 
-                your full health history during intake so Amy can recommend the safest, most effective options 
-                for you.
-              </p>
-            </div>
-          </motion.div>
-        </div>
       </Section>
 
       {/* Booking Modal */}

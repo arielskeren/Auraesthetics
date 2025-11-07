@@ -6,7 +6,7 @@ const BOOKINGS_API_VERSION = '2024-08-13';
 const EVENT_TYPES_API_VERSION = '2024-06-14';
 const MAX_REQUESTS_PER_MINUTE = 60;
 const RATE_WINDOW_MS = 60_000;
-const REMAINING_THRESHOLD = 60;
+const REMAINING_THRESHOLD = 20;
 const PAUSE_DURATION_MS = 30_000;
 
 let requestTimestamps: number[] = [];
