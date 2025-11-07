@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import ConditionalLayout from "./_components/ConditionalLayout";
 import ClientLayout from "./ClientLayout";
+import ConditionalLayout from "./_components/ConditionalLayout";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({
         </ConditionalLayout>
         <ClientLayout />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
