@@ -1,7 +1,9 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 const CAL_API_BASE_URL = 'https://api.cal.com/v2/';
-const CAL_API_VERSION = '2024-09-04';
+const DEFAULT_CAL_API_VERSION = '2024-09-04';
+const BOOKINGS_API_VERSION = '2024-08-13';
+const EVENT_TYPES_API_VERSION = '2024-06-14';
 const MAX_REQUESTS_PER_MINUTE = 60;
 const RATE_WINDOW_MS = 60_000;
 const REMAINING_THRESHOLD = 60;
@@ -75,7 +77,6 @@ function createClient(): AxiosInstance {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'cal-api-version': CAL_API_VERSION,
     },
   });
 
@@ -112,6 +113,60 @@ function sanitizePath(path: string) {
   return path.startsWith('/') ? path.slice(1) : path;
 }
 
+function hasVersionHeader(headers: Record<string, any>): boolean {
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'cal-api-version');
+}
+
+function resolveVersion(path: string): string {
+  if (path.startsWith('bookings')) {
+    return BOOKINGS_API_VERSION;
+  }
+
+  if (path.startsWith('event-types')) {
+    return EVENT_TYPES_API_VERSION;
+  }
+
+  return DEFAULT_CAL_API_VERSION;
+}
+
+function prepareRequest(
+  path: string,
+  config?: AxiosRequestConfig
+): { preparedPath: string; preparedConfig: AxiosRequestConfig | undefined } {
+  const preparedPath = sanitizePath(path);
+
+  const headers = { ...(config?.headers ?? {}) };
+  if (!hasVersionHeader(headers)) {
+    headers['cal-api-version'] = resolveVersion(preparedPath);
+  }
+
+  const preparedConfig = config ? { ...config, headers } : { headers };
+  return { preparedPath, preparedConfig };
+}
+
+type CalMethod = 'get' | 'post' | 'patch' | 'delete';
+
+async function sendCalRequest<T = any>(
+  method: CalMethod,
+  path: string,
+  dataOrConfig?: any,
+  maybeConfig?: AxiosRequestConfig
+): Promise<AxiosResponse<T>> {
+  const axiosClient = getClient();
+
+  if (method === 'get' || method === 'delete') {
+    const { preparedPath, preparedConfig } = prepareRequest(path, dataOrConfig);
+    return method === 'get'
+      ? axiosClient.get<T>(preparedPath, preparedConfig)
+      : axiosClient.delete<T>(preparedPath, preparedConfig);
+  }
+
+  const { preparedPath, preparedConfig } = prepareRequest(path, maybeConfig);
+  return method === 'post'
+    ? axiosClient.post<T>(preparedPath, dataOrConfig, preparedConfig)
+    : axiosClient.patch<T>(preparedPath, dataOrConfig, preparedConfig);
+}
+
 export function getCalRateLimitRemaining(headers: Record<string, any>) {
   const remaining = getRemainingFromHeaders(headers);
   return typeof remaining === 'number' ? remaining : null;
@@ -143,23 +198,51 @@ function unwrapData<T>(payload: any): T {
 }
 
 export async function calGet<T = any>(path: string, config?: AxiosRequestConfig) {
-  const response = await getClient().get<T>(sanitizePath(path), config);
+  const response = await sendCalRequest<T>('get', path, config);
   return unwrapData<T>(response.data);
 }
 
 export async function calPost<T = any>(path: string, data?: any, config?: AxiosRequestConfig) {
-  const response = await getClient().post<T>(sanitizePath(path), data, config);
+  const response = await sendCalRequest<T>('post', path, data, config);
   return unwrapData<T>(response.data);
 }
 
 export async function calPatch<T = any>(path: string, data?: any, config?: AxiosRequestConfig) {
-  const response = await getClient().patch<T>(sanitizePath(path), data, config);
+  const response = await sendCalRequest<T>('patch', path, data, config);
   return unwrapData<T>(response.data);
 }
 
 export async function calDelete<T = any>(path: string, config?: AxiosRequestConfig) {
-  const response = await getClient().delete<T>(sanitizePath(path), config);
+  const response = await sendCalRequest<T>('delete', path, config);
   return unwrapData<T>(response.data);
+}
+
+export async function calRequest<T = any>(
+  method: 'get',
+  path: string,
+  config?: AxiosRequestConfig
+): Promise<AxiosResponse<T>>;
+
+export async function calRequest<T = any>(
+  method: 'delete',
+  path: string,
+  config?: AxiosRequestConfig
+): Promise<AxiosResponse<T>>;
+
+export async function calRequest<T = any>(
+  method: 'post' | 'patch',
+  path: string,
+  data?: any,
+  config?: AxiosRequestConfig
+): Promise<AxiosResponse<T>>;
+
+export async function calRequest<T = any>(
+  method: CalMethod,
+  path: string,
+  dataOrConfig?: any,
+  maybeConfig?: AxiosRequestConfig
+): Promise<AxiosResponse<T>> {
+  return sendCalRequest<T>(method, path, dataOrConfig, maybeConfig);
 }
 
 export function getCalClient() {

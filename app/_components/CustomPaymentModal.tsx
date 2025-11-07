@@ -134,6 +134,7 @@ function AvailabilityPanel({
     startDate.setDate(startDate.getDate() + weekOffset * 7);
   }
   const startKey = startDate.toISOString();
+  const timezoneFromData = data?.meta?.timezone || 'America/New_York';
 
   useEffect(() => {
     let isMounted = true;
@@ -199,11 +200,17 @@ function AvailabilityPanel({
     {} as Record<string, AvailabilitySlot[]>
   );
 
-  const orderedDays = Object.keys(groupedSlots)
-    .map((key) => {
-      return { key, date: new Date(key), slots: groupedSlots[key] };
-    })
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const orderedDays = Array.from({ length: 7 }, (_, idx) => {
+    const day = new Date(startDate);
+    day.setDate(startDate.getDate() + idx);
+    const dayUtc = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()));
+    const key = dayUtc.toISOString().split('T')[0];
+    return {
+      key,
+      date: day,
+      slots: groupedSlots[key] || [],
+    };
+  });
 
   const handleSlotClick = (slot: AvailabilitySlot) => {
     if (!data) return;
@@ -280,35 +287,50 @@ function AvailabilityPanel({
         )}
 
         {!loading && serviceSlug && !error && orderedDays.length > 0 && (
-          <div className="grid gap-3">
-            {orderedDays.map(({ key, date, slots }) => (
-              <div key={key} className="border border-sand rounded-lg p-3">
-                <p className="text-sm font-medium text-charcoal mb-2">
-                  {formatDateHeading(date)}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {slots.map((slot) => {
-                    const slotDate = new Date(slot.slot);
-                    const label = formatTimeLabel(slotDate);
-                    const isSelected = selectedSlot?.startTime === slot.slot;
-                    return (
-                      <button
-                        key={slot.slot}
-                        type="button"
-                        onClick={() => handleSlotClick(slot)}
-                        className={`w-full px-3 py-1 rounded-md border text-xs font-medium leading-tight whitespace-nowrap text-left transition-colors ${
-                          isSelected
-                            ? 'bg-dark-sage text-charcoal border-dark-sage'
-                            : 'border-sage-dark text-sage-dark hover:bg-sand/30'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+          <div className="overflow-x-auto">
+            <div className="grid gap-4 min-w-[980px]" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+              {orderedDays.map(({ key, date, slots }) => (
+                <div key={key} className="border border-sand rounded-lg p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-charcoal">
+                      {formatDateHeading(date)}
+                    </p>
+                    <p className="text-xs text-warm-gray">
+                      {new Intl.DateTimeFormat('en-US', {
+                        weekday: 'long',
+                        timeZone: timezoneFromData,
+                      }).format(date)}
+                    </p>
+                  </div>
+
+                  {slots.length === 0 ? (
+                    <div className="text-xs text-warm-gray italic">No availability</div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {slots.map((slot) => {
+                        const slotDate = new Date(slot.slot);
+                        const label = formatTimeLabel(slotDate);
+                        const isSelected = selectedSlot?.startTime === slot.slot;
+                        return (
+                          <button
+                            key={slot.slot}
+                            type="button"
+                            onClick={() => handleSlotClick(slot)}
+                            className={`block w-full px-3 py-1 rounded-md border text-xs font-medium leading-tight text-left transition-colors ${
+                              isSelected
+                                ? 'bg-dark-sage text-charcoal border-dark-sage'
+                                : 'border-sage-dark text-sage-dark hover:bg-sand/30'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
