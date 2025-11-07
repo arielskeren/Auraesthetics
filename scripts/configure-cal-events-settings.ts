@@ -20,7 +20,7 @@ interface Service {
 // Check rate limit headers and wait if needed
 function checkRateLimit(headers: any): number {
   const remaining = Number(headers?.['x-ratelimit-remaining']);
-  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 70) {
+  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 60) {
     console.log(`⚠️  Rate limit remaining ${remaining}. Pausing 30s to comply with policy...`);
     return 30_000;
   }

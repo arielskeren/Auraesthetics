@@ -40,7 +40,8 @@ async function syncBookings() {
     const client = getCalClient();
     const calResponse = await client.get('bookings', {
       params: {
-        limit: 100,
+        take: 100,
+        skip: 0,
       },
     });
 

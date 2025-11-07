@@ -11,7 +11,7 @@
 
 ## Rate Limiting
 - Cal.com support confirmed **120 req/min** limit on v2.
-- Project policy: **cap at 60 req/min** and pause 30 seconds whenever remaining quota drops below 70.
+- Project policy: **cap at 60 req/min** and pause 30 seconds whenever remaining quota drops below 60.
 - Every request must log or inspect `x-ratelimit-remaining` and `x-ratelimit-reset` response headers.
 
 ## Implementation Notes

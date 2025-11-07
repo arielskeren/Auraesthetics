@@ -4,7 +4,7 @@ const CAL_API_BASE_URL = 'https://api.cal.com/v2/';
 const CAL_API_VERSION = '2024-09-04';
 const MAX_REQUESTS_PER_MINUTE = 60;
 const RATE_WINDOW_MS = 60_000;
-const REMAINING_THRESHOLD = 70;
+const REMAINING_THRESHOLD = 60;
 const PAUSE_DURATION_MS = 30_000;
 
 let requestTimestamps: number[] = [];
@@ -135,24 +135,31 @@ export function getCalRateLimitInfo(headers: Record<string, any>) {
   };
 }
 
+function unwrapData<T>(payload: any): T {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return payload.data as T;
+  }
+  return payload as T;
+}
+
 export async function calGet<T = any>(path: string, config?: AxiosRequestConfig) {
   const response = await getClient().get<T>(sanitizePath(path), config);
-  return response.data;
+  return unwrapData<T>(response.data);
 }
 
 export async function calPost<T = any>(path: string, data?: any, config?: AxiosRequestConfig) {
   const response = await getClient().post<T>(sanitizePath(path), data, config);
-  return response.data;
+  return unwrapData<T>(response.data);
 }
 
 export async function calPatch<T = any>(path: string, data?: any, config?: AxiosRequestConfig) {
   const response = await getClient().patch<T>(sanitizePath(path), data, config);
-  return response.data;
+  return unwrapData<T>(response.data);
 }
 
 export async function calDelete<T = any>(path: string, config?: AxiosRequestConfig) {
   const response = await getClient().delete<T>(sanitizePath(path), config);
-  return response.data;
+  return unwrapData<T>(response.data);
 }
 
 export function getCalClient() {

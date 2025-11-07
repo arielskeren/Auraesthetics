@@ -23,34 +23,44 @@ async function fetchEventTypes() {
     const client = getCalClient();
     const response = await client.get('event-types', {
       params: {
-        limit: 100,
+        take: 100,
+        skip: 0,
       },
     });
 
+    const payload = response.data;
     const eventTypes =
-      response.data?.eventTypes ??
-      response.data?.event_types ??
-      response.data ??
+      (Array.isArray(payload?.data) && payload.data) ||
+      (Array.isArray(payload?.items) && payload.items) ||
+      (Array.isArray(payload?.eventTypes) && payload.eventTypes) ||
+      (Array.isArray(payload) && payload) ||
       [];
 
     if (!Array.isArray(eventTypes)) {
-      console.error('⚠️ Unexpected response from Cal.com:', response.data);
+      console.error('⚠️ Unexpected response from Cal.com:', payload);
       process.exit(1);
     }
 
-    const simplified = eventTypes.map((event: any) => ({
-      id: event.id ?? event.uid ?? null,
-      slug: event.slug ?? null,
-      title: event.title ?? null,
-      hidden: event.hidden ?? false,
-      duration: event.length ?? event.duration ?? null,
-      requiresConfirmation: event.requiresConfirmation ?? event.requiresConfirmationByDefault ?? false,
-      metadata: {
-        description: event.description ?? null,
-        price: event.price ?? null,
-        currency: event.currency ?? null,
-      },
-    }));
+    const simplified = eventTypes.map((event: any) => {
+      const confirmation =
+        event.requiresConfirmation ??
+        event.requiresConfirmationByDefault ??
+        (event.confirmationPolicy?.type === 'manual');
+
+      return {
+        id: event.id ?? event.uid ?? null,
+        slug: event.slug ?? null,
+        title: event.title ?? null,
+        hidden: event.hidden ?? false,
+        duration: event.lengthInMinutes ?? event.length ?? event.duration ?? null,
+        requiresConfirmation: Boolean(confirmation),
+        metadata: {
+          description: event.description ?? null,
+          price: event.price ?? null,
+          currency: event.currency ?? null,
+        },
+      };
+    });
 
     fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
     fs.writeFileSync(
@@ -80,8 +90,8 @@ async function fetchEventTypes() {
     }
 
     const remainingNumber = rateLimitRemaining ?? null;
-    if (!Number.isNaN(remainingNumber) && remainingNumber > 0 && remainingNumber < 70) {
-      console.log('⏳ Remaining calls below 70. Pausing 30 seconds to comply with policy...');
+    if (!Number.isNaN(remainingNumber) && remainingNumber > 0 && remainingNumber < 60) {
+      console.log('⏳ Remaining calls below 60. Pausing 30 seconds to comply with policy...');
       await sleep(30_000);
       console.log('✅ Throttle pause complete. You can continue safely.');
     }
@@ -92,4 +102,3 @@ async function fetchEventTypes() {
 }
 
 fetchEventTypes();
-

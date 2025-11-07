@@ -54,7 +54,7 @@ async function checkWebhookStatus() {
     console.log('\n📅 Fetching recent bookings from Cal.com...');
     const client = getCalClient();
     const bookingsResponse = await client.get('bookings', {
-      params: { limit: 10 },
+      params: { take: 10, skip: 0 },
     });
 
     const bookings =

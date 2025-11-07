@@ -56,7 +56,7 @@ function calculateWaitTime(rateLimit: RateLimitInfo | null, delayMs: number): nu
     return delayMs;
   }
 
-  if (rateLimit.remaining < 70) {
+  if (rateLimit.remaining < 60) {
     console.log(`   ⚠️  Remaining calls ${rateLimit.remaining}. Enforcing 30s pause per policy...`);
     return 30_000;
   }

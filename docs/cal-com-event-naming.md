@@ -37,7 +37,7 @@ if (webhook.triggerEvent === 'BOOKING_CREATED') {
   // Update booking title via Cal.com API
   try {
     await axios.patch(
-      `https://api.cal.com/v1/bookings/${booking.id}`,
+      `https://api.cal.com/v2/bookings/${booking.id}`,
       { title: newTitle },
       {
         headers: {
