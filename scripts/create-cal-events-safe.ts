@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -150,25 +150,17 @@ async function createEventTypeSafe(service: Service, delayMs: number = 8000): Pr
     
     // Cal.com API v1 endpoint
     // Try different authentication methods - Cal.com might require only one or both
-    const response = await axios.post(
-      `https://api.cal.com/v1/event-types`,
-      eventTypeData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-          'X-Cal-API-Key': CAL_COM_API_KEY, // Alternative header format
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY, // Query param as backup
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.post('event-types', eventTypeData);
 
     // Check response status
     if (response.status === 200 || response.status === 201) {
-      const eventType = response.data.event_type;
-      const eventId = eventType.id;
+      const eventType = response.data?.event_type || response.data?.data || response.data;
+      const eventId = eventType?.id ?? eventType?.uid;
+      if (!eventId) {
+        console.error('   ❌ Response did not include event ID:', response.data);
+        return { success: false };
+      }
       // Ensure username is correct (should be 'auraesthetics' not 'theauraesthetics')
       // CAL_COM_USERNAME is guaranteed to be defined due to early exit check above
       const username = (CAL_COM_USERNAME || 'auraesthetics').replace('theauraesthetics', 'auraesthetics');

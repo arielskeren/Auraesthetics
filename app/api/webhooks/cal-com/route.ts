@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
-import axios from 'axios';
+import { calPatch, calPost } from '@/lib/calClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
 });
-
-const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
 
 // Cal.com webhook handler
 // This will be called when bookings are created/cancelled in Cal.com
@@ -198,23 +196,11 @@ export async function POST(request: NextRequest) {
           console.error('❌ Invalid booking attempt - no valid payment or token');
           
           // Try to cancel the booking via Cal.com API
-          if (CAL_COM_API_KEY && booking.id) {
+          if (booking.id) {
             try {
-              await axios.post(
-                `https://api.cal.com/v1/bookings/${booking.id || booking.uid}/cancel`,
-                {
-                  reason: 'Unauthorized booking - no valid payment found',
-                },
-                {
-                  headers: {
-                    'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-                    'Content-Type': 'application/json',
-                  },
-                  params: {
-                    apiKey: CAL_COM_API_KEY,
-                  },
-                }
-              );
+              await calPost(`bookings/${booking.id || booking.uid}/cancel`, {
+                reason: 'Unauthorized booking - no valid payment found',
+              });
               console.log('✅ Unauthorized booking cancelled via API');
             } catch (cancelError: any) {
               console.error('⚠️  Failed to cancel booking:', cancelError.response?.data || cancelError.message);
@@ -258,7 +244,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update booking title with custom format: [Event Type] - [Client Name] - [Payment Type]
-        if (CAL_COM_API_KEY && booking.id && isValidBooking) {
+        if (booking.id && isValidBooking) {
           try {
             const clientName = booking.attendees?.[0]?.name || 'Client';
             const paymentTypeFromMeta = booking.metadata?.paymentType || 
@@ -280,19 +266,7 @@ export async function POST(request: NextRequest) {
             const newTitle = `${eventTypeName} - ${clientName} - ${paymentTypeLabel}`;
             
             // Update booking title via Cal.com API
-            await axios.patch(
-              `https://api.cal.com/v1/bookings/${booking.id || booking.uid}`,
-              { title: newTitle },
-              {
-                headers: {
-                  'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-                  'Content-Type': 'application/json',
-                },
-                params: {
-                  apiKey: CAL_COM_API_KEY,
-                },
-              }
-            );
+            await calPatch(`bookings/${booking.id || booking.uid}`, { title: newTitle });
             console.log(`✅ Updated booking title: ${newTitle}`);
           } catch (titleError: any) {
             console.error('⚠️  Failed to update booking title:', titleError.response?.data || titleError.message);

@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -19,21 +19,12 @@ interface Service {
 
 async function verifyEventPrice(eventId: number): Promise<{ price: number; currency: string | null }> {
   try {
-    const response = await axios.get(
-      `https://api.cal.com/v1/event-types/${eventId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.get(`event-types/${eventId}`);
 
     return {
-      price: response.data.price || 0,
-      currency: response.data.currency || null,
+      price: response.data?.price || 0,
+      currency: response.data?.currency || null,
     };
   } catch (error: any) {
     console.error(`Error fetching event ${eventId}:`, error.response?.data || error.message);

@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -19,18 +19,10 @@ interface Service {
 
 // Check rate limit headers and wait if needed
 function checkRateLimit(headers: any): number {
-  const limit = parseInt(headers['x-ratelimit-limit'] || '0');
-  const remaining = parseInt(headers['x-ratelimit-remaining'] || '0');
-  const reset = parseInt(headers['x-ratelimit-reset'] || '0');
-
-  if (remaining < 5) {
-    const now = Math.floor(Date.now() / 1000);
-    const waitTime = Math.max((reset - now) * 1000, 10000);
-    console.log(`⚠️  Rate limit very low (${remaining}/${limit}). Waiting ${Math.ceil(waitTime / 1000)}s...`);
-    return waitTime;
-  } else if (remaining < 10) {
-    console.log(`⚠️  Rate limit low (${remaining}/${limit}). Waiting 10s...`);
-    return 10000;
+  const remaining = Number(headers?.['x-ratelimit-remaining']);
+  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 70) {
+    console.log(`⚠️  Rate limit remaining ${remaining}. Pausing 30s to comply with policy...`);
+    return 30_000;
   }
   return 5000;
 }
@@ -50,28 +42,19 @@ async function setRequireConfirmation(service: Service): Promise<{ success: bool
 
     console.log(`📝 Setting requiresConfirmation for: ${service.name} (Event ID: ${service.calEventId})`);
     
-    const response = await axios.patch(
-      `https://api.cal.com/v1/event-types/${service.calEventId}`,
-      updateData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
 
     // Check and display rate limits
     const rateLimit = {
-      limit: parseInt(response.headers['x-ratelimit-limit'] || '0'),
-      remaining: parseInt(response.headers['x-ratelimit-remaining'] || '0'),
-      reset: parseInt(response.headers['x-ratelimit-reset'] || '0'),
+      limit: Number(response.headers?.['x-ratelimit-limit'] || 0),
+      remaining: Number(response.headers?.['x-ratelimit-remaining'] || 0),
+      reset: Number(response.headers?.['x-ratelimit-reset'] || 0),
     };
 
-    console.log(`   Rate Limit: ${rateLimit.remaining}/${rateLimit.limit} remaining`);
+    if (!Number.isNaN(rateLimit.remaining)) {
+      console.log(`   Rate Limit: ${rateLimit.remaining}/${rateLimit.limit} remaining`);
+    }
 
     const waitTime = checkRateLimit(response.headers);
     console.log(`✅ Requires confirmation enabled for: ${service.name}`);

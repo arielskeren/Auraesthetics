@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -19,18 +19,10 @@ interface Service {
 
 // Check rate limit headers and wait if needed
 function checkRateLimit(headers: any): number {
-  const limit = parseInt(headers['x-ratelimit-limit'] || '0');
-  const remaining = parseInt(headers['x-ratelimit-remaining'] || '0');
-  const reset = parseInt(headers['x-ratelimit-reset'] || '0');
-
-  if (remaining < 5) {
-    const now = Math.floor(Date.now() / 1000);
-    const waitTime = Math.max((reset - now) * 1000, 10000);
-    console.log(`⚠️  Rate limit very low (${remaining}/${limit}). Waiting ${Math.ceil(waitTime / 1000)}s...`);
-    return waitTime;
-  } else if (remaining < 10) {
-    console.log(`⚠️  Rate limit low (${remaining}/${limit}). Waiting 10s...`);
-    return 10000;
+  const remaining = Number(headers?.['x-ratelimit-remaining']);
+  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 70) {
+    console.log(`⚠️  Rate limit remaining ${remaining}. Pausing 30s to comply with policy...`);
+    return 30_000;
   }
   return 5000;
 }
@@ -61,19 +53,8 @@ async function configureEventSettings(service: Service): Promise<{ success: bool
     console.log(`   - Minimum Notice: 120 minutes (2 hours)`);
     console.log(`   Note: Booking window (120 days) must be set manually in dashboard`);
     
-    const response = await axios.patch(
-      `https://api.cal.com/v1/event-types/${service.calEventId}`,
-      updateData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
 
     // Check and display rate limits
     const rateLimit = {

@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -59,6 +59,11 @@ function calculateWaitTime(rateLimit: RateLimitInfo | null, delayMs: number): nu
     return delayMs;
   }
 
+  if (rateLimit.remaining < 70) {
+    console.log(`   ⚠️  Remaining calls ${rateLimit.remaining}. Enforcing 30s pause per policy...`);
+    return 30_000;
+  }
+
   // If we're at or below 0, wait until reset
   if (rateLimit.remaining <= 0) {
     const timeUntilReset = rateLimit.reset - Date.now();
@@ -106,20 +111,8 @@ async function updateEventBuffer(service: Service, delayMs: number = 8000): Prom
     console.log(`   Buffer: ${BUFFER_TIME_MINUTES} minutes before appointment`);
     console.log(`   Making API call...`);
 
-    const response = await axios.patch(
-      `https://api.cal.com/v1/event-types/${service.calEventId}`,
-      updateData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-          'X-Cal-API-Key': CAL_COM_API_KEY,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
 
     // Check response status
     if (response.status === 200 || response.status === 204) {

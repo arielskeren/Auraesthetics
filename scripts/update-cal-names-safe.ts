@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -85,6 +85,11 @@ function calculateWaitTime(rateLimit: RateLimitInfo | null, defaultDelay: number
     return defaultDelay;
   }
   
+  if (rateLimit.remaining < 70) {
+    console.log(`   ⚠️  Remaining calls ${rateLimit.remaining}. Enforcing 30s pause per policy...`);
+    return 30_000;
+  }
+
   // If we're running low on remaining requests, wait longer
   if (rateLimit.remaining < 5) {
     const timeUntilReset = (rateLimit.reset * 1000) - Date.now();
@@ -134,19 +139,8 @@ async function updateEventTypeSafe(service: Service, delayMs: number = 5000): Pr
       console.log(`   Price: $${price} (${price * 100} cents)`);
     }
     
-    const response = await axios.patch(
-      `https://api.cal.com/v1/event-types/${service.calEventId}`,
-      updateData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
 
     const rateLimit = getRateLimitInfo(response.headers);
     

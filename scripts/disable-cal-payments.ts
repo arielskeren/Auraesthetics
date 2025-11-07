@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -22,23 +22,11 @@ interface Service {
 
 // Check rate limit headers and wait if needed
 function checkRateLimit(headers: any): number {
-  const limit = parseInt(headers['x-ratelimit-limit'] || '0');
-  const remaining = parseInt(headers['x-ratelimit-remaining'] || '0');
-  const reset = parseInt(headers['x-ratelimit-reset'] || '0');
-
-  if (remaining < 5) {
-    // Very low - wait until reset
-    const now = Math.floor(Date.now() / 1000);
-    const waitTime = Math.max((reset - now) * 1000, 10000);
-    console.log(`⚠️  Rate limit very low (${remaining}/${limit}). Waiting ${Math.ceil(waitTime / 1000)}s until reset...`);
-    return waitTime;
-  } else if (remaining < 10) {
-    // Low - wait 10 seconds
-    console.log(`⚠️  Rate limit low (${remaining}/${limit}). Waiting 10s...`);
-    return 10000;
+  const remaining = Number(headers?.['x-ratelimit-remaining']);
+  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 70) {
+    console.log(`⚠️  Rate limit remaining ${remaining}. Pausing 30s to comply with policy...`);
+    return 30_000;
   }
-
-  // Safe to continue - use minimum 5 second delay
   return 5000;
 }
 
@@ -58,19 +46,8 @@ async function disablePayment(service: Service): Promise<{ success: boolean; wai
 
     console.log(`📝 Disabling payment for: ${service.name} (Event ID: ${service.calEventId})`);
     
-    const response = await axios.patch(
-      `https://api.cal.com/v1/event-types/${service.calEventId}`,
-      updateData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.patch(`event-types/${service.calEventId}`, updateData);
 
     // Check rate limits
     const waitTime = checkRateLimit(response.headers);

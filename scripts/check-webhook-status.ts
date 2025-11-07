@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
 import axios from 'axios';
+import { getCalClient } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -51,21 +52,15 @@ async function checkWebhookStatus() {
   // Try to fetch recent bookings from Cal.com
   try {
     console.log('\n📅 Fetching recent bookings from Cal.com...');
-    const bookingsResponse = await axios.get(
-      'https://api.cal.com/v1/bookings',
-      {
-        headers: {
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-          limit: 10,
-        },
-      }
-    );
+    const client = getCalClient();
+    const bookingsResponse = await client.get('bookings', {
+      params: { limit: 10 },
+    });
 
-    const bookings = bookingsResponse.data.bookings || [];
+    const bookings =
+      bookingsResponse.data?.data ||
+      bookingsResponse.data?.bookings ||
+      [];
     console.log(`✅ Found ${bookings.length} recent bookings in Cal.com\n`);
 
     if (bookings.length > 0) {

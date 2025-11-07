@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-
-const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
-const CAL_API_VERSION = '2024-09-04';
-const CAL_V2_SLOTS_ENDPOINT = 'https://api.cal.com/v2/slots';
+import { getCalClient } from '@/lib/calClient';
 const EVENT_TYPES_PATH = path.join(process.cwd(), 'docs', 'cal-event-types.json');
 
 type CalEventType = {
@@ -73,13 +69,6 @@ function buildIsoRange(start: Date, numberOfDays: number) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!CAL_COM_API_KEY) {
-    return NextResponse.json(
-      { error: 'CAL_COM_API_KEY is not configured' },
-      { status: 500 }
-    );
-  }
-
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get('slug');
   const startParam = searchParams.get('start');
@@ -108,14 +97,9 @@ export async function GET(request: NextRequest) {
   const { startTime, endTime } = buildIsoRange(startDate, numberOfDays);
 
   try {
-    const response = await axios.get(CAL_V2_SLOTS_ENDPOINT, {
-      headers: {
-        Authorization: `Bearer ${CAL_COM_API_KEY}`,
-        'Content-Type': 'application/json',
-        'cal-api-version': CAL_API_VERSION,
-      },
+    const client = getCalClient();
+    const response = await client.get('slots', {
       params: {
-        apiKey: CAL_COM_API_KEY,
         eventTypeId: eventType.id,
         start: startTime,
         end: endTime,
@@ -123,7 +107,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
+    const rateLimitRemaining = response.headers?.['x-ratelimit-remaining'];
     const availabilityData = response.data?.data || {};
     const availability: AvailabilitySlot[] = [];
 

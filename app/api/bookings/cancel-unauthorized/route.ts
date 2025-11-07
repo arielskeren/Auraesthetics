@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import axios from 'axios';
-
-const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
+import { calPost } from '@/lib/calClient';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -42,21 +40,9 @@ export async function POST(request: NextRequest) {
       // Booking doesn't exist in our database - likely unauthorized
       // Try to cancel via Cal.com API
       try {
-        const cancelResponse = await axios.post(
-          `https://api.cal.com/v1/bookings/${calBookingId}/cancel`,
-          {
-            reason: reason || 'Unauthorized booking - no payment found',
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            params: {
-              apiKey: CAL_COM_API_KEY,
-            },
-          }
-        );
+        const cancelResponse = await calPost(`bookings/${calBookingId}/cancel`, {
+          reason: reason || 'Unauthorized booking - no payment found',
+        });
 
         return NextResponse.json({
           success: true,
@@ -79,21 +65,9 @@ export async function POST(request: NextRequest) {
     if (!bookingData.payment_intent_id || !bookingData.metadata?.bookingToken) {
       // No valid payment - cancel the booking
       try {
-        const cancelResponse = await axios.post(
-          `https://api.cal.com/v1/bookings/${calBookingId}/cancel`,
-          {
-            reason: reason || 'Unauthorized booking - no valid payment found',
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            params: {
-              apiKey: CAL_COM_API_KEY,
-            },
-          }
-        );
+        const cancelResponse = await calPost(`bookings/${calBookingId}/cancel`, {
+          reason: reason || 'Unauthorized booking - no valid payment found',
+        });
 
         // Update booking status
         await sql`

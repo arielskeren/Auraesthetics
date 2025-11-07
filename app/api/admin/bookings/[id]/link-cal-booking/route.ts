@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import axios from 'axios';
-
-const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
+import { calGet } from '@/lib/calClient';
 
 // POST /api/admin/bookings/[id]/link-cal-booking - Manually link a booking to a Cal.com booking
 export async function POST(
@@ -18,13 +16,6 @@ export async function POST(
       return NextResponse.json(
         { error: 'Cal.com booking ID is required' },
         { status: 400 }
-      );
-    }
-
-    if (!CAL_COM_API_KEY) {
-      return NextResponse.json(
-        { error: 'Cal.com API key not configured' },
-        { status: 500 }
       );
     }
 
@@ -50,20 +41,7 @@ export async function POST(
 
     // Fetch Cal.com booking details
     try {
-      const calResponse = await axios.get(
-        `https://api.cal.com/v1/bookings/${calBookingId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          params: {
-            apiKey: CAL_COM_API_KEY,
-          },
-        }
-      );
-
-      const calBooking = calResponse.data.booking || calResponse.data;
+      const calBooking = await calGet<any>(`bookings/${calBookingId}`);
 
       // Update booking with Cal.com data
       await sql`

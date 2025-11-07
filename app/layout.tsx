@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import ConditionalLayout from "./_components/ConditionalLayout";
 import ClientLayout from "./ClientLayout";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
   title: "Aura Wellness Aesthetics — Amy",
@@ -25,6 +26,7 @@ export default function RootLayout({
           {children}
         </ConditionalLayout>
         <ClientLayout />
+        <Analytics />
       </body>
     </html>
   );

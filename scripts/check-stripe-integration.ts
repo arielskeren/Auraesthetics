@@ -1,7 +1,7 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -45,19 +45,10 @@ async function checkEventStripe(service: Service): Promise<{ hasStripe: boolean;
   }
 
   try {
-    const response = await axios.get(
-      `https://api.cal.com/v1/event-types/${service.calEventId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-        },
-      }
-    );
+    const client = getCalClient();
+    const response = await client.get(`event-types/${service.calEventId}`);
 
-    const eventType = response.data.event_type;
+    const eventType = response.data?.event_type || response.data?.data || response.data;
     const hasPrice = eventType.price && eventType.price > 0;
     // Cal.com stores price in cents, so divide by 100 to get dollars
     const price = eventType.price ? eventType.price / 100 : 0;

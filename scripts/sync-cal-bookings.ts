@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import axios from 'axios';
+import { getCalClient } from '../lib/calClient';
 import { getSqlClient } from '../app/_utils/db';
 import Stripe from 'stripe';
 
@@ -37,21 +37,17 @@ async function syncBookings() {
 
   // Get recent bookings from Cal.com
   try {
-    const calResponse = await axios.get(
-      'https://api.cal.com/v1/bookings',
-      {
-        headers: {
-          'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          apiKey: CAL_COM_API_KEY,
-          limit: 100,
-        },
-      }
-    );
+    const client = getCalClient();
+    const calResponse = await client.get('bookings', {
+      params: {
+        limit: 100,
+      },
+    });
 
-    const calBookings = calResponse.data.bookings || [];
+    const calBookings =
+      calResponse.data?.data ||
+      calResponse.data?.bookings ||
+      [];
     console.log(`📅 Found ${calBookings.length} recent Cal.com bookings\n`);
 
     let matched = 0;

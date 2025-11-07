@@ -1,41 +1,39 @@
-# Aura Wellness Aesthetics - Documentation
+# Aura Wellness Aesthetics – Documentation
 
-Complete documentation for the Aura Wellness Aesthetics website.
+Curated references for development and operations. Legacy/experimental notes live under [`docs/archive/`](./archive/).
 
-## 📚 Documentation Structure
+## 📚 Key References
 
-### [Payment Integration](./payment-integration/)
-Complete payment system integration plans with Cal.com + Stripe:
-- Phase 1: Flow B (Custom Payment Popup) - Current
-- Phase 2-4: Future phases
-- Strategies 1-5: Implementation approaches
+### Payment & Booking
+- [`cal-com-v2-overview.md`](./cal-com-v2-overview.md) – Working with Cal.com API v2 + throttling rules
+- [`deposit-flow-overview.md`](./deposit-flow-overview.md) – Phase 1 payment + token flow
+- [`payment-linking-explanation.md`](./payment-linking-explanation.md) – How payments map to bookings
+- [`payment-security-solution.md`](./payment-security-solution.md)
 
-### [Integrations](./integrations/)
-Third-party service integration guides:
-- [Brevo](./integrations/brevo.md) - Email capture and tracking
-- [Cal.com](./integrations/cal-com.md) - Booking system
-- [Stripe](./integrations/stripe.md) - Payment processing
+### Admin & Ops
+- [`admin-dashboard-requirements.md`](./admin-dashboard-requirements.md)
+- [`admin-dashboard-notes.md`](./admin-dashboard-notes.md)
+- [`expired-token-handling.md`](./expired-token-handling.md)
+- [`webhook-debugging-guide.md`](./webhook-debugging-guide.md)
+- [`verify-webhook-setup.md`](./verify-webhook-setup.md)
 
-### [Guides](./guides/)
-Operational guides and best practices:
-- [Cal.com Rate Limits](./guides/cal-com-rate-limits.md) - API usage guidelines
+### Integrations & Content
+- [`stripe-test-cards.md`](./stripe-test-cards.md)
+- [`cal-com-event-naming.md`](./cal-com-event-naming.md)
+- [`payment-tracking-summary.md`](./payment-tracking-summary.md)
+- [`content/`](./content/) – content management guides
+- [`integrations/`](./integrations/) – provider-specific setup
+- [`guides/`](./guides/) – supplemental references (e.g., rate limits)
 
-### [Content](./content/)
-Content management guides:
-- [Service Photos](./content/service-photos.md) - Adding service images
+### Planning & Next Steps
+- [`next-steps.md`](./next-steps.md)
+- [`payment-integration/`](./payment-integration/) – phased roadmap + strategy docs
 
-## 🚀 Quick Links
+## 🚀 Quick Commands
+- `npm run lint`
+- `npm run build`
+- `npm run test-integration`
+- `npm run fetch-cal-event-types`
 
-- [Payment Integration Plans](./payment-integration/)
-- [Cal.com Setup](./integrations/cal-com.md)
-- [Stripe Setup](./integrations/stripe.md)
-- [Rate Limit Guide](./guides/cal-com-rate-limits.md)
-
-## 📖 Main Project README
-
-See [README.md](../README.md) in project root for:
-- Project overview
-- Quick start
-- Tech stack
-- Deployment info
-
+## 📖 Root README
+See [../README.md](../README.md) for project overview, quick start, and deployment details.

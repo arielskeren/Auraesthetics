@@ -1,14 +1,12 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { getCalClient } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
 const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
-const CAL_API_VERSION = '2024-09-04';
 const OUTPUT_PATH = path.join(process.cwd(), 'docs', 'cal-event-types.json');
-const EVENT_TYPES_ENDPOINT = 'https://api.cal.com/v2/event-types';
 
 if (!CAL_COM_API_KEY) {
   console.error('❌ CAL_COM_API_KEY is not set in .env.local');
@@ -22,14 +20,9 @@ function sleep(ms: number) {
 async function fetchEventTypes() {
   console.log('🔍 Fetching Cal.com event types...');
   try {
-    const response = await axios.get(EVENT_TYPES_ENDPOINT, {
-      headers: {
-        Authorization: `Bearer ${CAL_COM_API_KEY}`,
-        'Content-Type': 'application/json',
-        'cal-api-version': CAL_API_VERSION,
-      },
+    const client = getCalClient();
+    const response = await client.get('event-types', {
       params: {
-        apiKey: CAL_COM_API_KEY,
         limit: 100,
       },
     });
@@ -86,9 +79,9 @@ async function fetchEventTypes() {
     }
 
     const remainingNumber = Number(rateLimitRemaining);
-    if (!Number.isNaN(remainingNumber) && remainingNumber > 0 && remainingNumber < 20) {
-      console.log('⏳ Remaining calls under 20. Throttling for 20 seconds to avoid lockout...');
-      await sleep(20_000);
+    if (!Number.isNaN(remainingNumber) && remainingNumber > 0 && remainingNumber < 70) {
+      console.log('⏳ Remaining calls below 70. Pausing 30 seconds to comply with policy...');
+      await sleep(30_000);
       console.log('✅ Throttle pause complete. You can continue safely.');
     }
   } catch (error: any) {

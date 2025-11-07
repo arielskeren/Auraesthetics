@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
-import axios from 'axios';
+import { calPost } from '@/lib/calClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
 });
-
-const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -143,24 +141,12 @@ export async function POST(
       }
 
       // Cancel in Cal.com if booking ID exists
-      if (bookingData.cal_booking_id && CAL_COM_API_KEY) {
+      if (bookingData.cal_booking_id) {
         try {
-          const cancelResponse = await axios.post(
-            `https://api.cal.com/v1/bookings/${bookingData.cal_booking_id}/cancel`,
-            {
-              reason: 'Cancelled by admin',
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${CAL_COM_API_KEY}`,
-                'Content-Type': 'application/json',
-              },
-              params: {
-                apiKey: CAL_COM_API_KEY,
-              },
-            }
-          );
-          console.log('✅ Cal.com booking cancelled:', cancelResponse.data);
+          const cancelResponse = await calPost(`bookings/${bookingData.cal_booking_id}/cancel`, {
+            reason: 'Cancelled by admin',
+          });
+          console.log('✅ Cal.com booking cancelled:', cancelResponse);
         } catch (error: any) {
           console.error('⚠️  Error cancelling Cal.com booking:', error.response?.data || error.message);
           // Continue with local cancellation even if Cal.com fails
