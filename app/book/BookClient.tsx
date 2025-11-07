@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { HiOutlineArrowNarrowRight } from 'react-icons/hi';
+import { ArrowRight } from 'lucide-react';
 import Section from '../_components/Section';
 import BookingModal from '../_components/BookingModal';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
@@ -106,10 +106,10 @@ export default function BookClient() {
                   {index < steps.length - 1 && (
                     <>
                       <div className="hidden md:flex justify-center">
-                        <HiOutlineArrowNarrowRight className="h-8 w-8 text-dark-sage" />
+                        <ArrowRight className="h-8 w-8 text-dark-sage" />
                       </div>
                       <div className="md:hidden flex justify-center">
-                        <HiOutlineArrowNarrowRight className="h-6 w-6 text-dark-sage rotate-90" />
+                        <ArrowRight className="h-6 w-6 text-dark-sage rotate-90" />
                       </div>
                     </>
                   )}
