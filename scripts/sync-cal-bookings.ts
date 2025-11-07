@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { calRequest } from '../lib/calClient';
 import { getSqlClient } from '../app/_utils/db';
 import Stripe from 'stripe';
 
@@ -37,8 +37,7 @@ async function syncBookings() {
 
   // Get recent bookings from Cal.com
   try {
-    const client = getCalClient();
-    const calResponse = await client.get('bookings', {
+    const calResponse = await calRequest<any>('get', 'bookings', {
       params: {
         take: 100,
         skip: 0,
@@ -48,6 +47,7 @@ async function syncBookings() {
     const calBookings =
       calResponse.data?.data ||
       calResponse.data?.bookings ||
+      calResponse.data ||
       [];
     console.log(`📅 Found ${calBookings.length} recent Cal.com bookings\n`);
 
