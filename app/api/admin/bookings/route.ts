@@ -34,10 +34,14 @@ export async function GET(request: NextRequest) {
       ORDER BY created_at DESC
     `;
 
+    const bookingRows: any[] = Array.isArray(bookings)
+      ? bookings
+      : (bookings as any)?.rows ?? [];
+
     return NextResponse.json({
       success: true,
-      bookings: bookings,
-      count: bookings.length,
+      bookings: bookingRows,
+      count: bookingRows.length,
     });
   } catch (error: any) {
     console.error('Error fetching bookings:', error);

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
-export default function VerifyBookingPage() {
+function VerifyBookingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<'loading' | 'valid' | 'invalid'>('loading');
@@ -143,6 +143,28 @@ export default function VerifyBookingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-ivory p-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+        <Loader2 className="w-12 h-12 text-dark-sage animate-spin mx-auto mb-4" />
+        <h2 className="text-xl font-serif text-charcoal mb-2">Verifying Your Booking</h2>
+        <p className="text-warm-gray">Please wait while we verify your payment...</p>
+      </div>
+    </div>
+  );
+}
+
+export const dynamic = 'force-dynamic';
+
+export default function VerifyBookingPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <VerifyBookingContent />
+    </Suspense>
   );
 }
 

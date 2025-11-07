@@ -4,10 +4,20 @@ import Stripe from 'stripe';
 import axios from 'axios';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-10-29.clover',
 });
 
 const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
+
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
 
 // GET /api/admin/bookings/[id] - Get booking details and client history
 export async function GET(
@@ -23,14 +33,15 @@ export async function GET(
       SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
     `;
 
-    if (!booking || booking.length === 0) {
+    const bookingRows = normalizeRows(booking);
+    if (bookingRows.length === 0) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
       );
     }
 
-    const bookingData = booking[0];
+    const bookingData = bookingRows[0];
 
     // Get client history (last 5 bookings for same email)
     let clientHistory = [];
@@ -50,7 +61,7 @@ export async function GET(
         ORDER BY created_at DESC
         LIMIT 5
       `;
-      clientHistory = history;
+      clientHistory = normalizeRows(history);
     }
 
     return NextResponse.json({
@@ -96,14 +107,14 @@ export async function POST(
         SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
       `;
 
-      if (!booking || booking.length === 0) {
+      const bookingRows = normalizeRows(booking);
+      if (bookingRows.length === 0) {
         return NextResponse.json(
           { error: 'Booking not found' },
           { status: 404 }
         );
       }
-
-      const bookingData = booking[0];
+      const bookingData = bookingRows[0];
 
       let refundProcessed = false;
       let refundId = null;
@@ -192,14 +203,14 @@ export async function POST(
         SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
       `;
 
-      if (!booking || booking.length === 0) {
+      const bookingRows = normalizeRows(booking);
+      if (bookingRows.length === 0) {
         return NextResponse.json(
           { error: 'Booking not found' },
           { status: 404 }
         );
       }
-
-      const bookingData = booking[0];
+      const bookingData = bookingRows[0];
 
       if (!bookingData.payment_intent_id) {
         return NextResponse.json(

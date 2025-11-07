@@ -4,6 +4,16 @@ import axios from 'axios';
 
 const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
 
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
+
 // Cancel unauthorized Cal.com bookings (bookings without valid payment)
 export async function POST(request: NextRequest) {
   try {
@@ -26,7 +36,9 @@ export async function POST(request: NextRequest) {
       LIMIT 1
     `;
 
-    if (!booking || booking.length === 0) {
+    const bookingRows = normalizeRows(booking);
+
+    if (bookingRows.length === 0) {
       // Booking doesn't exist in our database - likely unauthorized
       // Try to cancel via Cal.com API
       try {
@@ -61,7 +73,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const bookingData = booking[0];
+    const bookingData = bookingRows[0];
 
     // Check if booking has valid payment
     if (!bookingData.payment_intent_id || !bookingData.metadata?.bookingToken) {

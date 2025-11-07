@@ -22,6 +22,12 @@ type CalEventType = {
   };
 };
 
+type AvailabilitySlot = {
+  slot: string;
+  duration?: number | null;
+  attendeeTimezone?: string | null;
+};
+
 interface EventTypeCache {
   fetchedAt: string;
   count: number;

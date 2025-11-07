@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
+
 // Send email notifications for expired tokens
 export async function POST(request: NextRequest) {
   try {
     const sql = getSqlClient();
 
     // Get expired bookings
-    const expiredBookings = await sql`
+    const expiredBookingsResult = await sql`
       SELECT 
         id,
         service_name,
@@ -30,6 +40,8 @@ export async function POST(request: NextRequest) {
         AND (metadata->>'notificationSent')::boolean IS NOT TRUE
       ORDER BY created_at DESC
     `;
+
+    const expiredBookings = normalizeRows(expiredBookingsResult);
 
     if (expiredBookings.length === 0) {
       return NextResponse.json({

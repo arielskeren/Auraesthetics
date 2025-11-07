@@ -4,11 +4,21 @@ import Stripe from 'stripe';
 import crypto from 'crypto';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-10-29.clover',
 });
 
 function generateBookingToken(): string {
   return crypto.randomBytes(32).toString('hex');
+}
+
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
 }
 
 // Regenerate booking token for an existing payment
@@ -32,12 +42,12 @@ export async function POST(request: NextRequest) {
       const result = await sql`
         SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
       `;
-      booking = result[0];
+      booking = normalizeRows(result)[0];
     } else if (paymentIntentId) {
       const result = await sql`
         SELECT * FROM bookings WHERE payment_intent_id = ${paymentIntentId} LIMIT 1
       `;
-      booking = result[0];
+      booking = normalizeRows(result)[0];
     }
 
     if (!booking) {

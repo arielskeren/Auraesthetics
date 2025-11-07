@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
+
 // Check for expired tokens without bookings
 // This endpoint can be called periodically (cron job) or manually
 export async function GET(request: NextRequest) {
@@ -8,7 +18,7 @@ export async function GET(request: NextRequest) {
     const sql = getSqlClient();
 
     // Find bookings with expired tokens that haven't been booked yet
-    const expiredBookings = await sql`
+    const expiredBookingsResult = await sql`
       SELECT 
         id,
         service_name,
@@ -30,6 +40,8 @@ export async function GET(request: NextRequest) {
         AND payment_status IN ('paid', 'authorized', 'processing')
       ORDER BY created_at DESC
     `;
+
+    const expiredBookings = normalizeRows(expiredBookingsResult);
 
     return NextResponse.json({
       expiredCount: expiredBookings.length,
@@ -77,8 +89,10 @@ export async function POST(request: NextRequest) {
         metadata
     `;
 
+    const resultRows = normalizeRows(result);
+
     // Get the updated bookings for notification
-    const expiredBookings = result.map((booking: any) => ({
+    const expiredBookings = resultRows.map((booking: any) => ({
       id: booking.id,
       serviceName: booking.service_name,
       clientEmail: booking.client_email,

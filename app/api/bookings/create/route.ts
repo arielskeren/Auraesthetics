@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -73,7 +83,8 @@ export async function POST(request: NextRequest) {
       RETURNING id, created_at
     `;
 
-    const booking = result[0];
+    const bookingRows = normalizeRows(result);
+    const booking = bookingRows[0];
 
     return NextResponse.json({
       success: true,

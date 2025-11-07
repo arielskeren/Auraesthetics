@@ -35,14 +35,18 @@ export async function POST(
       SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
     `;
 
-    if (!booking || booking.length === 0) {
+    const bookingRows: any[] = Array.isArray(booking)
+      ? booking
+      : (booking as any)?.rows ?? [];
+
+    if (bookingRows.length === 0) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
       );
     }
 
-    const bookingData = booking[0];
+    const bookingData = bookingRows[0];
 
     // Fetch Cal.com booking details
     try {

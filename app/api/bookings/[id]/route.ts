@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
+
 // GET booking by ID
 export async function GET(
   request: NextRequest,
@@ -15,7 +25,8 @@ export async function GET(
       WHERE id = ${id}
     `;
 
-    if (!result || result.length === 0) {
+    const rows = normalizeRows(result);
+    if (rows.length === 0) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
@@ -23,7 +34,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-      booking: result[0],
+      booking: rows[0],
     });
   } catch (error: any) {
     console.error('Error fetching booking:', error);
@@ -95,7 +106,8 @@ export async function PATCH(
       RETURNING *
     `;
 
-    if (!result || result.length === 0) {
+    const rows = normalizeRows(result);
+    if (rows.length === 0) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
@@ -104,7 +116,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      booking: result[0],
+      booking: rows[0],
     });
   } catch (error: any) {
     console.error('Error updating booking:', error);

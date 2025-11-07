@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getSqlClient } from '@/app/_utils/db';
 
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-10-29.clover',
 });
 
 export async function POST(request: NextRequest) {
@@ -34,14 +44,16 @@ export async function POST(request: NextRequest) {
       AND is_active = true
     `;
 
-    if (!dbResult || dbResult.length === 0) {
+    const discountRows = normalizeRows(dbResult);
+
+    if (discountRows.length === 0) {
       return NextResponse.json(
         { error: 'Invalid discount code', valid: false },
         { status: 400 }
       );
     }
 
-    const discountCode = dbResult[0];
+    const discountCode = discountRows[0];
     const stripeCouponId = discountCode.stripe_coupon_id;
 
     // Validate coupon with Stripe

@@ -18,7 +18,7 @@ if (!STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-10-29.clover',
 });
 
 // Test colors
@@ -190,8 +190,17 @@ async function testBookingTokenCreation(paymentIntentId: string) {
       // Now create booking token - the endpoint will check if payment is valid
       // For testing, we'll use a payment intent that exists but may not be succeeded
       // The token creation endpoint accepts 'requires_capture' and 'processing' as valid statuses
+      const slotPayload = {
+        startTime: new Date().toISOString(),
+        eventTypeId: 123456,
+        timezone: 'America/New_York',
+        duration: 60,
+        label: 'Test Slot',
+      };
+
       const response = await axios.post(`${BASE_URL}/api/bookings/create-token`, {
         paymentIntentId: testIntentId,
+        selectedSlot: slotPayload,
       });
       
       // If it fails because payment isn't succeeded, that's expected in this test scenario

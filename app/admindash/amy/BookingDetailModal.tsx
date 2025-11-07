@@ -366,7 +366,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       : 'Cancel Booking'}
                   </button>
                   
-                  {booking.payment_status === 'paid' && booking.payment_intent_id && booking.payment_status !== 'refunded' && (
+              {booking.payment_status === 'paid' && booking.payment_intent_id && (
                     <button
                       onClick={handleRefund}
                       disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
