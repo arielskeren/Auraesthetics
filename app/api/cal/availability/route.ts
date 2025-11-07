@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCalClient, getCalRateLimitRemaining } from '@/lib/calClient';
+import { calRequest, getCalRateLimitRemaining } from '@/lib/calClient';
 const EVENT_TYPES_PATH = path.join(process.cwd(), 'docs', 'cal-event-types.json');
 
 type CalEventType = {
@@ -97,8 +97,7 @@ export async function GET(request: NextRequest) {
   const { startTime, endTime } = buildIsoRange(startDate, numberOfDays);
 
   try {
-    const client = getCalClient();
-    const response = await client.get('slots', {
+    const response = await calRequest<any>('get', 'slots', {
       params: {
         eventTypeId: eventType.id,
         start: startTime,
