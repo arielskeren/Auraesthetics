@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Copy, Send, RefreshCw, XCircle, DollarSign, History, User, Calendar, Mail, Phone, MapPin } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Booking {
   id: string;
@@ -49,13 +49,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [showLinkCalBooking, setShowLinkCalBooking] = useState(false);
   const [calBookingIdInput, setCalBookingIdInput] = useState('');
 
-  useEffect(() => {
-    if (isOpen && booking) {
-      fetchBookingDetails();
-    }
-  }, [isOpen, booking]);
-
-  const fetchBookingDetails = async () => {
+  const fetchBookingDetails = useCallback(async () => {
     if (!booking) return;
     
     try {
@@ -71,7 +65,13 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     } finally {
       setLoading(false);
     }
-  };
+  }, [booking]);
+
+  useEffect(() => {
+    if (isOpen && booking) {
+      fetchBookingDetails();
+    }
+  }, [isOpen, booking, fetchBookingDetails]);
 
   const handleRegenerateToken = async () => {
     if (!booking) return;
@@ -395,7 +395,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
               {!booking.cal_booking_id && (
                 <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800 mb-2">
-                    This booking doesn't have a Cal.com booking ID. If the client has booked on Cal.com, you can link it manually.
+                    This booking doesn&apos;t have a Cal.com booking ID. If the client has booked on Cal.com, you can link it manually.
                   </p>
                   {!showLinkCalBooking ? (
                     <button

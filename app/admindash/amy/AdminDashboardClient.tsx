@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Calendar, DollarSign, User, Mail, Phone, Filter, Search, Eye } from 'lucide-react';
 import BookingDetailModal from './BookingDetailModal';
 
@@ -36,14 +36,6 @@ export default function AdminDashboardClient() {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  useEffect(() => {
-    filterBookings();
-  }, [bookings, paymentStatusFilter, paymentTypeFilter, searchQuery]);
-
   const fetchBookings = async () => {
     try {
       setLoading(true);
@@ -64,7 +56,7 @@ export default function AdminDashboardClient() {
     }
   };
 
-  const filterBookings = () => {
+  const filterBookings = useCallback(() => {
     let filtered = [...bookings];
 
     // Payment status filter
@@ -101,7 +93,15 @@ export default function AdminDashboardClient() {
     });
 
     setFilteredBookings(filtered);
-  };
+  }, [bookings, paymentStatusFilter, paymentTypeFilter, searchQuery]);
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  useEffect(() => {
+    filterBookings();
+  }, [filterBookings]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
