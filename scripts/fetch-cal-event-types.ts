@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { getCalClient, getCalRateLimitInfo } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -67,18 +67,19 @@ async function fetchEventTypes() {
       'utf8'
     );
 
-    const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
-    const rateLimitReset = response.headers['x-ratelimit-reset'];
+    const rateLimitInfo = getCalRateLimitInfo(response.headers ?? {});
+    const rateLimitRemaining = rateLimitInfo.remaining;
+    const rateLimitReset = rateLimitInfo.reset;
 
     console.log(`✅ Saved ${simplified.length} event types to ${OUTPUT_PATH}`);
-    if (typeof rateLimitRemaining !== 'undefined') {
+    if (typeof rateLimitRemaining === 'number') {
       console.log(`📉 Cal.com rate limit remaining: ${rateLimitRemaining}`);
     }
-    if (typeof rateLimitReset !== 'undefined') {
+    if (typeof rateLimitReset === 'number') {
       console.log(`⏱️  Rate limit resets at (epoch): ${rateLimitReset}`);
     }
 
-    const remainingNumber = Number(rateLimitRemaining);
+    const remainingNumber = rateLimitRemaining ?? null;
     if (!Number.isNaN(remainingNumber) && remainingNumber > 0 && remainingNumber < 70) {
       console.log('⏳ Remaining calls below 70. Pausing 30 seconds to comply with policy...');
       await sleep(30_000);

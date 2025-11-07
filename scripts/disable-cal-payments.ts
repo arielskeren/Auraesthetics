@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { getCalClient, getCalRateLimitRemaining } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -22,8 +22,8 @@ interface Service {
 
 // Check rate limit headers and wait if needed
 function checkRateLimit(headers: any): number {
-  const remaining = Number(headers?.['x-ratelimit-remaining']);
-  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 70) {
+  const remaining = getCalRateLimitRemaining(headers ?? {});
+  if (typeof remaining === 'number' && remaining > -1 && remaining < 70) {
     console.log(`⚠️  Rate limit remaining ${remaining}. Pausing 30s to comply with policy...`);
     return 30_000;
   }

@@ -32,13 +32,34 @@ async function ensureThrottle() {
   }
 }
 
+function pickHeaderNumber(headers: Record<string, any>, keys: string[]) {
+  for (const key of keys) {
+    const value = headers?.[key] ?? headers?.[key?.toLowerCase?.()] ?? headers?.[key?.toUpperCase?.()];
+    if (value !== undefined && value !== null) {
+      const num = Number(value);
+      if (!Number.isNaN(num)) {
+        return num;
+      }
+    }
+  }
+  return null;
+}
+
+function getRemainingFromHeaders(headers: Record<string, any>) {
+  return pickHeaderNumber(headers, [
+    'x-ratelimit-remaining',
+    'x-ratelimit-remaining-default',
+    'X-RateLimit-Remaining',
+    'X-RateLimit-Remaining-Default',
+  ]);
+}
+
 async function applyRateLimit(responseHeaders: Record<string, any>) {
   const now = Date.now();
   requestTimestamps.push(now);
 
-  const remainingRaw = responseHeaders?.['x-ratelimit-remaining'];
-  const remaining = Number(remainingRaw);
-  if (!Number.isNaN(remaining) && remaining > -1 && remaining < REMAINING_THRESHOLD) {
+  const remaining = getRemainingFromHeaders(responseHeaders);
+  if (typeof remaining === 'number' && remaining > -1 && remaining < REMAINING_THRESHOLD) {
     pauseUntil = Math.max(pauseUntil, now + PAUSE_DURATION_MS);
   }
 }
@@ -89,6 +110,29 @@ function getClient(): AxiosInstance {
 
 function sanitizePath(path: string) {
   return path.startsWith('/') ? path.slice(1) : path;
+}
+
+export function getCalRateLimitRemaining(headers: Record<string, any>) {
+  const remaining = getRemainingFromHeaders(headers);
+  return typeof remaining === 'number' ? remaining : null;
+}
+
+export function getCalRateLimitInfo(headers: Record<string, any>) {
+  return {
+    limit: pickHeaderNumber(headers, [
+      'x-ratelimit-limit',
+      'x-ratelimit-limit-default',
+      'X-RateLimit-Limit',
+      'X-RateLimit-Limit-Default',
+    ]),
+    remaining: getCalRateLimitRemaining(headers),
+    reset: pickHeaderNumber(headers, [
+      'x-ratelimit-reset',
+      'x-ratelimit-reset-default',
+      'X-RateLimit-Reset',
+      'X-RateLimit-Reset-Default',
+    ]),
+  };
 }
 
 export async function calGet<T = any>(path: string, config?: AxiosRequestConfig) {

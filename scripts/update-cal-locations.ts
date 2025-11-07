@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { getCalClient, getCalRateLimitInfo } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -39,19 +39,16 @@ interface RateLimitInfo {
 }
 
 function getRateLimitInfo(headers: any): RateLimitInfo | null {
-  const rateLimit = headers['x-ratelimit-limit'];
-  const rateLimitRemaining = headers['x-ratelimit-remaining'];
-  const rateLimitReset = headers['x-ratelimit-reset'];
-
-  if (rateLimit && rateLimitRemaining !== undefined) {
-    return {
-      limit: parseInt(rateLimit),
-      remaining: parseInt(rateLimitRemaining),
-      reset: rateLimitReset ? parseInt(rateLimitReset) * 1000 : Date.now(),
-    };
+  const info = getCalRateLimitInfo(headers ?? {});
+  if (info.limit == null && info.remaining == null && info.reset == null) {
+    return null;
   }
 
-  return null;
+  return {
+    limit: info.limit ?? 0,
+    remaining: info.remaining ?? 0,
+    reset: info.reset != null ? info.reset * 1000 : Date.now(),
+  };
 }
 
 function calculateWaitTime(rateLimit: RateLimitInfo | null, delayMs: number): number {

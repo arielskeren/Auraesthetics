@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { getCalClient, getCalRateLimitInfo } from '../lib/calClient';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -64,19 +64,15 @@ function parsePrice(priceStr: string): number {
 
 // Extract rate limit info from response headers
 function getRateLimitInfo(headers: any): RateLimitInfo | null {
-  const limit = headers['x-ratelimit-limit'];
-  const remaining = headers['x-ratelimit-remaining'];
-  const reset = headers['x-ratelimit-reset'];
-  
-  if (limit && remaining !== undefined && reset) {
-    return {
-      limit: parseInt(limit),
-      remaining: parseInt(remaining),
-      reset: parseInt(reset),
-    };
+  const info = getCalRateLimitInfo(headers ?? {});
+  if (info.limit == null && info.remaining == null && info.reset == null) {
+    return null;
   }
-  
-  return null;
+  return {
+    limit: info.limit ?? 0,
+    remaining: info.remaining ?? 0,
+    reset: info.reset ?? Date.now(),
+  };
 }
 
 // Calculate wait time based on rate limits

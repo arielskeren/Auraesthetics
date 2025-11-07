@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCalClient } from '@/lib/calClient';
+import { getCalClient, getCalRateLimitRemaining } from '@/lib/calClient';
 const EVENT_TYPES_PATH = path.join(process.cwd(), 'docs', 'cal-event-types.json');
 
 type CalEventType = {
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const rateLimitRemaining = response.headers?.['x-ratelimit-remaining'];
+    const rateLimitRemaining = getCalRateLimitRemaining(response.headers ?? {});
     const availabilityData = response.data?.data || {};
     const availability: AvailabilitySlot[] = [];
 

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { getCalClient } from '../lib/calClient';
+import { getCalClient, getCalRateLimitInfo, getCalRateLimitRemaining } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
@@ -19,8 +19,8 @@ interface Service {
 
 // Check rate limit headers and wait if needed
 function checkRateLimit(headers: any): number {
-  const remaining = Number(headers?.['x-ratelimit-remaining']);
-  if (!Number.isNaN(remaining) && remaining > -1 && remaining < 70) {
+  const remaining = getCalRateLimitRemaining(headers ?? {});
+  if (typeof remaining === 'number' && remaining > -1 && remaining < 70) {
     console.log(`⚠️  Rate limit remaining ${remaining}. Pausing 30s to comply with policy...`);
     return 30_000;
   }
@@ -46,13 +46,9 @@ async function setRequireConfirmation(service: Service): Promise<{ success: bool
     const response = await client.patch(`event-types/${service.calEventId}`, updateData);
 
     // Check and display rate limits
-    const rateLimit = {
-      limit: Number(response.headers?.['x-ratelimit-limit'] || 0),
-      remaining: Number(response.headers?.['x-ratelimit-remaining'] || 0),
-      reset: Number(response.headers?.['x-ratelimit-reset'] || 0),
-    };
+    const rateLimit = getCalRateLimitInfo(response.headers ?? {});
 
-    if (!Number.isNaN(rateLimit.remaining)) {
+    if (typeof rateLimit.remaining === 'number') {
       console.log(`   Rate Limit: ${rateLimit.remaining}/${rateLimit.limit} remaining`);
     }
 
