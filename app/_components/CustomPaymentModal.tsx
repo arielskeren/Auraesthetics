@@ -99,19 +99,44 @@ interface AvailabilityData {
   };
 }
 
-function formatDateHeading(date: Date) {
+function formatDateHeading(date: Date, timeZone?: string) {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone,
   }).format(date);
 }
 
-function formatTimeLabel(date: Date) {
+function formatTimeLabel(date: Date, timeZone?: string) {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone,
   }).format(date);
+}
+
+function formatDateKeyForTimezone(date: Date, timeZone: string) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+
+    if (year && month && day) {
+      return `${year}-${month}-${day}`;
+    }
+  } catch (error) {
+    console.warn('Failed to format date key for timezone', timeZone, error);
+  }
+
+  return date.toISOString().split('T')[0];
 }
 
 function AvailabilityPanel({
@@ -127,6 +152,10 @@ function AvailabilityPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AvailabilityData | null>(null);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [mobileStartIndex, setMobileStartIndex] = useState(0);
+
+  const MOBILE_COLUMNS = 3;
 
   const startDate = new Date();
   startDate.setHours(0, 0, 0, 0);
@@ -186,10 +215,22 @@ function AvailabilityPanel({
     onSelectSlot(null);
   }, [serviceSlug, onSelectSlot]);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window === 'undefined') return;
+      setIsMobileView(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const timezoneFromData = data?.meta?.timezone || 'America/New_York';
+
   const groupedSlots = (data?.availability || []).reduce(
     (acc, slot) => {
       const date = new Date(slot.slot);
-      const dayKey = date.toISOString().split('T')[0];
+      const dayKey = formatDateKeyForTimezone(date, timezoneFromData);
       if (!acc[dayKey]) {
         acc[dayKey] = [];
       }
@@ -199,11 +240,33 @@ function AvailabilityPanel({
     {} as Record<string, AvailabilitySlot[]>
   );
 
-  const orderedDays = Object.keys(groupedSlots)
-    .map((key) => {
-      return { key, date: new Date(key), slots: groupedSlots[key] };
-    })
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const dayRange = Array.from({ length: 7 }, (_, idx) => {
+    const day = new Date(startDate);
+    day.setDate(startDate.getDate() + idx);
+    const key = formatDateKeyForTimezone(day, timezoneFromData);
+    return {
+      key,
+      date: day,
+      slots: groupedSlots[key] || [],
+    };
+  });
+
+  const orderedDays = dayRange;
+
+  useEffect(() => {
+    if (!isMobileView) {
+      setMobileStartIndex(0);
+      return;
+    }
+    setMobileStartIndex((prev) => {
+      const total = orderedDays.length;
+      if (total === 0) return 0;
+      if (prev >= total) {
+        return Math.max(0, total - MOBILE_COLUMNS);
+      }
+      return prev;
+    });
+  }, [isMobileView, orderedDays.length]);
 
   const handleSlotClick = (slot: AvailabilitySlot) => {
     if (!data) return;
@@ -219,6 +282,26 @@ function AvailabilityPanel({
       duration,
       label,
     });
+  };
+
+  const totalDays = orderedDays.length;
+  const maxMobileStart = Math.max(0, totalDays - MOBILE_COLUMNS);
+  const mobileVisibleStart = isMobileView ? Math.min(mobileStartIndex, maxMobileStart) : 0;
+  const mobileVisibleEnd = mobileVisibleStart + MOBILE_COLUMNS;
+
+  const visibleDays = isMobileView
+    ? orderedDays.slice(mobileVisibleStart, Math.min(mobileVisibleEnd, totalDays))
+    : orderedDays;
+
+  const canPageBackward = isMobileView && mobileVisibleStart > 0;
+  const canPageForward = isMobileView && mobileVisibleStart + MOBILE_COLUMNS < totalDays;
+
+  const handleMobilePrev = () => {
+    setMobileStartIndex((prev) => Math.max(0, prev - MOBILE_COLUMNS));
+  };
+
+  const handleMobileNext = () => {
+    setMobileStartIndex((prev) => Math.min(maxMobileStart, prev + MOBILE_COLUMNS));
   };
 
   const disablePrevious = weekOffset <= 0;
@@ -280,35 +363,78 @@ function AvailabilityPanel({
         )}
 
         {!loading && serviceSlug && !error && orderedDays.length > 0 && (
-          <div className="grid gap-3">
-            {orderedDays.map(({ key, date, slots }) => (
-              <div key={key} className="border border-sand rounded-lg p-3">
-                <p className="text-sm font-medium text-charcoal mb-2">
-                  {formatDateHeading(date)}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {slots.map((slot) => {
-                    const slotDate = new Date(slot.slot);
-                    const label = formatTimeLabel(slotDate);
-                    const isSelected = selectedSlot?.startTime === slot.slot;
-                    return (
-                      <button
-                        key={slot.slot}
-                        type="button"
-                        onClick={() => handleSlotClick(slot)}
-                        className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                          isSelected
-                            ? 'bg-dark-sage text-charcoal border-dark-sage'
-                            : 'border-sage-dark text-sage-dark hover:bg-sand/40'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+          <div className="flex flex-col gap-4">
+            {isMobileView && (
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleMobilePrev}
+                  disabled={!canPageBackward || loading}
+                  className="p-2 rounded-full border border-sage-dark text-sage-dark hover:bg-sand/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Previous days"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMobileNext}
+                  disabled={!canPageForward || loading}
+                  className="p-2 rounded-full border border-sage-dark text-sage-dark hover:bg-sand/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Next days"
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
-            ))}
+            )}
+
+            <div
+              className="grid gap-4"
+              style={{
+                gridTemplateColumns: `repeat(${visibleDays.length || 1}, minmax(0, 1fr))`,
+              }}
+            >
+              {visibleDays.map(({ key, date, slots }) => (
+                <div key={key} className="border border-sand rounded-lg p-4 flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-charcoal">
+                      {formatDateHeading(date, timezoneFromData)}
+                    </p>
+                    <p className="text-xs text-warm-gray">
+                      {new Intl.DateTimeFormat('en-US', {
+                        timeZone: timezoneFromData,
+                        weekday: 'long',
+                      }).format(date)}
+                    </p>
+                  </div>
+
+                  {slots.length === 0 ? (
+                    <div className="text-xs text-warm-gray italic">No availability</div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {slots.map((slot) => {
+                        const slotDate = new Date(slot.slot);
+                        const label = formatTimeLabel(slotDate, timezoneFromData);
+                        const isSelected = selectedSlot?.startTime === slot.slot;
+                        return (
+                          <button
+                            key={slot.slot}
+                            type="button"
+                            onClick={() => handleSlotClick(slot)}
+                            className={`w-full px-3 py-2 rounded-full border text-sm transition-colors ${
+                              isSelected
+                                ? 'bg-dark-sage text-charcoal border-dark-sage'
+                                : 'border-sage-dark text-sage-dark hover:bg-sand/40'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -866,7 +992,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl relative"
+              className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl relative"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
