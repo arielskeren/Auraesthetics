@@ -32,7 +32,7 @@ interface CustomPaymentModalProps {
     price: string;
     duration: string;
     category: string;
-    slug: string;
+    slug?: string;
     calBookingUrl?: string | null;
   } | null;
 }
@@ -53,6 +53,27 @@ interface DiscountValidation {
   finalAmount: number;
   originalAmount: number;
   code?: string;
+}
+
+function deriveServiceSlug(service: { slug?: string; calBookingUrl?: string | null; name?: string } | null): string {
+  if (!service) return '';
+  if (service.slug) return service.slug;
+  if (service.calBookingUrl) {
+    try {
+      const url = new URL(service.calBookingUrl);
+      const segments = url.pathname.split('/').filter(Boolean);
+      const slugFromUrl = segments.pop();
+      if (slugFromUrl) {
+        return slugFromUrl;
+      }
+    } catch {
+      // ignore parsing errors and fall back to name
+    }
+  }
+  if (service.name) {
+    return service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+  }
+  return '';
 }
 
 interface AvailabilitySlot {
@@ -116,6 +137,17 @@ function AvailabilityPanel({
 
   useEffect(() => {
     let isMounted = true;
+
+    if (!serviceSlug) {
+      setLoading(false);
+      setData(null);
+      setError(null);
+      onSelectSlot(null);
+      return () => {
+        isMounted = false;
+      };
+    }
+
     async function fetchAvailability() {
       setLoading(true);
       setError(null);
@@ -147,7 +179,7 @@ function AvailabilityPanel({
     return () => {
       isMounted = false;
     };
-  }, [serviceSlug, weekOffset, startKey]);
+  }, [serviceSlug, weekOffset, startKey, onSelectSlot]);
 
   useEffect(() => {
     // Reset selection when service slug changes
@@ -241,13 +273,13 @@ function AvailabilityPanel({
           </div>
         )}
 
-        {!loading && !error && orderedDays.length === 0 && (
+        {!loading && serviceSlug && !error && orderedDays.length === 0 && (
           <p className="text-sm text-warm-gray">
             No openings this week. Try the next week or contact us directly.
           </p>
         )}
 
-        {!loading && !error && orderedDays.length > 0 && (
+        {!loading && serviceSlug && !error && orderedDays.length > 0 && (
           <div className="grid gap-3">
             {orderedDays.map(({ key, date, slots }) => (
               <div key={key} className="border border-sand rounded-lg p-3">
@@ -283,6 +315,12 @@ function AvailabilityPanel({
         <div className="mt-3 text-xs text-warm-gray">
           Times adjust automatically to your browser timezone.
         </div>
+
+        {!serviceSlug && (
+          <div className="text-sm text-warm-gray bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+            Availability will appear once this service is linked to a Cal.com event type.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -315,6 +353,9 @@ function PaymentForm({
   const [success, setSuccess] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SlotSelectionPayload | null>(null);
   const [slotError, setSlotError] = useState<string | null>(null);
+
+  const serviceSlug = deriveServiceSlug(service);
+  const serviceIdentifier = serviceSlug || (service?.name ? service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'service');
 
   const handleSlotSelection = useCallback((slot: SlotSelectionPayload | null) => {
     setSelectedSlot(slot);
@@ -405,7 +446,7 @@ function PaymentForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          serviceId: service.slug,
+          serviceId: serviceIdentifier,
           serviceName: service.name,
           amount: baseAmount,
           discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
@@ -533,7 +574,7 @@ function PaymentForm({
       </div>
 
       <AvailabilityPanel
-        serviceSlug={service.slug}
+        serviceSlug={serviceSlug}
         selectedSlot={selectedSlot}
         onSelectSlot={handleSlotSelection}
       />
@@ -747,6 +788,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [discountCode, setDiscountCode] = useState<string | undefined>();
   const [redirectError, setRedirectError] = useState<string | null>(null);
   const [slotSelection, setSlotSelection] = useState<SlotSelectionPayload | null>(null);
+  const serviceSlug = deriveServiceSlug(service);
 
   const handlePaymentSuccess = (
     intentId: string,
@@ -769,7 +811,8 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           discountCode: code || '',
           paymentType,
           bookingToken: bookingToken, // Secure token for verification
-          selectedSlot: slot,
+        selectedSlot: slot,
+        serviceSlug,
         };
         
         // Build verify URL with all required parameters
@@ -781,6 +824,9 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           metadata: JSON.stringify(metadata),
           selectedSlot: JSON.stringify(slot),
         });
+      if (serviceSlug) {
+        params.append('serviceSlug', serviceSlug);
+      }
         
         // Redirect to verification page first (prevents direct Cal.com access)
         const verifyUrl = `/book/verify?${params.toString()}`;
