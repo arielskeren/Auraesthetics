@@ -13,16 +13,30 @@
     "update-cal-locations": "tsx scripts/update-cal-locations.ts",
     "update-cal-buffer": "tsx scripts/update-cal-buffer.ts",
     "verify-cal-events": "tsx scripts/verify-cal-events.ts",
-    "check-stripe": "tsx scripts/check-stripe-integration.ts"
+    "check-stripe": "tsx scripts/check-stripe-integration.ts",
+    "disable-cal-payments": "tsx scripts/disable-cal-payments.ts",
+    "check-expired-bookings": "tsx scripts/check-expired-bookings.ts",
+    "verify-cal-prices": "tsx scripts/verify-cal-prices.ts",
+    "view-bookings": "tsx scripts/view-bookings-with-payment-type.ts",
+    "require-cal-confirmation": "tsx scripts/make-cal-events-require-confirmation.ts",
+    "configure-cal-settings": "tsx scripts/configure-cal-complete-settings.ts",
+    "test-integration": "tsx scripts/test-full-integration.ts",
+    "check-webhook": "tsx scripts/check-webhook-status.ts",
+    "sync-cal-bookings": "tsx scripts/sync-cal-bookings.ts",
+    "fetch-cal-event-types": "tsx scripts/fetch-cal-event-types.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "@stripe/react-stripe-js": "^5.3.0",
+    "@stripe/stripe-js": "^8.3.0",
     "axios": "^1.13.0",
     "dotenv": "^17.2.3",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.548.0",
     "next": "^14.2.0",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "stripe": "^19.3.0"
   },
   "devDependencies": {
     "@types/node": "^20",

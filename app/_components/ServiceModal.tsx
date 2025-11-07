@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
+import CustomPaymentModal from './CustomPaymentModal';
 
 interface ServiceModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
   // Hooks must be called before any early returns
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showPlaceholder, setShowPlaceholder] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Initialize Cal.com when modal opens and service is available
   useEffect(() => {
@@ -173,18 +175,15 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                           <h4 className="text-base font-semibold text-charcoal">Book This Treatment</h4>
                         </div>
                         <p className="text-sm text-warm-gray mb-4">
-                          Click the button below to view available times and complete your booking in our secure booking system.
+                          Click the button below to complete your payment and secure your booking time.
                         </p>
                         {calLink ? (
-                          <button
-                            ref={buttonRef}
-                            data-cal-link={calLink}
-                            data-cal-namespace={namespace}
-                            data-cal-config='{"layout":"month_view"}'
-                            className="w-full bg-dark-sage text-charcoal py-3 rounded-lg text-base font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
+                          <Button
+                            onClick={() => setShowPaymentModal(true)}
+                            className="w-full"
                           >
-                            Book Now on Cal.com
-                          </button>
+                            Book Now
+                          </Button>
                         ) : (
                           <Button 
                             variant="disabled" 
@@ -194,7 +193,7 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
                           </Button>
                         )}
                         <p className="text-xs text-warm-gray/70 text-center italic mt-3">
-                          Opens in popup calendar
+                          Secure payment required to book
                         </p>
                       </div>
                     </div>
@@ -215,6 +214,13 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
           </div>
         </>
       )}
+
+      {/* Payment Modal */}
+      <CustomPaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        service={service}
+      />
     </AnimatePresence>
   );
 }

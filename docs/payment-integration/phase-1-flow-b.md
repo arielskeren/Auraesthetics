@@ -6,7 +6,7 @@ Implement custom payment popup flow that allows clients to customize payment opt
 ## Requirements Summary
 - ✅ Flow B: Custom payment popup (not Cal.com native)
 - ✅ Discount codes via Stripe Coupons (Strategy 2, Option B)
-- ✅ Pay Later option with Plaid authorization (50% hold for cancellation)
+- ✅ 50% deposit option alongside full payment
 - ✅ Brevo welcome email with discount code
 - ✅ Neon PostgreSQL database for bookings
 - ⏸️ Payment plans: Deferred to later phase
@@ -82,7 +82,9 @@ CREATE INDEX idx_discount_codes_code ON discount_codes(code);
 - Payment method selector:
   - Pay Full Amount
   - Pay Deposit (50% default, customizable)
-  - Pay Later (requires Plaid authorization)
+  - Live availability preview (7-day window with week navigation)
+  - Pay Full Amount
+  - Pay 50% Deposit
 - Stripe Elements integration
 - Plaid Link integration (for pay-later)
 - Loading states and error handling
@@ -91,10 +93,9 @@ CREATE INDEX idx_discount_codes_code ON discount_codes(code);
 1. User selects service → Modal opens
 2. User enters discount code (optional) → Validate via API
 3. User selects payment method
-4. If "Pay Later" → Show Plaid authorization flow
-5. Process payment/authorization
-6. Store payment intent/authorization
-7. Open Cal.com with metadata
+4. Process payment (full or 50% deposit)
+5. Store payment intent details
+6. Open Cal.com with metadata after verification
 
 ---
 
@@ -126,24 +127,21 @@ const coupon = await stripe.coupons.retrieve(code);
 4. Create Stripe Payment Intent:
    - For "Pay Full": Capture immediately
    - For "Deposit": Capture deposit amount
-   - For "Pay Later": Create Setup Intent for authorization (50% hold)
+   - For "Deposit": Charge 50% of final amount, store balance due metadata
 5. Return client_secret
 
-### 3.3 Plaid Authorization (Pay Later)
-**File**: `app/api/payments/plaid-authorize/route.ts`
+### 3.3 Cal.com Availability Proxy *(New)*
+**File**: `app/api/cal/availability/route.ts`
 
 **Flow:**
-1. Receive Plaid token from client
-2. Create Stripe Payment Method from Plaid
-3. Create Payment Intent with `capture_method: 'manual'` (authorization only)
-4. Authorize 50% of service amount
-5. Store authorization ID in database
-6. Return authorization confirmation
+1. Receive `slug`, optional `start`, `days`, `timezone`
+2. Load `docs/cal-event-types.json` to map slug → event type ID
+3. Call Cal.com availability endpoint with 7-day window
+4. Return grouped availability + metadata for frontend display
 
 **Notes:**
-- Plaid Link integration needed on frontend
-- Stripe supports Plaid integration
-- Authorization can be captured later or cancelled
+- Used by `CustomPaymentModal` to show live slots before payment
+- Supports week navigation (increments of 7 days)
 
 ### 3.4 Create Booking Record
 **File**: `app/api/bookings/create/route.ts`

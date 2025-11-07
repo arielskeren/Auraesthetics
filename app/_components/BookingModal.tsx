@@ -2,8 +2,10 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
+import CustomPaymentModal from './CustomPaymentModal';
+import Button from './Button';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const buttonRef = useRef<HTMLButtonElement>(null);
   const calLink = service ? extractCalLink(service.calBookingUrl) : null;
   const namespace = service?.slug || 'booking';
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Initialize Cal.com when modal opens and service is available
   useEffect(() => {
@@ -113,7 +116,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                     </div>
                   )}
 
-                  {/* Cal.com Element-Click Embed Button */}
+                  {/* Booking CTA */}
                   {calLink ? (
                     <div className="mb-6">
                       <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
@@ -124,17 +127,17 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                           <h4 className="text-lg font-semibold text-charcoal">Book Your Appointment</h4>
                         </div>
                         <p className="text-sm text-warm-gray mb-4">
-                          Click below to view available times and complete your booking in our secure booking system.
+                          Click below to complete your payment and secure your booking time.
                         </p>
-                        <button
-                          ref={buttonRef}
-                          data-cal-link={calLink}
-                          data-cal-namespace={namespace}
-                          data-cal-config='{"layout":"month_view"}'
-                          className="w-full bg-dark-sage text-charcoal py-3 rounded-lg font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200"
+                        <Button
+                          onClick={() => setShowPaymentModal(true)}
+                          className="w-full"
                         >
-                          View Calendar & Book Now
-                        </button>
+                          Book Now
+                        </Button>
+                        <p className="text-xs text-warm-gray/70 text-center italic mt-3">
+                          Secure payment required to book
+                        </p>
                       </div>
                     </div>
                   ) : (
@@ -159,6 +162,13 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
           </div>
         </>
       )}
+
+      {/* Payment Modal */}
+      <CustomPaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        service={service}
+      />
     </AnimatePresence>
   );
 }
