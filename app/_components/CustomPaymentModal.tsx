@@ -78,6 +78,48 @@ interface CalPrivateLinkInfo {
   linkId: string;
 }
 
+function formatPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 15);
+  if (!digits) return '';
+
+  const countryCode = digits.length > 10 ? digits.slice(0, digits.length - 10) : '';
+  const core = digits.slice(-10);
+  const area = core.slice(0, 3);
+  const middle = core.slice(3, 6);
+  const last = core.slice(6);
+
+  const formattedCore =
+    last.length > 0
+      ? `(${area}) ${middle}-${last}`
+      : middle.length > 0
+      ? `(${area}) ${middle}`
+      : area;
+
+  return countryCode ? `+${countryCode} ${formattedCore}` : formattedCore;
+}
+
+function normalizePhoneForSubmit(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    return digits.length === 10 ? digits : `+${digits}`;
+  }
+  return value.trim();
+}
+
+function hasFirstAndLastName(value: string): boolean {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return parts.length >= 2;
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isValidPhoneDisplay(value: string): boolean {
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 10;
+}
+
 function deriveServiceSlug(service: { slug?: string; calBookingUrl?: string | null; name?: string } | null): string {
   if (!service) return '';
   if (service.slug) return service.slug;
@@ -471,10 +513,10 @@ function PaymentForm({
   }, [reservation, selectedSlot]);
 
   const isContactInfoComplete = useCallback(() => {
-    return Boolean(
-      contactDetails.name.trim() &&
-      contactDetails.email.trim() &&
-      contactDetails.phone.trim()
+    return (
+      hasFirstAndLastName(contactDetails.name) &&
+      isValidEmail(contactDetails.email) &&
+      isValidPhoneDisplay(contactDetails.phone)
     );
   }, [contactDetails]);
 
@@ -482,18 +524,16 @@ function PaymentForm({
     const errors: Partial<Record<keyof ContactDetails, string>> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!contactDetails.name.trim()) {
-      errors.name = 'Name is required';
+    if (!hasFirstAndLastName(contactDetails.name)) {
+      errors.name = 'Enter first and last name';
     }
 
-    if (!contactDetails.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!emailRegex.test(contactDetails.email.trim())) {
+    if (!isValidEmail(contactDetails.email)) {
       errors.email = 'Enter a valid email';
     }
 
-    if (!contactDetails.phone.trim()) {
-      errors.phone = 'Phone number is required';
+    if (!isValidPhoneDisplay(contactDetails.phone)) {
+      errors.phone = 'Enter a valid phone number';
     }
 
     setContactErrors(errors);
@@ -1001,7 +1041,7 @@ function PaymentForm({
     const trimmedContact: ContactDetails = {
       name: contactDetails.name.trim(),
       email: contactDetails.email.trim(),
-      phone: contactDetails.phone.trim(),
+      phone: normalizePhoneForSubmit(contactDetails.phone),
       notes: contactDetails.notes.trim(),
     };
 
@@ -1315,7 +1355,10 @@ function PaymentForm({
                   type="tel"
                   value={contactDetails.phone}
                   onChange={(event) => {
-                    setContactDetails((prev) => ({ ...prev, phone: event.target.value }));
+                    setContactDetails((prev) => ({
+                      ...prev,
+                      phone: formatPhoneInput(event.target.value),
+                    }));
                     setContactErrors((prev) => ({ ...prev, phone: undefined }));
                   }}
                   onBlur={validateContactDetails}
