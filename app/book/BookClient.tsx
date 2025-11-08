@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, useAnimationControls } from 'framer-motion';
 import Section from '../_components/Section';
 import BookingModal from '../_components/BookingModal';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
@@ -50,7 +50,7 @@ export default function BookClient() {
     setTimeout(() => setSelectedService(null), 300);
   };
 
-  const steps = [
+const steps = [
     {
       title: 'Choose Your Service',
       description: 'Browse the menu and tap “Book Now” for the treatment that fits your goals.',
@@ -68,6 +68,56 @@ export default function BookClient() {
       description: 'Receive a confirmation email with everything you need. Arrive on time and relax.',
     },
   ];
+
+  const stepControl1 = useAnimationControls();
+  const stepControl2 = useAnimationControls();
+  const stepControl3 = useAnimationControls();
+  const stepControl4 = useAnimationControls();
+  const stepControls = useMemo(
+    () => [stepControl1, stepControl2, stepControl3, stepControl4],
+    [stepControl1, stepControl2, stepControl3, stepControl4]
+  );
+
+  const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let current = 0;
+    const intervalTiming = 4000;
+    const highlight = async (index: number) => {
+      const control = stepControls[index];
+      await control.start({
+        scale: 1.05,
+        transition: { duration: 0.25, ease: 'easeOut' },
+      });
+      await control.start({
+        scale: 1,
+        transition: { duration: 0.4, ease: 'easeInOut' },
+      });
+    };
+
+    const cycle = () => {
+      if (!mounted) return;
+      highlight(current);
+      current = (current + 1) % stepControls.length;
+    };
+
+    const initialTimeout = setTimeout(() => {
+      cycle();
+      const intervalId = setInterval(cycle, intervalTiming);
+      animationTimerRef.current = intervalId;
+    }, 1000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(initialTimeout);
+      if (animationTimerRef.current) {
+        clearInterval(animationTimerRef.current);
+        animationTimerRef.current = null;
+      }
+      stepControls.forEach((control) => control.stop());
+    };
+  }, [stepControls]);
 
   return (
     <>
@@ -119,10 +169,14 @@ export default function BookClient() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
                 className="flex items-start gap-4 md:flex-col md:items-center md:text-center"
+                animate={stepControls[index]}
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-dark-sage text-charcoal font-semibold text-sm shadow-sm md:mb-2">
+                <motion.span
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-dark-sage text-charcoal font-semibold text-sm shadow-sm md:mb-2"
+                  animate={stepControls[index]}
+                >
                   {index + 1}
-                </span>
+                </motion.span>
                 <div className="md:max-w-[14rem]">
                   <h3 className="text-base font-serif text-charcoal">{step.title}</h3>
                   <p className="mt-2 text-xs md:text-sm text-warm-gray leading-relaxed">
