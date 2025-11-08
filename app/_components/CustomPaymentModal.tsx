@@ -705,6 +705,15 @@ function PaymentForm({
   ]);
 
   useEffect(() => {
+    if (reservationStatus === 'error' && reservationErrorDetail) {
+      const timer = window.setTimeout(() => {
+        setReservationErrorDetail(null);
+      }, 5000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [reservationStatus, reservationErrorDetail]);
+
+  useEffect(() => {
     if (paymentType !== 'deposit') {
       setDepositAcknowledged(false);
     }
