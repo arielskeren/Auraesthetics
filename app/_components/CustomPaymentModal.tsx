@@ -882,6 +882,17 @@ function PaymentForm({
   }, [reservationStatus, reservation]);
 
   useEffect(() => {
+    console.log('[PaymentForm state]', {
+      modalStage,
+      reservationStatus,
+      hasReservation: Boolean(reservation),
+      hasSelectedSlot: Boolean(selectedSlot),
+      reservationId: reservation?.id,
+      selectedSlotStart: selectedSlot?.startTime,
+    });
+  }, [modalStage, reservationStatus, reservation, selectedSlot]);
+
+  useEffect(() => {
     if (reservationStatus !== 'held' || reservationCountdown <= 0) {
       return;
     }
