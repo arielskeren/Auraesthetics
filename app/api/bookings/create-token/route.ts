@@ -7,9 +7,128 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
 });
 
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_CLIENTS_LIST_ID =
+  process.env.BREVO_CLIENTS_LIST_ID || process.env.BREVO_LIST_ID || '3';
+
 // Generate a secure random token
 function generateBookingToken(): string {
   return crypto.randomBytes(32).toString('hex');
+}
+
+function splitName(fullName: string): { firstName: string; lastName: string } {
+  const cleaned = fullName.trim();
+  if (!cleaned) {
+    return { firstName: 'Guest', lastName: 'Client' };
+  }
+  const parts = cleaned.split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: 'Client' };
+  }
+  const [firstName, ...rest] = parts;
+  return { firstName, lastName: rest.join(' ') || 'Client' };
+}
+
+function formatPhoneForBrevo(phone?: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  if (digits.startsWith('1') && digits.length === 11) {
+    return `+${digits}`;
+  }
+  if (phone.trim().startsWith('+')) {
+    return phone.trim();
+  }
+  return `+${digits}`;
+}
+
+async function upsertBrevoBookingContact(attendee: {
+  name: string;
+  email: string;
+  phone?: string | null;
+}) {
+  if (!BREVO_API_KEY) {
+    console.warn('[Brevo] BREVO_API_KEY not configured. Skipping contact sync.');
+    return;
+  }
+
+  const listIdNumber = Number(BREVO_CLIENTS_LIST_ID);
+  if (!Number.isFinite(listIdNumber) || listIdNumber <= 0) {
+    console.warn('[Brevo] Invalid list ID. Set BREVO_CLIENTS_LIST_ID or BREVO_LIST_ID.');
+    return;
+  }
+
+  if (!attendee.email) {
+    console.warn('[Brevo] Missing attendee email. Skipping contact sync.');
+    return;
+  }
+
+  const { firstName, lastName } = splitName(attendee.name || 'Guest Client');
+  const formattedPhone = formatPhoneForBrevo(attendee.phone);
+
+  const payload: Record<string, any> = {
+    email: attendee.email,
+    listIds: [listIdNumber],
+    updateEnabled: true,
+    attributes: {
+      FIRSTNAME: firstName,
+      LASTNAME: lastName,
+      SIGNUP_SOURCE: 'booking',
+    },
+  };
+
+  if (formattedPhone) {
+    payload.attributes.SMS = formattedPhone;
+    payload.attributes.LANDLINE_NUMBER = formattedPhone;
+  }
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/contacts', {
+      method: 'POST',
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => null);
+      // Handle duplicate contact gracefully (Brevo may return 400 duplicate_parameter)
+      if (response.status === 400 && errorBody?.code === 'duplicate_parameter') {
+        // Contact exists; attempt to update lists to ensure membership
+        try {
+          await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(attendee.email)}`, {
+            method: 'PUT',
+            headers: {
+              'api-key': BREVO_API_KEY,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              listIds: [listIdNumber],
+              attributes: payload.attributes,
+              updateEnabled: true,
+            }),
+          });
+        } catch (updateError) {
+          console.warn('[Brevo] Failed to update existing contact', updateError);
+        }
+        return;
+      }
+
+      console.warn('[Brevo] Failed to sync booking contact', {
+        status: response.status,
+        body: errorBody,
+      });
+    }
+  } catch (error) {
+    console.warn('[Brevo] Contact sync error', error);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -271,6 +390,12 @@ export async function POST(request: NextRequest) {
         )
       `;
     }
+
+    await upsertBrevoBookingContact({
+      name: attendeeDetails.name,
+      email: attendeeDetails.email,
+      phone: attendeeDetails.phone,
+    });
 
     return NextResponse.json({
       token,
