@@ -115,13 +115,12 @@ function VerifyBookingContent() {
           setStatus('valid');
           setBookingInfo(data.booking);
           
+          let publicCalUrl: string | null = null;
+
           if (privateLinkUrl) {
             setFallbackUrl(privateLinkUrl);
             // Redirect immediately to the private link so the reserved slot is honored.
             window.location.href = privateLinkUrl;
-            fallbackTimer = window.setTimeout(() => {
-              window.location.href = privateLinkUrl;
-            }, 4000);
           } else {
             const calParams = new URLSearchParams({
               token: token || '',
@@ -138,8 +137,8 @@ function VerifyBookingContent() {
               calParams.append('reservationId', reservationPayload.id);
             }
 
-            const calUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
-            setFallbackUrl(calUrl);
+            publicCalUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
+            setFallbackUrl(publicCalUrl);
           }
 
           let slotForCal:
@@ -188,9 +187,12 @@ function VerifyBookingContent() {
             });
           }
 
-          fallbackTimer = window.setTimeout(() => {
-            window.location.href = calUrl;
-          }, 6000);
+          const fallbackDestination = privateLinkUrl ?? publicCalUrl;
+          if (fallbackDestination) {
+            fallbackTimer = window.setTimeout(() => {
+              window.location.href = fallbackDestination;
+            }, privateLinkUrl ? 4000 : 6000);
+          }
         } else {
           setStatus('invalid');
           if (data.expired) {
