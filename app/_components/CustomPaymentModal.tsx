@@ -617,6 +617,7 @@ function PaymentForm({
           endTime: newReservation.endTime ?? null,
           timezone: newReservation.timezone ?? slot.timezone ?? null,
         });
+        setModalStage('details');
         setReservationStatus('held');
         setReservationCountdown(countdownSeconds > 0 ? countdownSeconds : 120);
         setReservationLoading(false);
@@ -817,6 +818,10 @@ function PaymentForm({
       return;
     }
 
+    if (reservationStatus === 'held' && reservation?.startTime === selectedSlot.startTime) {
+      return;
+    }
+
     if (reservationLoading) {
       return;
     }
@@ -825,8 +830,9 @@ function PaymentForm({
       return;
     }
 
+    setReservationLoading(true);
     reserveSlot(selectedSlot);
-  }, [selectedSlot, reservation, reservationLoading, reserveSlot]);
+  }, [selectedSlot, reservation, reservationLoading, reservationStatus, reserveSlot]);
 
   useEffect(() => {
     if (reservationStatus === 'error' && reservationErrorDetail) {
