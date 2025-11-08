@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { useState, useEffect, FormEvent, useCallback } from 'react';
+import { useState, useEffect, FormEvent, useCallback, useMemo } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -20,6 +20,7 @@ import {
 } from '@stripe/react-stripe-js';
 import { extractCalLink } from '../_hooks/useCalEmbed';
 import Button from './Button';
+import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -53,6 +54,21 @@ interface DiscountValidation {
   finalAmount: number;
   originalAmount: number;
   code?: string;
+}
+
+interface ContactDetails {
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+}
+
+interface ReservationInfo {
+  id: string;
+  expiresAt: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  timezone: string | null;
 }
 
 function deriveServiceSlug(service: { slug?: string; calBookingUrl?: string | null; name?: string } | null): string {
@@ -380,13 +396,15 @@ function PaymentForm({
   onClose 
 }: { 
   service: NonNullable<CustomPaymentModalProps['service']>;
-  onSuccess: (
-    paymentIntentId: string,
-    discountCode: string | undefined,
-    bookingToken: string | undefined,
-    paymentType: PaymentType,
-    slot: SlotSelectionPayload
-  ) => void;
+  onSuccess: (payload: {
+    paymentIntentId: string;
+    discountCode?: string;
+    bookingToken: string;
+    paymentType: PaymentType;
+    slot: SlotSelectionPayload;
+    contact: ContactDetails;
+    reservation: ReservationInfo;
+  }) => void;
   onClose: () => void;
 }) {
   const stripe = useStripe();
@@ -399,16 +417,65 @@ function PaymentForm({
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [contactDetails, setContactDetails] = useState<ContactDetails>({
+    name: '',
+    email: '',
+    phone: '',
+    notes: '',
+  });
+  const [contactErrors, setContactErrors] = useState<Partial<Record<keyof ContactDetails, string>>>({});
   const [selectedSlot, setSelectedSlot] = useState<SlotSelectionPayload | null>(null);
   const [slotError, setSlotError] = useState<string | null>(null);
+  const [reservation, setReservation] = useState<ReservationInfo | null>(null);
+  const [reservationLoading, setReservationLoading] = useState(false);
+  const [reservationError, setReservationError] = useState<string | null>(null);
+  const [preserveReservation, setPreserveReservation] = useState(false);
 
   const serviceSlug = deriveServiceSlug(service);
   const serviceIdentifier = serviceSlug || (service?.name ? service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'service');
 
-  const handleSlotSelection = useCallback((slot: SlotSelectionPayload | null) => {
-    setSelectedSlot(slot);
-    setSlotError(null);
-  }, []);
+  const reservationExpiryLabel = useMemo(() => {
+    if (!reservation?.expiresAt) {
+      return null;
+    }
+    const expires = new Date(reservation.expiresAt);
+    if (Number.isNaN(expires.getTime())) {
+      return null;
+    }
+    return expires.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }, [reservation?.expiresAt]);
+
+  const isContactInfoComplete = useCallback(() => {
+    return Boolean(
+      contactDetails.name.trim() &&
+      contactDetails.email.trim() &&
+      contactDetails.phone.trim()
+    );
+  }, [contactDetails]);
+
+  const handleSlotSelection = useCallback(
+    (slot: SlotSelectionPayload | null) => {
+      if (!slot) {
+        setSelectedSlot(null);
+        setSlotError(null);
+        setReservationError(null);
+        setPreserveReservation(false);
+        if (reservation?.id) {
+          void releaseReservation(reservation.id);
+        }
+        return;
+      }
+
+      setSelectedSlot(slot);
+      setSlotError(null);
+      setReservationError(null);
+      setPreserveReservation(false);
+    },
+    [releaseReservation, reservation]
+  );
 
   // Extract numeric price from string (e.g., "from $150" -> 150)
   const extractPrice = (priceString: string): number => {
@@ -434,6 +501,166 @@ function PaymentForm({
     
     setCurrentAmount(amount);
   }, [paymentType, discountValidation, baseAmount]);
+
+  useEffect(() => {
+    if (!selectedSlot) {
+      setReservationError(null);
+      return;
+    }
+
+    if (!isContactInfoComplete()) {
+      setReservationError('Enter your contact information to hold this time.');
+      return;
+    }
+
+    if (reservationLoading) {
+      return;
+    }
+
+    if (reservation && reservation.startTime === selectedSlot.startTime) {
+      setReservationError(null);
+      return;
+    }
+
+    const contact: ContactDetails = {
+      name: contactDetails.name.trim(),
+      email: contactDetails.email.trim(),
+      phone: contactDetails.phone.trim(),
+      notes: contactDetails.notes.trim(),
+    };
+
+    void reserveSlot(selectedSlot, contact);
+  }, [
+    selectedSlot,
+    contactDetails,
+    isContactInfoComplete,
+    reservation,
+    reservationLoading,
+    reserveSlot,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (reservation?.id && !preserveReservation) {
+        void releaseReservation(reservation.id);
+      }
+    };
+  }, [reservation, preserveReservation, releaseReservation]);
+
+  const validateContactDetails = useCallback(() => {
+    const errors: Partial<Record<keyof ContactDetails, string>> = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!contactDetails.name.trim()) {
+      errors.name = 'Name is required';
+    }
+
+    if (!contactDetails.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!emailRegex.test(contactDetails.email.trim())) {
+      errors.email = 'Enter a valid email';
+    }
+
+    if (!contactDetails.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    }
+
+    setContactErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [contactDetails]);
+
+  const releaseReservation = useCallback(
+    async (reservationId: string, options?: { preserveState?: boolean }) => {
+      try {
+        await fetch(`/api/cal/reservations/${reservationId}`, {
+          method: 'DELETE',
+        });
+      } catch (error) {
+        console.warn('Failed to release reservation', error);
+      } finally {
+        if (!options?.preserveState) {
+          setReservation((current) => {
+            if (current && current.id === reservationId) {
+              return null;
+            }
+            return current;
+          });
+        }
+      }
+    },
+    []
+  );
+
+  const reserveSlot = useCallback(
+    async (slot: SlotSelectionPayload, contact: ContactDetails) => {
+      const previousReservation = reservation;
+      setReservationLoading(true);
+      setReservationError(null);
+
+      const start = slot.startTime;
+      let end: string | null = null;
+      if (slot.duration && Number.isFinite(slot.duration)) {
+        const startDate = new Date(start);
+        const endDate = new Date(startDate.getTime() + slot.duration * 60 * 1000);
+        end = endDate.toISOString();
+      }
+
+      try {
+        const response = await fetch('/api/cal/reservations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventTypeId: slot.eventTypeId,
+            startTime: start,
+            endTime: end,
+            timezone: slot.timezone,
+            attendee: {
+              name: contact.name,
+              email: contact.email,
+              smsReminderNumber: contact.phone,
+            },
+            notes: contact.notes,
+            metadata: {
+              serviceSlug,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody.error || 'Failed to reserve slot');
+        }
+
+        const body = await response.json();
+        const reservationPayload = body.reservation ?? body.data ?? body;
+
+        const newReservation: ReservationInfo = {
+          id: reservationPayload.id,
+          expiresAt: reservationPayload.expiresAt ?? null,
+          startTime: reservationPayload.startTime ?? start,
+          endTime: reservationPayload.endTime ?? end,
+          timezone: reservationPayload.timezone ?? slot.timezone,
+        };
+
+        if (!newReservation.id) {
+          throw new Error('Failed to reserve slot: missing reservation ID');
+        }
+
+        setReservation(newReservation);
+        setReservationError(null);
+
+        if (previousReservation && previousReservation.id !== newReservation.id) {
+          void releaseReservation(previousReservation.id, { preserveState: true });
+        }
+      } catch (error: any) {
+        console.error('Failed to reserve slot:', error);
+        setReservationError(error.message || 'Unable to reserve this time. Please try again.');
+      } finally {
+        setReservationLoading(false);
+      }
+    },
+    [reservation, releaseReservation, serviceSlug]
+  );
 
   const validateDiscount = async () => {
     if (!discountCode.trim()) {
@@ -479,8 +706,33 @@ function PaymentForm({
       return;
     }
 
+    if (!validateContactDetails()) {
+      setError('Please correct the highlighted contact information.');
+      return;
+    }
+
     if (!selectedSlot) {
       setSlotError('Please choose an appointment time before continuing.');
+      return;
+    }
+
+    const trimmedContact: ContactDetails = {
+      name: contactDetails.name.trim(),
+      email: contactDetails.email.trim(),
+      phone: contactDetails.phone.trim(),
+      notes: contactDetails.notes.trim(),
+    };
+
+    if (reservationLoading) {
+      setError('Please wait while we secure your selected time.');
+      return;
+    }
+
+    if (!reservation || reservation.startTime !== selectedSlot.startTime) {
+      setSlotError('We need to hold your selected time before continuing. Please wait a moment or reselect the slot.');
+      setReservationError((prev) =>
+        prev || 'We are securing this time for you. If this message persists, pick the time again.'
+      );
       return;
     }
 
@@ -500,6 +752,10 @@ function PaymentForm({
           discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
           paymentType,
           depositPercent: 50,
+          clientName: trimmedContact.name,
+          clientEmail: trimmedContact.email,
+          clientPhone: trimmedContact.phone,
+          clientNotes: trimmedContact.notes,
         }),
       });
 
@@ -548,6 +804,16 @@ function PaymentForm({
                     label: selectedSlot.label,
                   }
                 : null,
+              reservation: reservation
+                ? {
+                    id: reservation.id,
+                    expiresAt: reservation.expiresAt,
+                    startTime: reservation.startTime,
+                    endTime: reservation.endTime,
+                    timezone: reservation.timezone,
+                  }
+                : null,
+              attendee: trimmedContact,
             }),
           });
 
@@ -562,17 +828,27 @@ function PaymentForm({
           
           console.log('Booking token created successfully:', tokenData.token);
           setSuccess(true);
+          const reservationSnapshot = reservation;
           
           // Small delay to show success message, then redirect
           setTimeout(() => {
+            if (!reservationSnapshot) {
+              setError('We lost the reservation for this time. Please contact support or try again.');
+              setProcessing(false);
+              return;
+            }
+
+            setPreserveReservation(true);
             try {
-              onSuccess(
-                paymentIntentId, 
-                discountValidation?.valid ? discountCode.toUpperCase() : undefined, 
-                tokenData.token,
+              onSuccess({
+                paymentIntentId,
+                discountCode: discountValidation?.valid ? discountCode.toUpperCase() : undefined,
+                bookingToken: tokenData.token,
                 paymentType,
-                selectedSlot
-              );
+                slot: selectedSlot,
+                contact: trimmedContact,
+                reservation: reservationSnapshot,
+              });
             } catch (redirectError) {
               console.error('Redirect error:', redirectError);
               setError('Failed to redirect. Please manually navigate to the booking page.');
@@ -621,6 +897,97 @@ function PaymentForm({
         </div>
       </div>
 
+      {/* Contact Information */}
+      <div className="border border-sand rounded-lg p-4">
+        <h3 className="font-serif text-lg text-charcoal mb-3">Your Information</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-name">
+              Full Name
+            </label>
+            <input
+              id="booking-name"
+              type="text"
+              value={contactDetails.name}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, name: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, name: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="Jane Doe"
+              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              disabled={processing}
+            />
+            {contactErrors.name && (
+              <p className="text-xs text-red-600 mt-1">{contactErrors.name}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
+              Email Address
+            </label>
+            <input
+              id="booking-email"
+              type="email"
+              value={contactDetails.email}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, email: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, email: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="you@example.com"
+              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              disabled={processing}
+            />
+            {contactErrors.email && (
+              <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
+              Phone Number
+            </label>
+            <input
+              id="booking-phone"
+              type="tel"
+              value={contactDetails.phone}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, phone: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, phone: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="(555) 123-4567"
+              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              disabled={processing}
+            />
+            {contactErrors.phone && (
+              <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
+              Notes (Optional)
+            </label>
+            <textarea
+              id="booking-notes"
+              value={contactDetails.notes}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
+              }}
+              placeholder="Let us know any preferences or special requests."
+              rows={3}
+              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none"
+              disabled={processing}
+            />
+          </div>
+        </div>
+      </div>
+
       <AvailabilityPanel
         serviceSlug={serviceSlug}
         selectedSlot={selectedSlot}
@@ -641,6 +1008,27 @@ function PaymentForm({
           <span className="text-xs text-warm-gray">
             Duration: {selectedSlot.duration ? `${selectedSlot.duration} minutes` : service.duration}
           </span>
+        </div>
+      )}
+
+      {reservationLoading && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-warm-gray">
+          <Loader2 className="animate-spin" size={16} />
+          Holding your selected time...
+        </div>
+      )}
+
+      {reservation && selectedSlot && reservation.startTime === selectedSlot.startTime && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-green-600">
+          <CheckCircle2 size={16} />
+          Slot reserved{reservationExpiryLabel ? ` until ${reservationExpiryLabel}` : ''}.
+        </div>
+      )}
+
+      {reservationError && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700 flex items-center gap-2">
+          <AlertCircle size={16} />
+          {reservationError}
         </div>
       )}
 
@@ -799,7 +1187,13 @@ function PaymentForm({
       <div className="flex gap-3">
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => {
+            if (reservation?.id) {
+              setPreserveReservation(false);
+              void releaseReservation(reservation.id);
+            }
+            onClose();
+          }}
           disabled={processing || success}
           className="flex-1 px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-white border-2 border-dark-sage text-dark-sage hover:bg-sage-light hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -807,7 +1201,7 @@ function PaymentForm({
         </button>
         <button
           type="submit"
-          disabled={processing || success || !stripe}
+          disabled={processing || success || !stripe || reservationLoading}
           className="flex-1 px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {processing ? (
@@ -836,37 +1230,58 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [discountCode, setDiscountCode] = useState<string | undefined>();
   const [redirectError, setRedirectError] = useState<string | null>(null);
   const [slotSelection, setSlotSelection] = useState<SlotSelectionPayload | null>(null);
+  const [contactDetails, setContactDetails] = useState<ContactDetails | null>(null);
+  const [reservationInfo, setReservationInfo] = useState<ReservationInfo | null>(null);
   const serviceSlug = deriveServiceSlug(service);
+  const primaryPhoto = useMemo(() => {
+    if (!service?.slug) return null;
+    const photos = getServicePhotoPaths(service.slug);
+    return photos.length > 0 ? photos[0] : null;
+  }, [service?.slug]);
 
-  const handlePaymentSuccess = (
-    intentId: string,
-    code: string | undefined,
-    bookingToken: string | undefined,
-    paymentType: PaymentType,
-    slot: SlotSelectionPayload
-  ) => {
-    setPaymentIntentId(intentId);
+  const handlePaymentSuccess = ({
+    paymentIntentId,
+    discountCode: code,
+    bookingToken,
+    paymentType,
+    slot,
+    contact,
+    reservation,
+  }: {
+    paymentIntentId: string;
+    discountCode?: string;
+    bookingToken: string;
+    paymentType: PaymentType;
+    slot: SlotSelectionPayload;
+    contact: ContactDetails;
+    reservation: ReservationInfo;
+  }) => {
+    setPaymentIntentId(paymentIntentId);
     setDiscountCode(code);
     setRedirectError(null);
     setSlotSelection(slot);
+    setContactDetails(contact);
+    setReservationInfo(reservation);
     
     // Redirect to verification page first, then to Cal.com
     if (service?.calBookingUrl) {
       const calLink = extractCalLink(service.calBookingUrl);
       if (calLink && bookingToken) {
         const metadata = {
-          paymentIntentId: intentId,
+          paymentIntentId,
           discountCode: code || '',
           paymentType,
           bookingToken: bookingToken, // Secure token for verification
-        selectedSlot: slot,
-        serviceSlug,
+          selectedSlot: slot,
+          serviceSlug,
+          contact,
+          reservation,
         };
         
         // Build verify URL with all required parameters
         const params = new URLSearchParams({
           token: bookingToken,
-          paymentIntentId: intentId,
+          paymentIntentId,
           paymentType,
           calLink: calLink,
           metadata: JSON.stringify(metadata),
@@ -874,6 +1289,12 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
         });
       if (serviceSlug) {
         params.append('serviceSlug', serviceSlug);
+      }
+      if (reservation) {
+        params.append('reservation', JSON.stringify(reservation));
+      }
+      if (contact) {
+        params.append('contact', JSON.stringify(contact));
       }
         
         // Redirect to verification page first (prevents direct Cal.com access)
@@ -940,6 +1361,17 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                     Secure your appointment with a payment
                   </p>
                 </div>
+
+                {primaryPhoto && (
+                  <div className="mb-6 rounded-lg overflow-hidden shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={primaryPhoto}
+                      alt={`${service.name} preview`}
+                      className="w-full h-40 object-cover"
+                    />
+                  </div>
+                )}
 
                 {redirectError && (
                   <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">

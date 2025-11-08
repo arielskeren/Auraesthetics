@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, useAnimationControls } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, useAnimationControls, useReducedMotion } from 'framer-motion';
 import Section from '../_components/Section';
 import BookingModal from '../_components/BookingModal';
-import { getServicePhotoPaths } from '../_utils/servicePhotos';
+import ServiceCard from '../_components/ServiceCard';
 
 interface Service {
   category: string;
@@ -77,47 +77,54 @@ const steps = [
     () => [stepControl1, stepControl2, stepControl3, stepControl4],
     [stepControl1, stepControl2, stepControl3, stepControl4]
   );
-
-  const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
-    let mounted = true;
-    let current = 0;
-    const intervalTiming = 4000;
-    const highlight = async (index: number) => {
-      const control = stepControls[index];
-      await control.start({
-        scale: 1.05,
-        transition: { duration: 0.25, ease: 'easeOut' },
+    if (prefersReducedMotion) {
+      stepControls.forEach((control) => control.set({ scale: 1 }));
+      return;
+    }
+
+    let cancelled = false;
+    const pulseDuration = 250;
+    const restDuration = 6000;
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), ms);
       });
-      await control.start({
-        scale: 1,
-        transition: { duration: 0.4, ease: 'easeInOut' },
-      });
+
+    const runSequence = async () => {
+      while (!cancelled) {
+        for (const control of stepControls) {
+          if (cancelled) break;
+          await control.start({
+            scale: 1.05,
+            transition: { duration: 0.2, ease: 'easeOut' },
+          });
+          await control.start({
+            scale: 1,
+            transition: { duration: 0.25, ease: 'easeInOut' },
+          });
+          if (cancelled) break;
+          await sleep(pulseDuration);
+        }
+
+        if (cancelled) break;
+        await sleep(restDuration);
+      }
     };
 
-    const cycle = () => {
-      if (!mounted) return;
-      highlight(current);
-      current = (current + 1) % stepControls.length;
-    };
-
-    const initialTimeout = setTimeout(() => {
-      cycle();
-      const intervalId = setInterval(cycle, intervalTiming);
-      animationTimerRef.current = intervalId;
-    }, 1000);
+    const starter = setTimeout(() => {
+      runSequence();
+    }, 600);
 
     return () => {
-      mounted = false;
-      clearTimeout(initialTimeout);
-      if (animationTimerRef.current) {
-        clearInterval(animationTimerRef.current);
-        animationTimerRef.current = null;
-      }
+      cancelled = true;
+      clearTimeout(starter);
       stepControls.forEach((control) => control.stop());
     };
-  }, [stepControls]);
+  }, [stepControls, prefersReducedMotion]);
 
   return (
     <>
@@ -195,12 +202,12 @@ const steps = [
         {/* Subtle green background */}
         <div className="absolute inset-0 bg-gradient-to-b from-dark-sage/6 to-transparent" />
         
-        <div className="flex flex-wrap justify-center gap-3 relative z-10">
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 relative z-10">
           {categories.map((category) => (
             <button
               key={category}
               onClick={() => setActiveCategory(category)}
-              className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px] ${
+              className={`px-4 py-2 sm:px-6 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 min-h-[40px] sm:min-h-[44px] ${
                 activeCategory === category
                   ? 'bg-dark-sage text-charcoal'
                   : 'bg-white text-warm-gray hover:bg-dark-sage/20 hover:text-charcoal'
@@ -224,68 +231,20 @@ const steps = [
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+            className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6 lg:gap-8"
           >
             {filteredServices.map((service, index) => (
-        <motion.div
+              <motion.div
                 key={service.slug}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.05 }}
                 className="h-full"
-        >
-                <div 
+              >
+                <ServiceCard
+                  {...service}
                   onClick={() => handleBookingClick(service)}
-                  className="h-full bg-white rounded-lg overflow-hidden shadow-sm group-hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col"
-                >
-                  {/* Service image or gradient placeholder */}
-                  {service.slug ? (
-                    <div className="h-48 flex-shrink-0 bg-gray-200 relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        src={getServicePhotoPaths(service.slug)[0]} 
-                        alt={service.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // Fallback to gradient if image doesn't exist
-                          const target = e.target as HTMLImageElement;
-                          const photoPaths = getServicePhotoPaths(service.slug);
-                          const currentSrc = target.src;
-                          const currentIndex = photoPaths.findIndex(path => currentSrc.includes(path.split('/').pop() || ''));
-                          
-                          if (currentIndex < photoPaths.length - 1) {
-                            // Try next fallback path
-                            target.src = photoPaths[currentIndex + 1];
-                          } else {
-                            // No more fallbacks, show gradient
-                            target.style.display = 'none';
-                            if (target.parentElement) {
-                              target.parentElement.className = 'h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand';
-                            }
-                          }
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="h-48 flex-shrink-0 bg-gradient-to-br from-dark-sage/60 via-taupe/40 to-sand" />
-                  )}
-                  
-                  {/* Content - consistent structure */}
-                  <div className="p-6 flex flex-col h-full">
-                    <h3 className="text-h3 text-charcoal mb-3 flex-shrink-0">{service.name}</h3>
-                    <p className="text-warm-gray text-sm leading-relaxed mb-5 min-h-[3rem] flex-grow">{service.summary}</p>
-                    
-                    <div className="flex justify-between items-center text-sm text-warm-gray mb-4 pt-4 border-t border-sand flex-shrink-0">
-                      <span>{service.duration}</span>
-                      <span className="font-medium">{service.price}</span>
-                    </div>
-                    
-                    {/* Book Now CTA - Always at bottom */}
-                    <button className="w-full bg-dark-sage text-charcoal py-2.5 rounded-lg text-sm font-semibold hover:bg-sage-dark hover:shadow-lg transition-all duration-200 flex-shrink-0">
-                      Book Now
-                    </button>
-                  </div>
-                </div>
+                />
               </motion.div>
             ))}
         </motion.div>

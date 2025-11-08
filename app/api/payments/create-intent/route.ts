@@ -25,13 +25,30 @@ export async function POST(request: NextRequest) {
       amount, 
       discountCode, 
       paymentType, 
-      depositPercent = 50 
+      depositPercent = 50,
+      clientName,
+      clientEmail,
+      clientPhone,
+      clientNotes = '',
     } = body;
 
     // Validate input
     if (!serviceId || !serviceName || !amount || !paymentType) {
       return NextResponse.json(
         { error: 'Missing required fields: serviceId, serviceName, amount, paymentType' },
+        { status: 400 }
+      );
+    }
+
+    const trimmedName = typeof clientName === 'string' ? clientName.trim() : '';
+    const trimmedEmail = typeof clientEmail === 'string' ? clientEmail.trim() : '';
+    const trimmedPhone = typeof clientPhone === 'string' ? clientPhone.trim() : '';
+    const trimmedNotes =
+      typeof clientNotes === 'string' ? clientNotes.trim() : '';
+
+    if (!trimmedName || !trimmedEmail || !trimmedPhone) {
+      return NextResponse.json(
+        { error: 'Missing required contact information: name, email, or phone' },
         { status: 400 }
       );
     }
@@ -130,6 +147,10 @@ export async function POST(request: NextRequest) {
         depositAmount: depositAmount.toString(),
         balanceDue: balanceDue.toString(),
         depositPercent: depositPercent.toString(),
+        clientName: trimmedName,
+        clientEmail: trimmedEmail,
+        clientPhone: trimmedPhone,
+        clientNotes: trimmedNotes,
       },
     };
 

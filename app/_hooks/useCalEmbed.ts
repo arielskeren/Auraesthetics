@@ -6,6 +6,28 @@ declare global {
   }
 }
 
+export interface CalSlotOptions {
+  startTime: string;
+  endTime?: string | null;
+  timezone?: string | null;
+}
+
+export interface CalPrefillOptions {
+  name?: string;
+  email?: string;
+  smsReminderNumber?: string;
+  notes?: string;
+}
+
+export interface CalOpenOptions {
+  namespace?: string;
+  calLink: string;
+  slot?: CalSlotOptions | null;
+  prefill?: CalPrefillOptions | null;
+  metadata?: Record<string, any>;
+  onClose?: () => void;
+}
+
 /**
  * Hook to load Cal.com embed script once globally
  */
@@ -81,6 +103,78 @@ export function initCalService(namespace: string, calLink: string) {
   } catch (error) {
     console.error('Error initializing Cal.com:', error);
   }
+}
+
+/**
+ * Open Cal.com booking modal with optional slot reservation and prefill information
+ */
+export function openCalBooking(options: CalOpenOptions) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const attemptOpen = (tries = 0) => {
+    if (window.Cal) {
+      const payload: any = {
+        calLink: options.calLink,
+      };
+
+      if (options.namespace) {
+        try {
+          window.Cal('init', options.namespace, { origin: 'https://app.cal.com' });
+          payload.namespace = options.namespace;
+        } catch (error) {
+          console.warn('Failed to initialize Cal namespace', error);
+        }
+      }
+
+      if (options.slot) {
+        payload.slot = {
+          startTime: options.slot.startTime,
+          endTime: options.slot.endTime ?? undefined,
+          timeZone: options.slot.timezone ?? undefined,
+        };
+      }
+
+      if (options.prefill) {
+        const filteredPrefill = Object.fromEntries(
+          Object.entries({
+            name: options.prefill.name,
+            email: options.prefill.email,
+            smsReminderNumber: options.prefill.smsReminderNumber,
+            notes: options.prefill.notes,
+          }).filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+        );
+        if (Object.keys(filteredPrefill).length > 0) {
+          payload.prefill = filteredPrefill;
+        }
+      }
+
+      if (options.metadata) {
+        payload.metadata = options.metadata;
+      }
+
+      if (options.onClose) {
+        payload.onClose = options.onClose;
+      }
+
+      try {
+        window.Cal('open', payload);
+      } catch (error) {
+        console.error('Failed to open Cal booking modal', error);
+      }
+      return;
+    }
+
+    if (tries > 25) {
+      console.error('Cal.com embed not ready after multiple attempts');
+      return;
+    }
+
+    setTimeout(() => attemptOpen(tries + 1), 150);
+  };
+
+  attemptOpen();
 }
 
 /**

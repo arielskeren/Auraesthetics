@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Calendar, DollarSign, User, Mail, Phone, Filter, Search, Eye } from 'lucide-react';
+import { Loader2, Calendar, DollarSign, User, Mail, Phone, Search, Eye, RefreshCw } from 'lucide-react';
 import BookingDetailModal from './BookingDetailModal';
 
 interface Booking {
@@ -30,15 +30,26 @@ export default function AdminDashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
   
+  const refreshMessageStyles: Record<'success' | 'info' | 'error', string> = {
+    success: 'bg-green-50 border-green-200 text-green-700',
+    info: 'bg-blue-50 border-blue-200 text-blue-700',
+    error: 'bg-red-50 border-red-200 text-red-600',
+  };
+
   // Filters
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('active'); // Default to 'active' (excludes cancelled/refunded)
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       const response = await fetch('/api/admin/bookings');
       
       if (!response.ok) {
@@ -48,13 +59,17 @@ export default function AdminDashboardClient() {
       const data = await response.json();
       setBookings(data.bookings || []);
       setError(null);
+      return data.bookings || [];
     } catch (err: any) {
       setError(err.message || 'Failed to load bookings');
       console.error('Error fetching bookings:', err);
+      return null;
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   const filterBookings = useCallback(() => {
     let filtered = [...bookings];
@@ -97,11 +112,17 @@ export default function AdminDashboardClient() {
 
   useEffect(() => {
     fetchBookings();
-  }, []);
+  }, [fetchBookings]);
 
   useEffect(() => {
     filterBookings();
   }, [filterBookings]);
+
+  useEffect(() => {
+    if (!refreshMessage) return;
+    const timer = window.setTimeout(() => setRefreshMessage(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [refreshMessage]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -140,6 +161,51 @@ export default function AdminDashboardClient() {
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshMessage(null);
+
+    const previousCount = bookings.length;
+
+    try {
+      const result = await fetchBookings({ silent: true });
+
+      if (Array.isArray(result)) {
+        const newCount = result.length;
+        if (newCount > previousCount) {
+          const diff = newCount - previousCount;
+          setRefreshMessage({
+            type: 'success',
+            text: `Fetched ${diff} new booking${diff === 1 ? '' : 's'}.`,
+          });
+        } else if (newCount < previousCount) {
+          setRefreshMessage({
+            type: 'info',
+            text: 'Bookings list updated.',
+          });
+        } else {
+          setRefreshMessage({
+            type: 'info',
+            text: 'No new bookings found.',
+          });
+        }
+      } else {
+        setRefreshMessage({
+          type: 'error',
+          text: 'Failed to refresh bookings. Please try again.',
+        });
+      }
+    } catch (error) {
+      setRefreshMessage({
+        type: 'error',
+        text: 'Failed to refresh bookings. Please try again.',
+      });
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -213,6 +279,22 @@ export default function AdminDashboardClient() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-sage-dark/20">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+            <p className="text-sm font-medium text-charcoal">Filter bookings</p>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-sage text-charcoal font-medium hover:bg-sage-dark disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {refreshing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div className="relative">
@@ -254,6 +336,14 @@ export default function AdminDashboardClient() {
             </select>
           </div>
         </div>
+
+        {refreshMessage && (
+          <div
+            className={`mb-6 border ${refreshMessageStyles[refreshMessage.type]} rounded-lg px-4 py-3 text-sm`}
+          >
+            {refreshMessage.text}
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (
@@ -418,7 +508,9 @@ export default function AdminDashboardClient() {
             setShowDetailModal(false);
             setSelectedBooking(null);
           }}
-          onRefresh={fetchBookings}
+          onRefresh={() => {
+            void fetchBookings({ silent: true });
+          }}
         />
       </div>
     </div>

@@ -3,6 +3,11 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  useCalEmbed,
+  openCalBooking,
+  type CalPrefillOptions,
+} from '@/app/_hooks/useCalEmbed';
 
 function VerifyBookingContent() {
   const searchParams = useSearchParams();
@@ -15,12 +20,18 @@ function VerifyBookingContent() {
     label?: string;
     timezone?: string;
   } | null>(null);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+
+  useCalEmbed();
 
   useEffect(() => {
     const token = searchParams.get('token');
     const paymentIntentId = searchParams.get('paymentIntentId');
     const calLink = searchParams.get('calLink');
     const selectedSlotParam = searchParams.get('selectedSlot');
+    const contactParam = searchParams.get('contact');
+    const reservationParam = searchParams.get('reservation');
+    const metadataParam = searchParams.get('metadata');
 
     if (!token && !paymentIntentId) {
       setStatus('invalid');
@@ -45,6 +56,48 @@ function VerifyBookingContent() {
       }
     }
 
+    let contactPrefill: CalPrefillOptions | null = null;
+    if (contactParam) {
+      try {
+        const parsed = JSON.parse(contactParam);
+        contactPrefill = {
+          name: parsed.name || '',
+          email: parsed.email || '',
+          smsReminderNumber: parsed.phone || '',
+          notes: parsed.notes || '',
+        };
+      } catch (error) {
+        console.warn('Failed to parse contact prefill payload:', error);
+        contactPrefill = null;
+      }
+    }
+
+    let reservationPayload: {
+      id?: string;
+      startTime?: string | null;
+      endTime?: string | null;
+      timezone?: string | null;
+    } | null = null;
+    if (reservationParam) {
+      try {
+        reservationPayload = JSON.parse(reservationParam);
+      } catch (error) {
+        console.warn('Failed to parse reservation payload:', error);
+        reservationPayload = null;
+      }
+    }
+
+    let metadataPayload: Record<string, any> | undefined;
+    if (metadataParam) {
+      try {
+        metadataPayload = JSON.parse(metadataParam);
+      } catch (error) {
+        console.warn('Failed to parse metadata payload:', error);
+      }
+    }
+
+    let fallbackTimer: number | undefined;
+
     // Verify token
     const verifyToken = async () => {
       try {
@@ -59,25 +112,70 @@ function VerifyBookingContent() {
           setStatus('valid');
           setBookingInfo(data.booking);
           
-          // Redirect to Cal.com after short delay
-          setTimeout(() => {
-            // Build Cal.com URL with token and payment info
-            const calParams = new URLSearchParams({
-              token: token || '',
-              paymentIntentId: paymentIntentId || '',
-              paymentType: searchParams.get('paymentType') || 'full',
-            });
-            if (slotPayload?.startTime) {
-              calParams.append('slotStart', slotPayload.startTime);
-            }
-            if (slotPayload?.timezone) {
-              calParams.append('timezone', slotPayload.timezone);
-            }
-            
-            const calUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
-            console.log('Redirecting to Cal.com:', calUrl);
+          const calParams = new URLSearchParams({
+            token: token || '',
+            paymentIntentId: paymentIntentId || '',
+            paymentType: searchParams.get('paymentType') || 'full',
+          });
+          if (slotPayload?.startTime) {
+            calParams.append('slotStart', slotPayload.startTime);
+          }
+          if (slotPayload?.timezone) {
+            calParams.append('timezone', slotPayload.timezone);
+          }
+          if (reservationPayload?.id) {
+            calParams.append('reservationId', reservationPayload.id);
+          }
+
+          const calUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
+          setFallbackUrl(calUrl);
+
+          let slotForCal:
+            | {
+                startTime: string;
+                endTime?: string | null;
+                timezone?: string | null;
+              }
+            | undefined;
+
+          if (reservationPayload?.startTime) {
+            slotForCal = {
+              startTime: reservationPayload.startTime,
+              endTime: reservationPayload.endTime ?? undefined,
+              timezone: reservationPayload.timezone ?? slotPayload?.timezone ?? undefined,
+            };
+          } else if (slotPayload?.startTime) {
+            slotForCal = {
+              startTime: slotPayload.startTime,
+              endTime: undefined,
+              timezone: slotPayload.timezone ?? undefined,
+            };
+          }
+
+          const metadataForCal = {
+            ...(metadataPayload || {}),
+            token,
+            paymentIntentId,
+            reservationId: reservationPayload?.id,
+          };
+
+          openCalBooking({
+            calLink,
+            namespace: searchParams.get('serviceSlug') || undefined,
+            slot: slotForCal,
+            prefill: contactPrefill || undefined,
+            metadata: metadataForCal,
+            onClose: () => {
+              if (fallbackTimer) {
+                window.clearTimeout(fallbackTimer);
+              }
+              router.push('/book');
+            },
+          });
+
+          fallbackTimer = window.setTimeout(() => {
             window.location.href = calUrl;
-          }, 1500);
+          }, 6000);
         } else {
           setStatus('invalid');
           if (data.expired) {
@@ -96,6 +194,12 @@ function VerifyBookingContent() {
     };
 
     verifyToken();
+
+    return () => {
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer);
+      }
+    };
   }, [searchParams, router]);
 
   return (
@@ -124,7 +228,17 @@ function VerifyBookingContent() {
                 {slotInfo?.label && <p>Selected Slot: {slotInfo.label}</p>}
               </div>
             )}
-            <p className="text-warm-gray">Redirecting you to schedule your appointment...</p>
+            <p className="text-warm-gray mb-4">
+              We opened the scheduling form in a popup. If it doesn&apos;t appear, use the button below.
+            </p>
+            {fallbackUrl && (
+              <button
+                onClick={() => window.open(fallbackUrl, '_blank', 'noopener')}
+                className="px-6 py-2 bg-dark-sage text-charcoal rounded-lg font-medium hover:bg-sage-dark transition-colors"
+              >
+                Open Scheduling in New Tab
+              </button>
+            )}
           </>
         )}
 

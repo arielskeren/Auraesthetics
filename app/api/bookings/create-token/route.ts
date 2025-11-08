@@ -15,7 +15,12 @@ function generateBookingToken(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { paymentIntentId, selectedSlot } = body as {
+    const {
+      paymentIntentId,
+      selectedSlot,
+      reservation,
+      attendee,
+    } = body as {
       paymentIntentId?: string;
       selectedSlot?: {
         startTime?: string;
@@ -23,6 +28,19 @@ export async function POST(request: NextRequest) {
         timezone?: string;
         duration?: number | null;
         label?: string;
+      } | null;
+      reservation?: {
+        id?: string;
+        expiresAt?: string | null;
+        startTime?: string | null;
+        endTime?: string | null;
+        timezone?: string | null;
+      } | null;
+      attendee?: {
+        name?: string;
+        email?: string;
+        phone?: string;
+        notes?: string;
       } | null;
     };
 
@@ -40,6 +58,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!attendee || !attendee.name || !attendee.email || !attendee.phone) {
+      return NextResponse.json(
+        { error: 'Attendee name, email, and phone are required' },
+        { status: 400 }
+      );
+    }
+
+    const attendeeDetails = {
+      name: attendee.name.trim(),
+      email: attendee.email.trim(),
+      phone: attendee.phone.trim(),
+      notes: attendee.notes ? attendee.notes.trim() : '',
+    };
+
+    if (!attendeeDetails.name || !attendeeDetails.email || !attendeeDetails.phone) {
+      return NextResponse.json(
+        { error: 'Attendee details cannot be empty' },
+        { status: 400 }
+      );
+    }
+
     const slotDetails = {
       startTime: selectedSlot.startTime,
       eventTypeId: selectedSlot.eventTypeId,
@@ -47,6 +86,22 @@ export async function POST(request: NextRequest) {
       duration: typeof selectedSlot.duration === 'number' ? selectedSlot.duration : null,
       label: selectedSlot.label || null,
     };
+
+    const bookingDateIso = (() => {
+      const date = new Date(slotDetails.startTime);
+      return Number.isNaN(date.getTime()) ? slotDetails.startTime : date.toISOString();
+    })();
+
+    const reservationDetails =
+      reservation && reservation.id
+        ? {
+            id: reservation.id,
+            expiresAt: reservation.expiresAt ?? null,
+            startTime: reservation.startTime ?? slotDetails.startTime,
+            endTime: reservation.endTime ?? null,
+            timezone: reservation.timezone ?? slotDetails.timezone,
+          }
+        : null;
 
     // Verify payment intent exists and is valid
     let paymentIntent;
@@ -77,7 +132,7 @@ export async function POST(request: NextRequest) {
     // Store token in database
     // First, check if booking already exists for this payment intent
     const existingResult = await sql`
-      SELECT id FROM bookings 
+      SELECT id, metadata FROM bookings 
       WHERE payment_intent_id = ${paymentIntentId}
       LIMIT 1
     `;
@@ -93,11 +148,44 @@ export async function POST(request: NextRequest) {
       ? parseFloat(paymentIntent.metadata.balanceDue)
       : Math.max(0, finalAmount - depositAmountMetadata);
 
+    const metadataPaymentDetails = {
+      paymentType,
+      depositAmount: depositAmountMetadata,
+      balanceDue: balanceDueMetadata,
+      finalAmount,
+      depositPercent: paymentIntent.metadata?.depositPercent || '50',
+    };
+
     const existingRows = Array.isArray(existingResult)
       ? existingResult
       : (existingResult as any)?.rows ?? [];
 
     if (existingRows.length > 0) {
+      const existingBooking = existingRows[0] as any;
+      const existingMetadataRaw = existingBooking.metadata;
+      const existingMetadata =
+        existingMetadataRaw && typeof existingMetadataRaw === 'object'
+          ? existingMetadataRaw
+          : {};
+      const stripeMetadata =
+        existingMetadata?.stripe && typeof existingMetadata.stripe === 'object'
+          ? existingMetadata.stripe
+          : {};
+      const updatedMetadata = {
+        ...existingMetadata,
+        bookingToken: token,
+        tokenExpiresAt: expiresAt.toISOString(),
+        paymentType,
+        paymentDetails: metadataPaymentDetails,
+        selectedSlot: slotDetails,
+        attendee: attendeeDetails,
+        reservation: reservationDetails ?? existingMetadata?.reservation ?? null,
+        stripe: {
+          ...stripeMetadata,
+          lastSucceededIntentAt: new Date().toISOString(),
+        },
+      };
+
       // Update existing booking with token and payment type
       await sql`
         UPDATE bookings 
@@ -109,35 +197,13 @@ export async function POST(request: NextRequest) {
           discount_amount = ${parseFloat(paymentIntent.metadata?.discountAmount || '0')},
           discount_code = ${paymentIntent.metadata?.discountCode || null},
           payment_status = ${paymentType === 'deposit' ? 'deposit_paid' : paymentIntent.status === 'succeeded' ? 'paid' : paymentIntent.status === 'requires_capture' ? 'authorized' : 'processing'},
-          metadata = jsonb_set(
-            jsonb_set(
-              jsonb_set(
-                jsonb_set(
-                  jsonb_set(
-                    COALESCE(metadata, '{}'::jsonb),
-                    '{bookingToken}',
-                    ${JSON.stringify(token)}::jsonb
-                  ),
-                  '{tokenExpiresAt}',
-                  ${JSON.stringify(expiresAt.toISOString())}::jsonb
-                ),
-                '{paymentType}',
-                ${JSON.stringify(paymentType)}::jsonb
-              ),
-              '{paymentDetails}',
-              ${JSON.stringify({
-                paymentType,
-                depositAmount: depositAmountMetadata,
-                balanceDue: balanceDueMetadata,
-                finalAmount,
-                depositPercent: paymentIntent.metadata?.depositPercent || '50',
-              })}::jsonb
-            ),
-            '{selectedSlot}',
-            ${JSON.stringify(slotDetails)}::jsonb
-          ),
+          client_name = ${attendeeDetails.name || null},
+          client_email = ${attendeeDetails.email || null},
+          client_phone = ${attendeeDetails.phone || null},
+          booking_date = ${bookingDateIso},
+          metadata = ${JSON.stringify(updatedMetadata)}::jsonb,
           updated_at = NOW()
-        WHERE payment_intent_id = ${paymentIntentId}
+        WHERE id = ${existingBooking.id}
       `;
     } else {
       // Create new booking record with token
@@ -160,14 +226,13 @@ export async function POST(request: NextRequest) {
         bookingToken: token,
         tokenExpiresAt: expiresAt.toISOString(),
         paymentType,
-        paymentDetails: {
-          paymentType,
-          depositAmount: depositAmountMetadata,
-          balanceDue: balanceDueMetadata,
-          finalAmount,
-          depositPercent: paymentIntent.metadata?.depositPercent || '50',
-        },
+        paymentDetails: metadataPaymentDetails,
         selectedSlot: slotDetails,
+        attendee: attendeeDetails,
+        reservation: reservationDetails,
+        stripe: {
+          lastSucceededIntentAt: new Date().toISOString(),
+        },
       };
 
       await sql`
@@ -182,6 +247,10 @@ export async function POST(request: NextRequest) {
           payment_type,
           payment_status,
           payment_intent_id,
+          client_name,
+          client_email,
+          client_phone,
+          booking_date,
           metadata
         ) VALUES (
           ${serviceId},
@@ -194,7 +263,11 @@ export async function POST(request: NextRequest) {
           ${paymentType},
           ${paymentStatus},
           ${paymentIntentId},
-          ${JSON.stringify(metadata)}
+          ${attendeeDetails.name || null},
+          ${attendeeDetails.email || null},
+          ${attendeeDetails.phone || null},
+          ${bookingDateIso},
+          ${JSON.stringify(metadata)}::jsonb
         )
       `;
     }
