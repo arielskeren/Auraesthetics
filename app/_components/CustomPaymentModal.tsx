@@ -459,6 +459,18 @@ function PaymentForm({
   const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
   const shouldShowPaymentSections = modalStage === 'details' && reservationStatus === 'held' && !!reservation;
   const isAvailabilityStage = modalStage === 'availability';
+  const reservationMatchesSelectedSlot = useMemo(() => {
+    if (!reservation || !selectedSlot) return false;
+    if (reservation.startTime && reservation.startTime === selectedSlot.startTime) {
+      return true;
+    }
+    const reservationTimestamp = reservation.startTime ? Date.parse(reservation.startTime) : NaN;
+    const selectedTimestamp = Date.parse(selectedSlot.startTime);
+    if (!Number.isNaN(reservationTimestamp) && !Number.isNaN(selectedTimestamp)) {
+      return reservationTimestamp === selectedTimestamp;
+    }
+    return false;
+  }, [reservation, selectedSlot]);
 
   const isContactInfoComplete = useCallback(() => {
     return Boolean(
@@ -1000,7 +1012,7 @@ function PaymentForm({
       return;
     }
 
-    if (!reservation || reservation.startTime !== selectedSlot.startTime) {
+    if (!reservation || !reservationMatchesSelectedSlot) {
       setSlotError('We need to hold your selected time before continuing. Please wait a moment or reselect the slot.');
       setReservationErrorDetail((prev) =>
         prev || 'We are securing this time for you. If this message persists, pick the time again.'
@@ -1543,7 +1555,8 @@ function PaymentForm({
             !shouldShowPaymentSections ||
             !cardComplete ||
             !contactInfoReady ||
-            (paymentType === 'deposit' && !depositAcknowledged)
+            (paymentType === 'deposit' && !depositAcknowledged) ||
+            !reservationMatchesSelectedSlot
           }
           className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
