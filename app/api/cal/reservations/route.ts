@@ -4,12 +4,9 @@ import { calRequest } from '@/lib/calClient';
 type ReserveRequestBody = {
   eventTypeId?: number;
   slotStart?: string;
-  startTime?: string;
-  endTime?: string | null;
   slotDuration?: number | string | null;
   reservationDuration?: number | string | null;
   timeZone?: string;
-  timezone?: string;
 };
 
 function normalizeReservationResponse(payload: any) {
@@ -32,8 +29,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ReserveRequestBody;
   const eventTypeId = body.eventTypeId;
-  const slotStart = body.slotStart ?? body.startTime;
-  const timeZone = body.timeZone ?? body.timezone;
+  const slotStart = body.slotStart;
+  const timeZone = body.timeZone;
   const reservationDurationRaw = body.reservationDuration;
 
     if (!eventTypeId || !slotStart) {
@@ -88,12 +85,20 @@ export async function POST(request: NextRequest) {
       reservation,
     });
   } catch (error: any) {
-    console.error('Failed to reserve Cal.com slot:', error.response?.data || error.message);
+    const responseData = error.response?.data || {};
+    const message =
+      responseData?.details?.message ||
+      responseData?.message ||
+      responseData?.error ||
+      error.message ||
+      'Failed to reserve Cal.com slot';
+    console.error('Failed to reserve Cal.com slot:', responseData || error.message);
     const status = error.response?.status || 500;
     return NextResponse.json(
       {
         error: 'Failed to reserve Cal.com slot',
-        details: error.response?.data || error.message,
+        details: responseData,
+        message,
       },
       { status }
     );

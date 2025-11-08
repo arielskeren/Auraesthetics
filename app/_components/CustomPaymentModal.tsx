@@ -134,10 +134,14 @@ function AvailabilityPanel({
   serviceSlug,
   selectedSlot,
   onSelectSlot,
+  hiddenSlotStart,
+  isSelectionDisabled,
 }: {
   serviceSlug: string;
   selectedSlot: SlotSelectionPayload | null;
   onSelectSlot: (slot: SlotSelectionPayload | null) => void;
+  hiddenSlotStart?: string | null;
+  isSelectionDisabled?: boolean;
 }) {
   const [pageOffset, setPageOffset] = useState(0);
   const [daysPerPage, setDaysPerPage] = useState(7);
@@ -350,6 +354,9 @@ function AvailabilityPanel({
                   ) : (
                     <div className="flex flex-col gap-2">
                       {slots.map((slot) => {
+                        if (hiddenSlotStart && slot.slot === hiddenSlotStart) {
+                          return null;
+                        }
                         const slotDate = new Date(slot.slot);
                         const label = formatTimeLabel(slotDate);
                         const isSelected = selectedSlot?.startTime === slot.slot;
@@ -358,6 +365,7 @@ function AvailabilityPanel({
                             key={slot.slot}
                             type="button"
                             onClick={() => handleSlotClick(slot)}
+                            disabled={isSelectionDisabled}
                             className={`block w-full px-3 py-2 rounded-md border text-sm font-medium leading-tight text-center transition-colors ${
                               isSelected
                                 ? 'bg-dark-sage text-charcoal border-dark-sage'
@@ -434,10 +442,13 @@ function PaymentForm({
   const [reservationCountdown, setReservationCountdown] = useState(0);
   const [reservationAttempts, setReservationAttempts] = useState(0);
   const [reservationErrorDetail, setReservationErrorDetail] = useState<string | null>(null);
+  const [reservationSuccessDetail, setReservationSuccessDetail] = useState<string | null>(null);
+  const [cardComplete, setCardComplete] = useState(false);
   const reserveRetryTimeoutRef = useRef<number | null>(null);
 
   const serviceSlug = deriveServiceSlug(service);
   const serviceIdentifier = serviceSlug || (service?.name ? service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'service');
+  const shouldShowPaymentSections = reservationStatus === 'held' && !!reservation;
 
   const isContactInfoComplete = useCallback(() => {
     return Boolean(
@@ -468,6 +479,8 @@ function PaymentForm({
     setContactErrors(errors);
     return Object.keys(errors).length === 0;
   }, [contactDetails]);
+
+  const contactInfoReady = isContactInfoComplete();
 
   const releaseReservation = useCallback(
     async (reservationId: string, options?: { preserveState?: boolean }) => {
@@ -502,7 +515,7 @@ function PaymentForm({
   const activeSlotKeyRef = useRef<string | null>(null);
 
   const performReserve = useCallback(
-    async (slot: SlotSelectionPayload, contact: ContactDetails, attempt = 1) => {
+    async (slot: SlotSelectionPayload, attempt = 1) => {
       activeSlotKeyRef.current = slot.startTime;
       setReservationAttempts(attempt);
       setReservationStatus('holding');
@@ -522,7 +535,12 @@ function PaymentForm({
 
         if (!response.ok) {
           const errorBody = await response.json().catch(() => ({}));
-          throw new Error(errorBody.error || 'Failed to reserve slot');
+          const reserveMessage =
+            errorBody?.message ||
+            errorBody?.details?.message ||
+            errorBody?.error ||
+            'Failed to reserve slot';
+          throw new Error(reserveMessage);
         }
 
         const body = await response.json();
@@ -548,6 +566,40 @@ function PaymentForm({
         if (reservation && reservation.id && reservation.id !== newReservation.id) {
           void releaseReservation(reservation.id, { preserveState: true });
         }
+
+        let verified = true;
+        try {
+          const verifyResponse = await fetch(`/api/cal/reservations/${newReservation.id}/verify`);
+          if (!verifyResponse.ok) {
+            verified = false;
+          } else {
+            const verifyJson = await verifyResponse.json();
+            const verifyStatus = verifyJson.status ?? (verifyJson.success === false ? 'error' : 'success');
+            if (verifyStatus !== 'success') {
+              verified = false;
+            }
+          }
+        } catch (verifyError) {
+          console.warn('Reservation verification failed', verifyError);
+          verified = false;
+        }
+
+        if (!verified) {
+          await releaseReservation(newReservation.id, { preserveState: true });
+          clearPendingReserve();
+          setReservationLoading(false);
+          setReservationStatus('error');
+          setReservationErrorDetail('We could not confirm the hold. Please select another time.');
+          setReservation(null);
+          setSelectedSlot(null);
+          setReservationCountdown(0);
+          setReservationAttempts(0);
+          setReservationSuccessDetail(null);
+          setCardComplete(false);
+          activeSlotKeyRef.current = null;
+          return;
+        }
+
         const expiresAt = newReservation.expiresAt ? new Date(newReservation.expiresAt).getTime() : null;
         const countdownSeconds =
           expiresAt && Number.isFinite(expiresAt)
@@ -565,6 +617,20 @@ function PaymentForm({
         setReservationLoading(false);
         setReservationErrorDetail(null);
         setPreserveReservation(false);
+        const expiresDisplay =
+          newReservation.expiresAt
+            ? new Date(newReservation.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+            : null;
+        setReservationSuccessDetail(
+          expiresDisplay
+            ? `Slot reserved. Complete checkout by ${expiresDisplay}.`
+            : 'Slot reserved. Complete checkout below.'
+        );
+        console.log('Reservation confirmed', {
+          reservationId: newReservation.id,
+          slot: newReservation.startTime,
+          expiresAt: newReservation.expiresAt,
+        });
       } catch (error: any) {
         if (activeSlotKeyRef.current !== slot.startTime) {
           return;
@@ -576,13 +642,14 @@ function PaymentForm({
         if (attempt < 3) {
           setReservationErrorDetail(`${message} Retrying (${attempt + 1}/3)...`);
           reserveRetryTimeoutRef.current = window.setTimeout(() => {
-            performReserve(slot, contact, attempt + 1);
+            performReserve(slot, attempt + 1);
           }, 1500 * attempt);
         } else {
           clearPendingReserve();
           setReservationLoading(false);
           setReservationStatus('error');
           setReservationErrorDetail(message);
+          setReservationSuccessDetail(null);
           activeSlotKeyRef.current = null;
           setReservation(null);
           setSelectedSlot(null);
@@ -593,16 +660,58 @@ function PaymentForm({
   );
 
   const reserveSlot = useCallback(
-    (slot: SlotSelectionPayload, contact: ContactDetails) => {
+    async (slot: SlotSelectionPayload) => {
       clearPendingReserve();
       setReservationLoading(true);
       setReservationErrorDetail(null);
       setReservationAttempts(0);
       setReservationStatus('holding');
-      performReserve(slot, contact, 1);
+      await performReserve(slot, 1);
     },
     [clearPendingReserve, performReserve]
   );
+
+  const resetReservationState = useCallback((message?: string) => {
+    activeSlotKeyRef.current = null;
+    setReservation(null);
+    setSelectedSlot(null);
+    setReservationStatus('idle');
+    setReservationCountdown(0);
+    setReservationAttempts(0);
+    setReservationErrorDetail(null);
+    setReservationSuccessDetail(message ?? null);
+    setReservationLoading(false);
+    setCardComplete(false);
+    setPreserveReservation(false);
+  }, []);
+
+  const handleReleaseSlot = useCallback(async (message?: string) => {
+    if (!reservation?.id) {
+      resetReservationState(message);
+      return;
+    }
+    setReservationLoading(true);
+    setPreserveReservation(true);
+    try {
+      await releaseReservation(reservation.id, { preserveState: true });
+      resetReservationState(message ?? 'Slot released. Select a new time to continue.');
+    } catch (error) {
+      console.warn('Release slot failed', error);
+      resetReservationState();
+      setReservationErrorDetail('We could not release the slot automatically. Please pick a new time.');
+    }
+  }, [releaseReservation, reservation, resetReservationState]);
+
+  const handleChangeTime = useCallback(async () => {
+    await handleReleaseSlot('Slot released. Select a new time to continue.');
+  }, [handleReleaseSlot]);
+
+  const handleCancel = useCallback(() => {
+    if (reservation?.id) {
+      void handleReleaseSlot('Slot released.');
+    }
+    onClose();
+  }, [handleReleaseSlot, onClose, reservation]);
 
   const handleSlotSelection = useCallback(
     (slot: SlotSelectionPayload | null) => {
@@ -657,8 +766,6 @@ function PaymentForm({
     setCurrentAmount(amount);
   }, [paymentType, discountValidation, baseAmount]);
 
-  const { name: contactName, email: contactEmail, phone: contactPhone, notes: contactNotes } = contactDetails;
-
   useEffect(() => {
     if (!selectedSlot) {
       setReservationStatus('idle');
@@ -669,7 +776,7 @@ function PaymentForm({
       return;
     }
 
-    if (!isContactInfoComplete()) {
+    if (!contactInfoReady) {
       setReservationStatus('idle');
       setReservationErrorDetail('Enter your contact information to hold this time.');
       setReservationLoading(false);
@@ -684,25 +791,8 @@ function PaymentForm({
       return;
     }
 
-    const contact: ContactDetails = {
-      name: contactName.trim(),
-      email: contactEmail.trim(),
-      phone: contactPhone.trim(),
-      notes: contactNotes.trim(),
-    };
-
-    reserveSlot(selectedSlot, contact);
-  }, [
-    selectedSlot,
-    contactName,
-    contactEmail,
-    contactPhone,
-    contactNotes,
-    isContactInfoComplete,
-    reservation,
-    reservationLoading,
-    reserveSlot,
-  ]);
+    reserveSlot(selectedSlot);
+  }, [selectedSlot, contactInfoReady, reservation, reservationLoading, reserveSlot]);
 
   useEffect(() => {
     if (reservationStatus === 'error' && reservationErrorDetail) {
@@ -712,6 +802,21 @@ function PaymentForm({
       return () => window.clearTimeout(timer);
     }
   }, [reservationStatus, reservationErrorDetail]);
+
+  useEffect(() => {
+    if (reservationSuccessDetail) {
+      const timer = window.setTimeout(() => {
+        setReservationSuccessDetail(null);
+      }, 4000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [reservationSuccessDetail]);
+
+  useEffect(() => {
+    if (reservationStatus !== 'held') {
+      setCardComplete(false);
+    }
+  }, [reservationStatus]);
 
   useEffect(() => {
     if (paymentType !== 'deposit') {
@@ -742,32 +847,18 @@ function PaymentForm({
 
   useEffect(() => {
     if (reservationStatus === 'held' && reservationCountdown === 0 && reservation?.id) {
-      setReservationStatus('error');
-      const expirationMessage = 'Reservation timed out. Please select another time.';
-      setReservationErrorDetail(expirationMessage);
-      setReservationLoading(false);
-      void releaseReservation(reservation.id);
-      setReservation(null);
-      setSelectedSlot(null);
-      activeSlotKeyRef.current = null;
+    const expirationMessage = 'Reservation timed out. Please select another time.';
+    setReservationStatus('error');
+    setReservationErrorDetail(expirationMessage);
+    void (async () => {
+      try {
+        await releaseReservation(reservation.id, { preserveState: true });
+      } finally {
+        resetReservationState();
+      }
+    })();
     }
-  }, [reservationStatus, reservationCountdown, reservation, releaseReservation]);
-
-  const handleChangeTime = useCallback(async () => {
-    clearPendingReserve();
-    activeSlotKeyRef.current = null;
-    if (reservation?.id) {
-      await releaseReservation(reservation.id);
-    }
-    setSelectedSlot(null);
-    setReservation(null);
-    setReservationStatus('idle');
-    setReservationCountdown(0);
-    setReservationErrorDetail(null);
-    setReservationAttempts(0);
-    setReservationLoading(false);
-    setSlotError(null);
-  }, [clearPendingReserve, releaseReservation, reservation]);
+}, [reservationStatus, reservationCountdown, reservation, releaseReservation, resetReservationState]);
 
   const validateDiscount = async () => {
     if (!discountCode.trim()) {
@@ -1109,19 +1200,33 @@ function PaymentForm({
               Complete checkout within {reservationCountdown}s to keep this time.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleChangeTime}
-            className="self-start px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
-          >
-            Change time
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleChangeTime}
+              className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
+            >
+              Change time
+            </button>
+            <button
+              type="button"
+              onClick={() => handleReleaseSlot('Slot released. Select a new time to continue.')}
+              className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Release slot
+            </button>
+          </div>
+          {reservationSuccessDetail && (
+            <div className="text-xs text-green-700">{reservationSuccessDetail}</div>
+          )}
         </div>
       ) : (
         <AvailabilityPanel
           serviceSlug={serviceSlug}
           selectedSlot={selectedSlot}
           onSelectSlot={handleSlotSelection}
+          hiddenSlotStart={reservation?.startTime ?? null}
+          isSelectionDisabled={reservationStatus === 'holding' || reservationLoading}
         />
       )}
 
@@ -1132,7 +1237,7 @@ function PaymentForm({
         </div>
       )}
 
-      {selectedSlot && (
+      {reservationStatus !== 'held' && selectedSlot && (
         <div className="bg-dark-sage/10 border border-dark-sage/40 rounded-lg px-3 sm:px-4 py-2.5 mb-2 text-sm text-charcoal flex flex-col gap-1">
           <span className="font-medium">Selected Slot</span>
           <span>{selectedSlot.label}</span>
@@ -1158,6 +1263,8 @@ function PaymentForm({
         </div>
       )}
 
+      {shouldShowPaymentSections ? (
+        <>
       {/* Discount Code */}
       <div>
         <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
@@ -1277,7 +1384,10 @@ function PaymentForm({
           Card Information
         </label>
         <div className="p-3 sm:p-4 border border-sage-dark rounded-lg bg-white">
-          <CardElement options={cardElementOptions} />
+          <CardElement
+            options={cardElementOptions}
+            onChange={(event) => setCardComplete(event.complete)}
+          />
         </div>
       </div>
 
@@ -1329,13 +1439,7 @@ function PaymentForm({
       <div className="flex gap-2.5 sm:gap-3">
         <button
           type="button"
-          onClick={() => {
-            if (reservation?.id) {
-              setPreserveReservation(false);
-              void releaseReservation(reservation.id);
-            }
-            onClose();
-          }}
+          onClick={handleCancel}
           disabled={processing || success}
           className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-white border-2 border-dark-sage text-dark-sage hover:bg-sage-light hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -1348,6 +1452,9 @@ function PaymentForm({
             success ||
             !stripe ||
             reservationLoading ||
+            !shouldShowPaymentSections ||
+            !cardComplete ||
+            !contactInfoReady ||
             (paymentType === 'deposit' && !depositAcknowledged)
           }
           className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1369,6 +1476,13 @@ function PaymentForm({
           )}
         </button>
       </div>
+        </>
+      ) : (
+        <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-warm-gray">
+          {reservationSuccessDetail ??
+            'Select an available time and complete your contact information to continue to payment.'}
+        </div>
+      )}
     </form>
   );
 }
