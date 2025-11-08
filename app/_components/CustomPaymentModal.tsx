@@ -1173,24 +1173,8 @@ function PaymentForm({
   return (
     <form onSubmit={handlePayment} className="space-y-5 sm:space-y-6">
       {/* Service Summary */}
-      <div className="bg-sand/30 p-4 rounded-lg">
-        <h3 className="font-serif text-lg text-charcoal mb-2">{service.name}</h3>
-        <div className="flex justify-between text-sm text-warm-gray">
-          <span>Duration: {service.duration}</span>
-          <span className="font-medium">Base Price: ${baseAmount.toFixed(2)}</span>
-        </div>
-      </div>
-
       {isAvailabilityStage && (
         <div className="space-y-4 sm:space-y-5">
-          <div className="border border-sand rounded-lg p-3 sm:p-4 bg-white">
-            <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2">Step 1 · Choose your time</h3>
-            <p className="text-xs sm:text-sm text-warm-gray leading-relaxed">
-              Select an available slot to place a short hold while you enter your contact and payment details.
-              Holds typically last about two minutes—plenty of time to complete checkout.
-            </p>
-          </div>
-
           <AvailabilityPanel
             serviceSlug={serviceSlug}
             selectedSlot={selectedSlot}
