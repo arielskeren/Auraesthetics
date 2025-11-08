@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
+import { createCalPrivateLink, CalPrivateLink } from '@/lib/calPrivateLinks';
 import crypto from 'crypto';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -330,6 +331,29 @@ export async function POST(request: NextRequest) {
       depositPercent: paymentIntent.metadata?.depositPercent || '50',
     };
 
+    let calPrivateLink: CalPrivateLink | null = null;
+    const rawEventTypeId = slotDetails.eventTypeId;
+    const numericEventTypeId =
+      typeof rawEventTypeId === 'string'
+        ? Number.parseInt(rawEventTypeId, 10)
+        : typeof rawEventTypeId === 'number'
+        ? rawEventTypeId
+        : Number.NaN;
+
+    if (Number.isFinite(numericEventTypeId)) {
+      try {
+        const expiresAtMs = Date.now() + 30 * 60 * 1000; // 30 minutes
+        const expiresAt = new Date(expiresAtMs).toISOString();
+
+        calPrivateLink = await createCalPrivateLink(numericEventTypeId, {
+          expiresAt,
+          maxUsageCount: 1,
+        });
+      } catch (error) {
+        console.warn('Failed to create Cal.com private link', error);
+      }
+    }
+
     const existingRows = Array.isArray(existingResult)
       ? existingResult
       : (existingResult as any)?.rows ?? [];
@@ -358,6 +382,7 @@ export async function POST(request: NextRequest) {
           ...stripeMetadata,
           lastSucceededIntentAt: new Date().toISOString(),
         },
+        calPrivateLink: calPrivateLink ?? existingMetadata?.calPrivateLink ?? null,
       };
 
       // Update existing booking with token and payment type
@@ -407,6 +432,7 @@ export async function POST(request: NextRequest) {
         stripe: {
           lastSucceededIntentAt: new Date().toISOString(),
         },
+        calPrivateLink: calPrivateLink ?? null,
       };
 
       await sql`
@@ -457,6 +483,13 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
       paymentIntentId,
       paymentStatus: paymentIntent.status,
+      calPrivateLink: calPrivateLink
+        ? {
+            bookingUrl: calPrivateLink.bookingUrl,
+            expiresAt: calPrivateLink.expiresAt,
+            linkId: calPrivateLink.linkId,
+          }
+        : null,
     });
   } catch (error: any) {
     console.error('Token creation error:', error);

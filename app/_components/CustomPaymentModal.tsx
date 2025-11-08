@@ -19,6 +19,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import { extractCalLink } from '../_hooks/useCalEmbed';
+import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import Button from './Button';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
@@ -69,6 +70,12 @@ interface ReservationInfo {
   startTime: string | null;
   endTime: string | null;
   timezone: string | null;
+}
+
+interface CalPrivateLinkInfo {
+  bookingUrl: string;
+  expiresAt: string;
+  linkId: string;
 }
 
 function deriveServiceSlug(service: { slug?: string; calBookingUrl?: string | null; name?: string } | null): string {
@@ -409,6 +416,7 @@ function PaymentForm({
     slot: SlotSelectionPayload;
     contact: ContactDetails;
     reservation: ReservationInfo;
+    calPrivateLink?: CalPrivateLinkInfo | null;
   }) => void;
   onClose: () => void;
   modalStage: 'availability' | 'details';
@@ -1122,6 +1130,7 @@ function PaymentForm({
                 slot: selectedSlot,
                 contact: trimmedContact,
                 reservation: reservationSnapshot,
+                calPrivateLink: tokenData.calPrivateLink ?? null,
               });
             } catch (redirectError) {
               console.error('Redirect error:', redirectError);
@@ -1579,6 +1588,7 @@ function PaymentForm({
 }
 
 export default function CustomPaymentModal({ isOpen, onClose, service }: CustomPaymentModalProps) {
+  useBodyScrollLock(isOpen);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [discountCode, setDiscountCode] = useState<string | undefined>();
   const [redirectError, setRedirectError] = useState<string | null>(null);
@@ -1586,6 +1596,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [contactDetails, setContactDetails] = useState<ContactDetails | null>(null);
   const [reservationInfo, setReservationInfo] = useState<ReservationInfo | null>(null);
   const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
+  const [calPrivateLinkInfo, setCalPrivateLinkInfo] = useState<CalPrivateLinkInfo | null>(null);
   const serviceSlug = deriveServiceSlug(service);
   const primaryPhoto = useMemo(() => {
     if (!service?.slug) return null;
@@ -1607,6 +1618,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     slot,
     contact,
     reservation,
+    calPrivateLink,
   }: {
     paymentIntentId: string;
     discountCode?: string;
@@ -1615,6 +1627,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     slot: SlotSelectionPayload;
     contact: ContactDetails;
     reservation: ReservationInfo;
+    calPrivateLink?: CalPrivateLinkInfo | null;
   }) => {
     setPaymentIntentId(paymentIntentId);
     setDiscountCode(code);
@@ -1622,11 +1635,16 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     setSlotSelection(slot);
     setContactDetails(contact);
     setReservationInfo(reservation);
+    setCalPrivateLinkInfo(calPrivateLink ?? null);
     
     // Redirect to verification page first, then to Cal.com
-    if (service?.calBookingUrl) {
-      const calLink = extractCalLink(service.calBookingUrl);
-      if (calLink && bookingToken) {
+    const baseCalLink = calPrivateLink?.bookingUrl
+      ? extractCalLink(calPrivateLink.bookingUrl)
+      : service?.calBookingUrl
+      ? extractCalLink(service.calBookingUrl)
+      : null;
+
+    if (baseCalLink && bookingToken) {
         const metadata = {
           paymentIntentId,
           discountCode: code || '',
@@ -1636,6 +1654,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           serviceSlug,
           contact,
           reservation,
+          calPrivateLink,
         };
         
         // Build verify URL with all required parameters
@@ -1643,7 +1662,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           token: bookingToken,
           paymentIntentId,
           paymentType,
-          calLink: calLink,
+          calLink: baseCalLink,
           metadata: JSON.stringify(metadata),
           selectedSlot: JSON.stringify(slot),
         });
@@ -1656,6 +1675,10 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
       if (contact) {
         params.append('contact', JSON.stringify(contact));
       }
+      if (calPrivateLink?.bookingUrl) {
+        params.append('privateLink', calPrivateLink.bookingUrl);
+        params.append('privateLinkExpiresAt', calPrivateLink.expiresAt);
+      }
         
         // Redirect to verification page first (prevents direct Cal.com access)
         const verifyUrl = `/book/verify?${params.toString()}`;
@@ -1667,13 +1690,14 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           console.error('Redirect error:', error);
           setRedirectError('Failed to redirect. Please manually navigate to the booking page.');
         }
-      } else {
-        console.error('No Cal.com link or booking token found:', { calLink, bookingToken, service });
-        setRedirectError('Missing booking information. Please contact support.');
-      }
     } else {
-      console.error('No service or calBookingUrl found');
-      setRedirectError('Missing service information. Please contact support.');
+      console.error('No Cal.com link or booking token found:', {
+        calPrivateLink,
+        serviceLink: service?.calBookingUrl,
+        bookingToken,
+        service,
+      });
+      setRedirectError('Missing booking information. Please contact support.');
     }
   };
 

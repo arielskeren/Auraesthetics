@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
+import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
 
@@ -24,6 +25,7 @@ interface BookingModalProps {
 
 export default function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   useCalEmbed();
+  useBodyScrollLock(isOpen);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const calLink = service ? extractCalLink(service.calBookingUrl) : null;
   const namespace = service?.slug || 'booking';

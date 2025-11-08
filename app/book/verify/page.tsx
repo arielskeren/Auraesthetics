@@ -7,6 +7,7 @@ import {
   useCalEmbed,
   openCalBooking,
   type CalPrefillOptions,
+  extractCalLink,
 } from '@/app/_hooks/useCalEmbed';
 
 function VerifyBookingContent() {
@@ -27,7 +28,9 @@ function VerifyBookingContent() {
   useEffect(() => {
     const token = searchParams.get('token');
     const paymentIntentId = searchParams.get('paymentIntentId');
-    const calLink = searchParams.get('calLink');
+    const privateLinkUrl = searchParams.get('privateLink');
+    const calLinkParam = searchParams.get('calLink');
+    const calLink = privateLinkUrl ? extractCalLink(privateLinkUrl) : calLinkParam;
     const selectedSlotParam = searchParams.get('selectedSlot');
     const contactParam = searchParams.get('contact');
     const reservationParam = searchParams.get('reservation');
@@ -127,7 +130,9 @@ function VerifyBookingContent() {
             calParams.append('reservationId', reservationPayload.id);
           }
 
-          const calUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
+          const calUrl = privateLinkUrl
+            ? privateLinkUrl
+            : `https://cal.com/${calLink}?${calParams.toString()}`;
           setFallbackUrl(calUrl);
 
           let slotForCal:
@@ -157,6 +162,7 @@ function VerifyBookingContent() {
             token,
             paymentIntentId,
             reservationId: reservationPayload?.id,
+            privateLink: privateLinkUrl || null,
           };
 
           openCalBooking({
