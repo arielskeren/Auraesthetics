@@ -497,12 +497,7 @@ function PaymentForm({
         console.warn('Failed to release reservation', error);
       } finally {
         if (!options?.preserveState) {
-          setReservation((current) => {
-            if (current && current.id === reservationId) {
-              return null;
-            }
-            return current;
-          });
+          setReservation(null);
           setSelectedSlot(null);
         }
       }
