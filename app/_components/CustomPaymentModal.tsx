@@ -130,7 +130,6 @@ function formatTimeLabel(date: Date) {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: 'America/New_York',
-    timeZoneName: 'short',
   }).format(date);
 }
 
@@ -316,7 +315,7 @@ function AvailabilityPanel({
         </div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 pb-2">
         {loading && (
           <div className="flex items-center gap-2 text-sm text-warm-gray">
             <Loader2 className="animate-spin" size={16} />
