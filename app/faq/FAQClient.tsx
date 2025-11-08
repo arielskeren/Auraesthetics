@@ -34,17 +34,28 @@ export default function FAQClient() {
           transition={{ duration: 0.6 }}
           className="max-w-3xl mx-auto"
         >
-          <div className="bg-white rounded-lg shadow-sm p-8 md:p-12">
-            {faqs.map((faq, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 1, y: 0 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: index * 0.05 }}
-              >
-                <Accordion question={faq.q} answer={faq.a} />
-              </motion.div>
+          <div className="bg-white rounded-lg shadow-sm p-8 md:p-12 space-y-12">
+            {faqs.map((section, sectionIndex) => (
+              <div key={section.group}>
+                <div className="mb-6 text-left">
+                  <h2 className="text-h3 font-serif text-charcoal">{section.group}</h2>
+                  <div className="mt-2 h-0.5 w-16 bg-dark-sage/50" />
+                </div>
+
+                <div className="space-y-4">
+                  {section.faqs.map((faq, index) => (
+                    <motion.div
+                      key={faq.q}
+                      initial={{ opacity: 1, y: 0 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.4, delay: (sectionIndex * 0.1) + index * 0.05 }}
+                    >
+                      <Accordion question={faq.q} answer={faq.a} />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
 

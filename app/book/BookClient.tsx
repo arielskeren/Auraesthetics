@@ -1,8 +1,7 @@
 'use client';
 
-import { Fragment, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
 import Section from '../_components/Section';
 import BookingModal from '../_components/BookingModal';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
@@ -76,52 +75,8 @@ export default function BookClient() {
 
   return (
     <>
-      {/* How It Works */}
-      <Section background="sand" className="relative !pb-16">
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-l from-dark-sage/8 via-transparent to-dark-sage/8 opacity-40" />
-
-        <div className="max-w-5xl mx-auto relative z-10">
-          <motion.div
-            initial={{ opacity: 1, y: 0 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-h2 font-serif text-charcoal mb-8 text-center">How It Works</h2>
-
-            <div className="flex flex-col md:flex-row md:items-center md:justify-center gap-8">
-              {steps.map((step, index) => (
-                <Fragment key={step.title}>
-                  <div className="bg-white p-6 rounded-lg shadow-sm flex-1 min-w-[220px]">
-                    <div className="flex items-center gap-4 mb-4">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-dark-sage text-charcoal font-semibold">
-                        {index + 1}
-                      </span>
-                      <h3 className="text-h3 font-serif text-charcoal">{step.title}</h3>
-                    </div>
-                    <p className="text-warm-gray text-sm leading-relaxed">{step.description}</p>
-                  </div>
-                  {index < steps.length - 1 && (
-                    <>
-                      <div className="hidden md:flex justify-center">
-                        <ArrowRight className="h-8 w-8 text-dark-sage" />
-                      </div>
-                      <div className="md:hidden flex justify-center">
-                        <ArrowRight className="h-6 w-6 text-dark-sage rotate-90" />
-                      </div>
-                    </>
-                  )}
-                </Fragment>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </Section>
-
       {/* Hero */}
-      <Section background="sand" className="relative">
+      <Section background="sand" className="relative !py-12 md:!py-20">
         {/* Decorative green line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         {/* Background accents */}
@@ -131,12 +86,12 @@ export default function BookClient() {
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto pt-16 md:pt-0 relative z-10"
+          className="text-center max-w-3xl mx-auto pt-8 md:pt-2 relative z-10"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-6">
+          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-4">
             Book Your Treatment
           </h1>
-          <p className="text-lg text-warm-gray leading-relaxed mb-8">
+          <p className="text-base md:text-lg text-warm-gray leading-relaxed mb-6 md:mb-8">
             Choose your service below and you&apos;ll be redirected to our secure booking system to select your time and complete your appointment.
           </p>
         </motion.div>
@@ -256,6 +211,53 @@ export default function BookClient() {
         onClose={handleCloseModal}
         service={selectedService}
       />
+
+      {/* How It Works */}
+      <Section background="sand" className="relative !py-16">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-dark-sage/8 via-transparent to-dark-sage/8 opacity-30" />
+
+        <div className="max-w-4xl mx-auto relative z-10 text-center">
+          <motion.div
+            initial={{ opacity: 1, y: 0 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-h2 font-serif text-charcoal">How It Works</h2>
+            <p className="mt-3 text-sm md:text-base text-warm-gray max-w-2xl mx-auto">
+              Booking is quick and transparent. Follow these simple steps and you&apos;ll be ready for your visit.
+            </p>
+
+            <div className="mt-10 grid gap-6 md:gap-8 md:grid-cols-2">
+              {steps.map((step, index) => (
+                <motion.div
+                  key={step.title}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: index * 0.08 }}
+                  className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm px-6 py-7 text-left border border-dark-sage/20"
+                >
+                  <div className="flex items-start gap-4">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-dark-sage/90 text-charcoal font-semibold">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <h3 className="text-base md:text-lg font-serif text-charcoal mb-2">
+                        {step.title}
+                      </h3>
+                      <p className="text-sm text-warm-gray leading-relaxed">
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </Section>
     </>
   );
 }

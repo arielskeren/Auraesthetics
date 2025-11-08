@@ -44,19 +44,19 @@ export default function ServicesClient() {
   return (
     <>
       {/* Hero */}
-      <Section background="sand">
+      <Section background="sand" className="relative !py-12 md:!py-20">
         {/* Decorative green line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto pt-16 md:pt-0"
+          className="text-center max-w-3xl mx-auto pt-8 md:pt-2"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-4">
+          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-3 md:mb-4">
             Services
           </h1>
-          <p className="text-lg text-warm-gray leading-relaxed">
+          <p className="text-base md:text-lg text-warm-gray leading-relaxed">
             Thoughtfully curated treatments that honor your skin&apos;s unique needs and your personal goals.
           </p>
         </motion.div>

@@ -1,43 +1,99 @@
 [
   {
-    "q": "How do I book an appointment?",
-    "a": "Online booking will open soon. Join the email list to be notified and access launch‑week perks."
+    "group": "Booking & Scheduling",
+    "faqs": [
+      {
+        "q": "How do I book an appointment?",
+        "a": "All appointments are managed through our secure Cal.com scheduler. Browse available services, choose “Book Now,” and you’ll be guided step-by-step to pick a time that works for you."
+      },
+      {
+        "q": "Can I book more than one service in the same visit?",
+        "a": "Absolutely. Select your primary treatment in the scheduler and add additional services or enhancements where available. If you’re unsure about timing, reach out and we’ll help customize the visit."
+      },
+      {
+        "q": "What if I don’t see a time that works?",
+        "a": "Cal.com shows Amy’s live calendar. If nothing fits, join the waitlist option inside the scheduler or email us with your preferred windows—we’ll reach out if a spot opens."
+      },
+      {
+        "q": "How far in advance can I schedule?",
+        "a": "Spots typically release 6–8 weeks ahead. Set a reminder to check back or join the email list for early access to new availability."
+      }
+    ]
   },
   {
-    "q": "Where are you located?",
-    "a": "We're located in Fort Lauderdale, FL, and we service all of South Florida. Parking is available on-site. Hours are by appointment only—check the scheduler for availability."
+    "group": "Payments & Policies",
+    "faqs": [
+      {
+        "q": "What is your cancellation policy?",
+        "a": "Plans change—we get it. Cancel or reschedule 72+ hours before your appointment for a full refund (minus processing fees). Within 48–72 hours, 50% is refundable. Same-day cancellations or no-shows are non-refundable, but you’ll receive 25% off your next service (up to 50% of the cancelled value). Late arrivals may shorten service time to keep the schedule running smoothly."
+      },
+      {
+        "q": "Do you require a deposit to book?",
+        "a": "A small, non-refundable retainer is collected at checkout to secure your appointment. It’s applied to your total service cost when you check out in-studio."
+      },
+      {
+        "q": "Which payment methods do you accept?",
+        "a": "We accept major credit and debit cards, HSA/FSA cards for eligible services, and touchless options like Apple Pay in-studio."
+      },
+      {
+        "q": "Can I use a gift card or promo code?",
+        "a": "Yes. Enter your code in the discount field on the Cal.com checkout screen, or bring your digital/physical gift card to redeem at your visit."
+      }
+    ]
   },
   {
-    "q": "What is your cancellation policy?",
-    "a": "Cancellations made 72+ hours before your appointment receive a full refund (minus processing fee). Cancellations within 48–72 hours receive a 50% refund. Cancellations within 24 hours receive no refund, but you'll receive 25% off your next service (up to 50% of the cancelled service value). No-shows are treated the same as 24-hour cancellations. If you arrive late, your appointment time may be shortened depending on schedule availability."
+    "group": "Treatment Prep & Aftercare",
+    "faqs": [
+      {
+        "q": "Which facial is right for me?",
+        "a": "Start with the Signature Aura Facial if you’re unsure—Amy will evaluate your skin and tailor modalities, products, and enhancements in real time."
+      },
+      {
+        "q": "How should I prepare before my appointment?",
+        "a": "Pause retinoids, exfoliants, and aggressive treatments for 48–72 hours, arrive with clean skin when possible, and share any medication or health updates during intake."
+      },
+      {
+        "q": "I'm on acne medication—can I be treated?",
+        "a": "Some services aren’t compatible with isotretinoin or certain prescriptions. Let us know what you’re using—Amy will advise safe alternatives or adjust the treatment protocol."
+      },
+      {
+        "q": "Are treatments pregnancy-safe?",
+        "a": "Many treatments can be adapted safely for pregnancy or nursing. Mention it during booking so we can tailor ingredients, techniques, and positioning for your comfort."
+      },
+      {
+        "q": "Do you offer extractions?",
+        "a": "Yes, when it benefits your skin. Extractions are performed gently with barrier-supportive techniques to avoid unnecessary irritation."
+      },
+      {
+        "q": "What aftercare support do you provide?",
+        "a": "You’ll leave with personalized home-care and product recommendations, plus follow-up access if you have questions. Expect a post-visit email with tailored tips."
+      }
+    ]
   },
   {
-    "q": "I'm on acne medication—can I be treated?",
-    "a": "Some services are not appropriate while using isotretinoin or certain topicals. Please share your current routine and medications during intake—Amy will advise safe options."
-  },
-  {
-    "q": "Which facial is right for me?",
-    "a": "Start with the Signature Aura Facial; we'll customize based on your skin and goals."
-  },
-  {
-    "q": "Do you offer extractions?",
-    "a": "Yes, when appropriate and always gently to respect the skin barrier."
-  },
-  {
-    "q": "Are treatments pregnancy‑safe?",
-    "a": "Many are. Please mention pregnancy during intake so we can tailor products and modalities."
-  },
-  {
-    "q": "Do you sell skincare?",
-    "a": "Curated home‑care recommendations are provided post‑service; retail offerings will be listed at launch."
-  },
-  {
-    "q": "Do you accept gratuity?",
-    "a": "Gratuity is appreciated but never expected. Digital options will be available in‑studio."
-  },
-  {
-    "q": "Accessibility & sensitivities",
-    "a": "Please tell us about fragrance sensitivities or accessibility needs—our studio aims to accommodate."
+    "group": "Studio Experience",
+    "faqs": [
+      {
+        "q": "Where are you located?",
+        "a": "Aura Aesthetics is based in Fort Lauderdale, FL with easy on-site parking. The studio operates by appointment only—your confirmation email will include directions and entry details."
+      },
+      {
+        "q": "What should I expect during my first visit?",
+        "a": "Plan to arrive 10 minutes early to settle in, review your goals with Amy, and finalize any intake forms. We’ll create a relaxing, fully customized experience from start to finish."
+      },
+      {
+        "q": "Do you sell skincare?",
+        "a": "Yes—curated professional products are available in-studio, and you’ll receive recommendations tailored to your routine after each service."
+      },
+      {
+        "q": "Do you accept gratuity?",
+        "a": "Gratuity is never expected but always appreciated. Digital tipping options are available if you choose to leave one."
+      },
+      {
+        "q": "Accessibility & sensitivities",
+        "a": "Please share any mobility needs, fragrance sensitivities, or accommodation requests ahead of time. We’ll prepare the studio so you feel comfortable throughout your visit."
+      }
+    ]
   }
 ]
 

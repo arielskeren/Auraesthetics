@@ -123,15 +123,37 @@ function AvailabilityPanel({
   selectedSlot: SlotSelectionPayload | null;
   onSelectSlot: (slot: SlotSelectionPayload | null) => void;
 }) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [daysPerPage, setDaysPerPage] = useState(7);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AvailabilityData | null>(null);
 
+  useEffect(() => {
+    const updateLayout = () => {
+      if (typeof window === 'undefined') return;
+      const nextDays = window.innerWidth >= 1024 ? 7 : 3;
+      setDaysPerPage((prev) => {
+        if (prev !== nextDays) {
+          setPageOffset(0);
+        }
+        return nextDays;
+      });
+    };
+
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    setPageOffset(0);
+  }, [serviceSlug]);
+
   const startDate = new Date();
   startDate.setHours(0, 0, 0, 0);
-  if (weekOffset > 0) {
-    startDate.setDate(startDate.getDate() + weekOffset * 7);
+  if (pageOffset > 0) {
+    startDate.setDate(startDate.getDate() + pageOffset * daysPerPage);
   }
   const startKey = startDate.toISOString();
   const timezoneFromData = data?.meta?.timezone || 'America/New_York';
@@ -154,7 +176,7 @@ function AvailabilityPanel({
       setError(null);
       try {
         const response = await fetch(
-          `/api/cal/availability?slug=${serviceSlug}&start=${startKey}&days=7`
+          `/api/cal/availability?slug=${serviceSlug}&start=${startKey}&days=${daysPerPage}`
         );
         if (!response.ok) {
           const body = await response.json();
@@ -180,7 +202,7 @@ function AvailabilityPanel({
     return () => {
       isMounted = false;
     };
-  }, [serviceSlug, weekOffset, startKey, onSelectSlot]);
+  }, [serviceSlug, pageOffset, startKey, onSelectSlot, daysPerPage]);
 
   useEffect(() => {
     // Reset selection when service slug changes
@@ -200,7 +222,7 @@ function AvailabilityPanel({
     {} as Record<string, AvailabilitySlot[]>
   );
 
-  const orderedDays = Array.from({ length: 7 }, (_, idx) => {
+  const orderedDays = Array.from({ length: daysPerPage }, (_, idx) => {
     const day = new Date(startDate);
     day.setDate(startDate.getDate() + idx);
     const dayUtc = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()));
@@ -228,44 +250,45 @@ function AvailabilityPanel({
     });
   };
 
-  const disablePrevious = weekOffset <= 0;
+  const disablePrevious = pageOffset <= 0;
+  const dayMs = 24 * 60 * 60 * 1000;
 
   return (
     <div className="mb-6 border border-sand rounded-lg">
-      <div className="flex items-center justify-between px-4 py-3 bg-sand/40 border-b border-sand">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-sand/30 border-b border-sand">
         <div className="flex items-center gap-2 text-charcoal">
           <CalendarDays size={18} />
           <div>
             <p className="text-sm font-medium">Availability</p>
             <p className="text-xs text-warm-gray">
               {formatDateHeading(startDate)} →{' '}
-              {formatDateHeading(new Date(startDate.getTime() + 6 * 24 * 60 * 60 * 1000))}
+              {formatDateHeading(new Date(startDate.getTime() + (daysPerPage - 1) * dayMs))}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setWeekOffset((prev) => Math.max(0, prev - 1))}
+            onClick={() => setPageOffset((prev) => Math.max(0, prev - 1))}
             disabled={disablePrevious || loading}
             className="p-2 rounded-full border border-sage-dark text-sage-dark hover:bg-sand/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            aria-label="Previous week"
+            aria-label={`Previous ${daysPerPage} days`}
           >
             <ChevronLeft size={16} />
           </button>
           <button
             type="button"
-            onClick={() => setWeekOffset((prev) => prev + 1)}
+            onClick={() => setPageOffset((prev) => prev + 1)}
             disabled={loading}
             className="p-2 rounded-full border border-sage-dark text-sage-dark hover:bg-sand/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            aria-label="Next week"
+            aria-label={`Next ${daysPerPage} days`}
           >
             <ChevronRight size={16} />
           </button>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-3">
         {loading && (
           <div className="flex items-center gap-2 text-sm text-warm-gray">
             <Loader2 className="animate-spin" size={16} />
@@ -287,10 +310,13 @@ function AvailabilityPanel({
         )}
 
         {!loading && serviceSlug && !error && orderedDays.length > 0 && (
-          <div className="overflow-x-auto">
-            <div className="grid gap-4 min-w-[980px]" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+          <div className={daysPerPage === 7 ? 'overflow-x-auto' : ''}>
+            <div
+              className={`grid gap-3 ${daysPerPage === 7 ? 'min-w-[940px]' : ''}`}
+              style={{ gridTemplateColumns: `repeat(${daysPerPage}, minmax(0, 1fr))` }}
+            >
               {orderedDays.map(({ key, date, slots }) => (
-                <div key={key} className="border border-sand rounded-lg p-4 flex flex-col gap-3">
+                <div key={key} className="border border-sand rounded-lg p-3 flex flex-col gap-3">
                   <div>
                     <p className="text-sm font-medium text-charcoal">
                       {formatDateHeading(date)}
@@ -316,7 +342,7 @@ function AvailabilityPanel({
                             key={slot.slot}
                             type="button"
                             onClick={() => handleSlotClick(slot)}
-                            className={`block w-full px-3 py-1 rounded-md border text-xs font-medium leading-tight text-left transition-colors ${
+                            className={`block w-full px-3 py-2 rounded-md border text-sm font-medium leading-tight text-center transition-colors ${
                               isSelected
                                 ? 'bg-dark-sage text-charcoal border-dark-sage'
                                 : 'border-sage-dark text-sage-dark hover:bg-sand/30'

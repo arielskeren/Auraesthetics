@@ -16,11 +16,6 @@ export default function FormsClient() {
       status: 'Coming Soon'
     },
     {
-      title: 'COVID-19 Screening',
-      description: 'Health screening form to ensure safety for all clients and staff.',
-      status: 'Coming Soon'
-    },
-    {
       title: 'Photo Release Consent',
       description: 'Optional consent for before/after photos and social media sharing.',
       status: 'Coming Soon'
