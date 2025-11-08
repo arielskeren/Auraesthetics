@@ -148,6 +148,11 @@ function AvailabilityPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AvailabilityData | null>(null);
+  const onSelectSlotRef = useRef(onSelectSlot);
+
+  useEffect(() => {
+    onSelectSlotRef.current = onSelectSlot;
+  }, [onSelectSlot]);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -185,7 +190,7 @@ function AvailabilityPanel({
       setLoading(false);
       setData(null);
       setError(null);
-      onSelectSlot(null);
+      onSelectSlotRef.current(null);
       return () => {
         isMounted = false;
       };
@@ -222,12 +227,12 @@ function AvailabilityPanel({
     return () => {
       isMounted = false;
     };
-  }, [serviceSlug, pageOffset, startKey, onSelectSlot, daysPerPage]);
+  }, [serviceSlug, pageOffset, startKey, daysPerPage]);
 
   useEffect(() => {
     // Reset selection when service slug changes
-    onSelectSlot(null);
-  }, [serviceSlug, onSelectSlot]);
+    onSelectSlotRef.current(null);
+  }, [serviceSlug]);
 
   const groupedSlots = (data?.availability || []).reduce(
     (acc, slot) => {
@@ -717,6 +722,16 @@ function PaymentForm({
     setDepositAcknowledged,
     setModalStage,
   ]);
+
+  const previousServiceSlugRef = useRef(serviceSlug);
+
+  useEffect(() => {
+    if (previousServiceSlugRef.current === serviceSlug) {
+      return;
+    }
+    previousServiceSlugRef.current = serviceSlug;
+    resetReservationState(undefined, { resetContact: true, resetPayment: true });
+  }, [serviceSlug, resetReservationState]);
 
   const handleReleaseSlot = useCallback(async (message?: string) => {
     if (!reservation?.id) {
