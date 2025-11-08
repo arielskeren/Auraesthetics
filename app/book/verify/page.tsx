@@ -24,6 +24,7 @@ function VerifyBookingContent() {
     const token = searchParams.get('token');
     const paymentIntentId = searchParams.get('paymentIntentId');
     const privateLinkUrl = searchParams.get('privateLink');
+    const publicLinkUrl = searchParams.get('publicUrl');
     const calLinkParam = searchParams.get('calLink');
     const calLink = privateLinkUrl ? extractCalLink(privateLinkUrl) : calLinkParam;
     const selectedSlotParam = searchParams.get('selectedSlot');
@@ -94,6 +95,9 @@ function VerifyBookingContent() {
           const resolvedLink = (() => {
             if (privateLinkUrl) {
               return privateLinkUrl;
+            }
+            if (publicLinkUrl) {
+              return publicLinkUrl;
             }
             const calParams = new URLSearchParams({
               token: token || '',
@@ -169,6 +173,11 @@ function VerifyBookingContent() {
               >
                 Open Scheduling in New Tab
               </button>
+            )}
+            {!fallbackUrl && (
+              <p className="mt-3 text-sm text-red-600">
+                We couldn&apos;t generate your scheduling link automatically. Please contact support so we can finalize your appointment.
+              </p>
             )}
           </>
         )}

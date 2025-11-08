@@ -459,6 +459,7 @@ function PaymentForm({
     contact: ContactDetails;
     reservation: ReservationInfo;
     calPrivateLink?: CalPrivateLinkInfo | null;
+    publicBookingUrl?: string | null;
   }) => void;
   onClose: () => void;
   modalStage: 'availability' | 'details';
@@ -1171,6 +1172,7 @@ function PaymentForm({
                 contact: trimmedContact,
                 reservation: reservationSnapshot,
                 calPrivateLink: tokenData.calPrivateLink ?? null,
+                publicBookingUrl: tokenData.publicBookingUrl ?? null,
               });
             } catch (redirectError) {
               console.error('Redirect error:', redirectError);
@@ -1640,6 +1642,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [reservationInfo, setReservationInfo] = useState<ReservationInfo | null>(null);
   const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
   const [calPrivateLinkInfo, setCalPrivateLinkInfo] = useState<CalPrivateLinkInfo | null>(null);
+  const [publicBookingUrl, setPublicBookingUrl] = useState<string | null>(null);
   const serviceSlug = deriveServiceSlug(service);
   const primaryPhoto = useMemo(() => {
     if (!service?.slug) return null;
@@ -1650,6 +1653,8 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   useEffect(() => {
     if (!isOpen) {
       setModalStage('availability');
+      setCalPrivateLinkInfo(null);
+      setPublicBookingUrl(null);
     }
   }, [isOpen, setModalStage]);
 
@@ -1662,6 +1667,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     contact,
     reservation,
     calPrivateLink,
+    publicBookingUrl: publicUrl,
   }: {
     paymentIntentId: string;
     discountCode?: string;
@@ -1671,6 +1677,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     contact: ContactDetails;
     reservation: ReservationInfo;
     calPrivateLink?: CalPrivateLinkInfo | null;
+    publicBookingUrl?: string | null;
   }) => {
     setPaymentIntentId(paymentIntentId);
     setDiscountCode(code);
@@ -1679,10 +1686,13 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     setContactDetails(contact);
     setReservationInfo(reservation);
     setCalPrivateLinkInfo(calPrivateLink ?? null);
+    setPublicBookingUrl(publicUrl ?? null);
     
     // Redirect to verification page first, then to Cal.com
     const baseCalLink = calPrivateLink?.bookingUrl
       ? extractCalLink(calPrivateLink.bookingUrl)
+      : publicUrl
+      ? extractCalLink(publicUrl)
       : service?.calBookingUrl
       ? extractCalLink(service.calBookingUrl)
       : null;
@@ -1721,6 +1731,9 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
       if (calPrivateLink?.bookingUrl) {
         params.append('privateLink', calPrivateLink.bookingUrl);
         params.append('privateLinkExpiresAt', calPrivateLink.expiresAt);
+      }
+      if (publicUrl) {
+        params.append('publicUrl', publicUrl);
       }
         
         // Redirect to verification page first (prevents direct Cal.com access)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
 import { createCalPrivateLink, CalPrivateLink } from '@/lib/calPrivateLinks';
+import { buildPublicCalUrl } from '@/lib/calPublicUrl';
 import crypto from 'crypto';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -340,6 +341,16 @@ export async function POST(request: NextRequest) {
         ? rawEventTypeId
         : Number.NaN;
 
+    const publicCalUrl = Number.isFinite(numericEventTypeId)
+      ? buildPublicCalUrl(numericEventTypeId, {
+          params: {
+            name: attendeeDetails.name,
+            email: attendeeDetails.email,
+            notes: attendeeDetails.notes || undefined,
+          },
+        })
+      : null;
+
     if (Number.isFinite(numericEventTypeId)) {
       try {
         const expiresAtMs = Date.now() + 30 * 60 * 1000; // 30 minutes
@@ -390,6 +401,10 @@ export async function POST(request: NextRequest) {
           lastSucceededIntentAt: new Date().toISOString(),
         },
         calPrivateLink: calPrivateLink ?? existingMetadata?.calPrivateLink ?? null,
+        publicCalBooking: {
+          url: publicCalUrl?.url ?? existingMetadata?.publicCalBooking?.url ?? null,
+          parts: publicCalUrl?.parts ?? existingMetadata?.publicCalBooking?.parts ?? null,
+        },
       };
 
       // Update existing booking with token and payment type
@@ -440,6 +455,10 @@ export async function POST(request: NextRequest) {
           lastSucceededIntentAt: new Date().toISOString(),
         },
         calPrivateLink: calPrivateLink ?? null,
+        publicCalBooking: {
+          url: publicCalUrl?.url ?? null,
+          parts: publicCalUrl?.parts ?? null,
+        },
       };
 
       await sql`
@@ -497,6 +516,7 @@ export async function POST(request: NextRequest) {
             linkId: calPrivateLink.linkId,
           }
         : null,
+      publicBookingUrl: publicCalUrl?.url ?? null,
     });
   } catch (error: any) {
     console.error('Token creation error:', error);

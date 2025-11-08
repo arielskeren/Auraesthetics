@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import { calRequest, getCalRateLimitRemaining } from '@/lib/calClient';
+import { getCalEventBookingUrl, getCalUrlParts } from '@/lib/calEventMapping';
 const EVENT_TYPES_PATH = path.join(process.cwd(), 'docs', 'cal-event-types.json');
 
 type CalEventType = {
@@ -84,6 +85,8 @@ export async function GET(request: NextRequest) {
 
   const eventTypes = loadEventTypes();
   const eventType = eventTypes.eventTypes.find((event) => event.slug === slug);
+  const publicBookingUrl = getCalEventBookingUrl(eventType.id);
+  const urlParts = getCalUrlParts(publicBookingUrl);
 
   if (!eventType) {
     return NextResponse.json(
@@ -124,7 +127,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({
+    return withCors(
+      request,
+      NextResponse.json({
       slug,
       eventTypeId: eventType.id,
       title: eventType.title,
@@ -139,18 +144,62 @@ export async function GET(request: NextRequest) {
         rateLimitRemaining:
           typeof rateLimitRemaining !== 'undefined' ? Number(rateLimitRemaining) : null,
         source: 'cal.com',
+        bookingUrl: publicBookingUrl,
+        calUrlParts: urlParts,
       },
-    });
+      })
+    );
   } catch (error: any) {
     console.error('Failed to fetch Cal.com availability:', error.response?.data || error.message);
     const status = error.response?.status || 500;
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch availability from Cal.com',
-        details: error.response?.data || error.message,
-      },
-      { status }
+    return withCors(
+      request,
+      NextResponse.json(
+        {
+          error: 'Failed to fetch availability from Cal.com',
+          details: error.response?.data || error.message,
+        },
+        { status }
+      )
     );
   }
+}
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  process.env.NEXT_PUBLIC_SITE_URL,
+  process.env.NEXT_PUBLIC_PREVIEW_URL,
+  'https://www.theauraesthetics.com',
+  'https://theauraesthetics.com',
+  'http://localhost:3000',
+].filter(Boolean) as string[];
+
+function resolveOrigin(request: NextRequest) {
+  const requestOrigin = request.headers.get('origin');
+  if (requestOrigin && DEFAULT_ALLOWED_ORIGINS.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+  return DEFAULT_ALLOWED_ORIGINS[0] ?? '*';
+}
+
+function applyCorsHeaders(response: NextResponse, origin: string) {
+  response.headers.set('Access-Control-Allow-Origin', origin);
+  response.headers.set('Vary', 'Origin');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  response.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With'
+  );
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
+}
+
+function withCors(request: NextRequest, response: NextResponse) {
+  const origin = resolveOrigin(request);
+  return applyCorsHeaders(response, origin);
+}
+
+export async function OPTIONS(request: NextRequest) {
+  const origin = resolveOrigin(request);
+  return applyCorsHeaders(new NextResponse(null, { status: 204 }), origin);
 }
 
