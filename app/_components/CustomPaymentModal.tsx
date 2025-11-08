@@ -617,6 +617,7 @@ function PaymentForm({
           endTime: newReservation.endTime ?? null,
           timezone: newReservation.timezone ?? slot.timezone ?? null,
         });
+        setModalStage('details');
         setReservationStatus('held');
         setReservationCountdown(countdownSeconds > 0 ? countdownSeconds : 120);
         setReservationLoading(false);
