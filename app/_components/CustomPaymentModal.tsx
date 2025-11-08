@@ -366,7 +366,7 @@ function AvailabilityPanel({
                             type="button"
                             onClick={() => handleSlotClick(slot)}
                             disabled={isSelectionDisabled}
-                            className={`block w-full px-2.5 py-2 rounded-md border text-xs sm:text-sm font-medium leading-tight text-center transition-colors ${
+                            className={`block w-full px-2.5 py-1.5 rounded-md border text-[13px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors ${
                               isSelected
                                 ? 'bg-dark-sage text-charcoal border-dark-sage'
                                 : 'border-sage-dark text-sage-dark hover:bg-sand/30'
@@ -1716,7 +1716,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                 <div className="mb-4 sm:mb-6">
                   <div className="flex items-start gap-3 sm:gap-4">
                     {primaryPhoto ? (
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-sand/40 flex-shrink-0 shadow-sm">
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-sand/40 flex-shrink-0 shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={primaryPhoto}
@@ -1725,7 +1725,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                         />
                       </div>
                     ) : (
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-sand/60 flex items-center justify-center text-xs text-warm-gray uppercase tracking-wide flex-shrink-0">
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg bg-sand/60 flex items-center justify-center text-xs text-warm-gray uppercase tracking-wide flex-shrink-0">
                         {service.name.slice(0, 2)}
                       </div>
                     )}
