@@ -53,23 +53,19 @@ export default function BookClient() {
   const steps = [
     {
       title: 'Choose Your Service',
-      description:
-        'Browse our services and click "Book Now" on your preferred treatment. You\'ll be taken to our secure Cal.com booking page.',
+      description: 'Browse the menu and tap “Book Now” for the treatment that fits your goals.',
     },
     {
       title: 'Select Your Time',
-      description:
-        "View real-time availability and choose a date and time that works for your schedule. Times are synced with Amy's calendar.",
+      description: 'Pick a date and time from Amy’s live calendar—availability updates in real time.',
     },
     {
       title: 'Complete Intake Form',
-      description:
-        'Fill out a brief intake form with your skin concerns, goals, and any allergies. This helps Amy customize your treatment.',
+      description: 'Share your skin goals, preferences, and allergies so Amy can tailor the visit.',
     },
     {
       title: 'Confirm & Arrive',
-      description:
-        'Receive confirmation with all the details you need. Then just show up on time and let us take care of the rest.',
+      description: 'Receive a confirmation email with everything you need. Arrive on time and relax.',
     },
   ];
 
@@ -112,29 +108,30 @@ export default function BookClient() {
             Booking is simple. Follow the steps below and we&apos;ll have everything ready for your visit.
           </p>
 
-          <div className="grid gap-4 md:gap-6 md:grid-cols-4">
+          <div className="relative pt-2">
+            <div className="hidden md:block absolute top-6 left-1/2 w-full -translate-x-1/2 h-px bg-dark-sage/20" />
+            <ol className="grid gap-5 md:gap-6 md:grid-cols-4">
             {steps.map((step, index) => (
-              <motion.div
+              <motion.li
                 key={step.title}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="bg-white/90 backdrop-blur-sm border border-dark-sage/20 rounded-xl px-4 py-5 text-left shadow-sm"
+                className="flex items-start gap-4 md:flex-col md:items-center md:text-center"
               >
-                <div className="flex items-start gap-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-dark-sage/90 text-charcoal font-semibold text-sm">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <h3 className="text-base font-serif text-charcoal mb-1">{step.title}</h3>
-                    <p className="text-xs md:text-sm text-warm-gray leading-relaxed">
-                      {step.description}
-                    </p>
-                  </div>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-dark-sage text-charcoal font-semibold text-sm shadow-sm md:mb-2">
+                  {index + 1}
+                </span>
+                <div className="md:max-w-[14rem]">
+                  <h3 className="text-base font-serif text-charcoal">{step.title}</h3>
+                  <p className="mt-2 text-xs md:text-sm text-warm-gray leading-relaxed">
+                    {step.description}
+                  </p>
                 </div>
-              </motion.div>
+              </motion.li>
             ))}
+            </ol>
           </div>
         </motion.div>
       </Section>
