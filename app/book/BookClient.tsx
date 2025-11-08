@@ -76,7 +76,7 @@ export default function BookClient() {
   return (
     <>
       {/* Hero */}
-      <Section background="sand" className="relative !py-12 md:!py-20">
+      <Section background="sand" className="relative !py-7 md:!py-12">
         {/* Decorative green line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         {/* Background accents */}
@@ -86,14 +86,56 @@ export default function BookClient() {
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto pt-8 md:pt-2 relative z-10"
+          className="text-center max-w-3xl mx-auto pt-5 md:pt-2 relative z-10"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-4">
+          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-3">
             Book Your Treatment
           </h1>
-          <p className="text-base md:text-lg text-warm-gray leading-relaxed mb-6 md:mb-8">
+          <p className="text-base md:text-lg text-warm-gray leading-relaxed mb-4 md:mb-5">
             Choose your service below and you&apos;ll be redirected to our secure booking system to select your time and complete your appointment.
           </p>
+        </motion.div>
+      </Section>
+
+      {/* How It Works */}
+      <Section background="ivory" className="relative !py-10">
+        <div className="absolute inset-0 bg-gradient-to-b from-dark-sage/10 via-transparent to-transparent" />
+        <motion.div
+          initial={{ opacity: 1, y: 0 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="max-w-4xl mx-auto text-center relative z-10"
+        >
+          <h2 className="text-h3 md:text-h2 font-serif text-charcoal mb-3">How It Works</h2>
+          <p className="text-sm md:text-base text-warm-gray leading-relaxed mb-6 md:mb-8">
+            Booking is simple. Follow the steps below and we&apos;ll have everything ready for your visit.
+          </p>
+
+          <div className="grid gap-4 md:gap-6 md:grid-cols-4">
+            {steps.map((step, index) => (
+              <motion.div
+                key={step.title}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+                className="bg-white/90 backdrop-blur-sm border border-dark-sage/20 rounded-xl px-4 py-5 text-left shadow-sm"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-dark-sage/90 text-charcoal font-semibold text-sm">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <h3 className="text-base font-serif text-charcoal mb-1">{step.title}</h3>
+                    <p className="text-xs md:text-sm text-warm-gray leading-relaxed">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </motion.div>
       </Section>
 
@@ -211,53 +253,6 @@ export default function BookClient() {
         onClose={handleCloseModal}
         service={selectedService}
       />
-
-      {/* How It Works */}
-      <Section background="sand" className="relative !py-16">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-b from-dark-sage/8 via-transparent to-dark-sage/8 opacity-30" />
-
-        <div className="max-w-4xl mx-auto relative z-10 text-center">
-          <motion.div
-            initial={{ opacity: 1, y: 0 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-h2 font-serif text-charcoal">How It Works</h2>
-            <p className="mt-3 text-sm md:text-base text-warm-gray max-w-2xl mx-auto">
-              Booking is quick and transparent. Follow these simple steps and you&apos;ll be ready for your visit.
-            </p>
-
-            <div className="mt-10 grid gap-6 md:gap-8 md:grid-cols-2">
-              {steps.map((step, index) => (
-                <motion.div
-                  key={step.title}
-                  initial={{ opacity: 0, y: 24 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: index * 0.08 }}
-                  className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm px-6 py-7 text-left border border-dark-sage/20"
-                >
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-dark-sage/90 text-charcoal font-semibold">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <h3 className="text-base md:text-lg font-serif text-charcoal mb-2">
-                        {step.title}
-                      </h3>
-                      <p className="text-sm text-warm-gray leading-relaxed">
-                        {step.description}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </Section>
     </>
   );
 }
