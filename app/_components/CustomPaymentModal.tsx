@@ -456,97 +456,6 @@ function PaymentForm({
     );
   }, [contactDetails]);
 
-  const handleSlotSelection = useCallback(
-    (slot: SlotSelectionPayload | null) => {
-      if (!slot) {
-        setSelectedSlot(null);
-        setSlotError(null);
-        setReservationError(null);
-        setPreserveReservation(false);
-        if (reservation?.id) {
-          void releaseReservation(reservation.id);
-        }
-        return;
-      }
-
-      setSelectedSlot(slot);
-      setSlotError(null);
-      setReservationError(null);
-      setPreserveReservation(false);
-    },
-    [releaseReservation, reservation]
-  );
-
-  // Extract numeric price from string (e.g., "from $150" -> 150)
-  const extractPrice = (priceString: string): number => {
-    const match = priceString.match(/\$?(\d+)/);
-    return match ? parseFloat(match[1]) : 0;
-  };
-
-  const baseAmount = extractPrice(service.price);
-  const [currentAmount, setCurrentAmount] = useState(baseAmount);
-  const currentFinalAmount = discountValidation?.finalAmount || baseAmount;
-  const balanceDue =
-    paymentType === 'deposit'
-      ? Number(Math.max(0, currentFinalAmount - currentAmount).toFixed(2))
-      : 0;
-
-  // Update amount when discount or payment type changes
-  useEffect(() => {
-    let amount = discountValidation?.finalAmount || baseAmount;
-    
-    if (paymentType === 'deposit') {
-      amount = amount * 0.5; // 50% deposit
-    }
-    
-    setCurrentAmount(amount);
-  }, [paymentType, discountValidation, baseAmount]);
-
-  useEffect(() => {
-    if (!selectedSlot) {
-      setReservationError(null);
-      return;
-    }
-
-    if (!isContactInfoComplete()) {
-      setReservationError('Enter your contact information to hold this time.');
-      return;
-    }
-
-    if (reservationLoading) {
-      return;
-    }
-
-    if (reservation && reservation.startTime === selectedSlot.startTime) {
-      setReservationError(null);
-      return;
-    }
-
-    const contact: ContactDetails = {
-      name: contactDetails.name.trim(),
-      email: contactDetails.email.trim(),
-      phone: contactDetails.phone.trim(),
-      notes: contactDetails.notes.trim(),
-    };
-
-    void reserveSlot(selectedSlot, contact);
-  }, [
-    selectedSlot,
-    contactDetails,
-    isContactInfoComplete,
-    reservation,
-    reservationLoading,
-    reserveSlot,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (reservation?.id && !preserveReservation) {
-        void releaseReservation(reservation.id);
-      }
-    };
-  }, [reservation, preserveReservation, releaseReservation]);
-
   const validateContactDetails = useCallback(() => {
     const errors: Partial<Record<keyof ContactDetails, string>> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -661,6 +570,97 @@ function PaymentForm({
     },
     [reservation, releaseReservation, serviceSlug]
   );
+
+  const handleSlotSelection = useCallback(
+    (slot: SlotSelectionPayload | null) => {
+      if (!slot) {
+        setSelectedSlot(null);
+        setSlotError(null);
+        setReservationError(null);
+        setPreserveReservation(false);
+        if (reservation?.id) {
+          void releaseReservation(reservation.id);
+        }
+        return;
+      }
+
+      setSelectedSlot(slot);
+      setSlotError(null);
+      setReservationError(null);
+      setPreserveReservation(false);
+    },
+    [releaseReservation, reservation]
+  );
+
+  // Extract numeric price from string (e.g., "from $150" -> 150)
+  const extractPrice = (priceString: string): number => {
+    const match = priceString.match(/\$?(\d+)/);
+    return match ? parseFloat(match[1]) : 0;
+  };
+
+  const baseAmount = extractPrice(service.price);
+  const [currentAmount, setCurrentAmount] = useState(baseAmount);
+  const currentFinalAmount = discountValidation?.finalAmount || baseAmount;
+  const balanceDue =
+    paymentType === 'deposit'
+      ? Number(Math.max(0, currentFinalAmount - currentAmount).toFixed(2))
+      : 0;
+
+  // Update amount when discount or payment type changes
+  useEffect(() => {
+    let amount = discountValidation?.finalAmount || baseAmount;
+    
+    if (paymentType === 'deposit') {
+      amount = amount * 0.5; // 50% deposit
+    }
+    
+    setCurrentAmount(amount);
+  }, [paymentType, discountValidation, baseAmount]);
+
+  useEffect(() => {
+    if (!selectedSlot) {
+      setReservationError(null);
+      return;
+    }
+
+    if (!isContactInfoComplete()) {
+      setReservationError('Enter your contact information to hold this time.');
+      return;
+    }
+
+    if (reservationLoading) {
+      return;
+    }
+
+    if (reservation && reservation.startTime === selectedSlot.startTime) {
+      setReservationError(null);
+      return;
+    }
+
+    const contact: ContactDetails = {
+      name: contactDetails.name.trim(),
+      email: contactDetails.email.trim(),
+      phone: contactDetails.phone.trim(),
+      notes: contactDetails.notes.trim(),
+    };
+
+    void reserveSlot(selectedSlot, contact);
+  }, [
+    selectedSlot,
+    contactDetails,
+    isContactInfoComplete,
+    reservation,
+    reservationLoading,
+    reserveSlot,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (reservation?.id && !preserveReservation) {
+        void releaseReservation(reservation.id);
+      }
+    };
+  }, [reservation, preserveReservation, releaseReservation]);
 
   const validateDiscount = async () => {
     if (!discountCode.trim()) {
