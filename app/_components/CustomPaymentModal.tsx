@@ -515,7 +515,6 @@ function PaymentForm({
           body: JSON.stringify({
             eventTypeId: slot.eventTypeId,
             slotStart: start,
-            slotDuration: slot.duration ?? null,
             reservationDuration: 2,
             timeZone: slot.timezone,
           }),

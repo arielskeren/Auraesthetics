@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as ReserveRequestBody;
   const eventTypeId = body.eventTypeId;
   const slotStart = body.slotStart ?? body.startTime;
+  const timeZone = body.timeZone ?? body.timezone;
   const reservationDurationRaw = body.reservationDuration;
 
     if (!eventTypeId || !slotStart) {
@@ -55,6 +56,10 @@ export async function POST(request: NextRequest) {
         : null;
     if (durationMinutes && Number.isFinite(durationMinutes)) {
       payload.slotDuration = durationMinutes;
+    }
+
+    if (timeZone) {
+      payload.timeZone = timeZone;
     }
 
     const reservationDuration =
