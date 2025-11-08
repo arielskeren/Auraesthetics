@@ -406,7 +406,9 @@ function AvailabilityPanel({
 function PaymentForm({ 
   service, 
   onSuccess, 
-  onClose 
+  onClose,
+  modalStage,
+  setModalStage,
 }: { 
   service: NonNullable<CustomPaymentModalProps['service']>;
   onSuccess: (payload: {
@@ -419,6 +421,8 @@ function PaymentForm({
     reservation: ReservationInfo;
   }) => void;
   onClose: () => void;
+  modalStage: 'availability' | 'details';
+  setModalStage: (stage: 'availability' | 'details') => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -453,10 +457,6 @@ function PaymentForm({
 
   const serviceSlug = deriveServiceSlug(service);
   const serviceIdentifier = serviceSlug || (service?.name ? service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'service');
-  // Flow note: previous implementation mingled availability, contact, and payment states,
-  // causing slot holds to drop when contact inputs were edited. We now stage the UI so
-  // reservations happen immediately after a slot is selected, and details are collected only after.
-  const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
   const shouldShowPaymentSections = modalStage === 'details' && reservationStatus === 'held' && !!reservation;
   const isAvailabilityStage = modalStage === 'availability';
   const reservationMatchesSelectedSlot = useMemo(() => {
@@ -1610,12 +1610,19 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [slotSelection, setSlotSelection] = useState<SlotSelectionPayload | null>(null);
   const [contactDetails, setContactDetails] = useState<ContactDetails | null>(null);
   const [reservationInfo, setReservationInfo] = useState<ReservationInfo | null>(null);
+  const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
   const serviceSlug = deriveServiceSlug(service);
   const primaryPhoto = useMemo(() => {
     if (!service?.slug) return null;
     const photos = getServicePhotoPaths(service.slug);
     return photos.length > 0 ? photos[0] : null;
   }, [service?.slug]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setModalStage('availability');
+    }
+  }, [isOpen]);
 
   const handlePaymentSuccess = ({
     paymentIntentId,
@@ -1770,18 +1777,14 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3 sm:px-4 py-2 flex items-center justify-between">
+                  <div className="mt-4 rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3 sm:px-4 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                     <p className="text-sm sm:text-base font-medium text-charcoal">
                       {modalStage === 'availability' ? 'Step 1 · Choose your time' : 'Step 2 · Confirm and checkout'}
                     </p>
                     <span className="text-xs sm:text-sm text-warm-gray">
                       {modalStage === 'availability'
-                        ? 'Hold your preferred time to continue'
-                        : reservationMatchesSelectedSlot
-                        ? reservation
-                          ? `Held until ${reservation.expiresAt ? new Date(reservation.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'confirmation'}`
-                          : 'Time secured'
-                        : 'Verifying selection...'}
+                        ? 'Select an available slot to place a short hold.'
+                        : 'Enter your details and payment to secure the booking.'}
                     </span>
                   </div>
                 </div>
@@ -1796,6 +1799,8 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                     service={service} 
                     onSuccess={handlePaymentSuccess}
                     onClose={onClose}
+                    modalStage={modalStage}
+                    setModalStage={setModalStage}
                   />
                 </Elements>
               </div>
