@@ -899,7 +899,7 @@ function PaymentForm({
     if (!reservation && reservationStatus !== 'holding') {
       setModalStage('availability');
     }
-  }, [reservationStatus, reservation]);
+  }, [reservationStatus, reservation, setModalStage]);
 
   useEffect(() => {
     console.log('[PaymentForm state]', {
@@ -1608,7 +1608,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     if (!isOpen) {
       setModalStage('availability');
     }
-  }, [isOpen]);
+  }, [isOpen, setModalStage]);
 
   const handlePaymentSuccess = ({
     paymentIntentId,
