@@ -775,12 +775,35 @@ function PaymentForm({
 
       setSelectedSlot(slot);
       setSlotError(null);
-      setReservationStatus('holding');
       setReservationErrorDetail(null);
+
+      const isSameReservedSlot =
+        reservationStatus === 'held' &&
+        reservation &&
+        reservation.startTime === slot.startTime;
+
+      if (isSameReservedSlot) {
+        setModalStage('details');
+        return;
+      }
+
+      if (reservationLoading && activeSlotKeyRef.current === slot.startTime) {
+        return;
+      }
+
       setPreserveReservation(false);
       setModalStage('availability');
+      reserveSlot(slot);
     },
-    [clearPendingReserve, releaseReservation, reservation, setModalStage]
+    [
+      clearPendingReserve,
+      releaseReservation,
+      reservation,
+      reservationLoading,
+      reservationStatus,
+      reserveSlot,
+      setModalStage,
+    ]
   );
 
   // Extract numeric price from string (e.g., "from $150" -> 150)
@@ -807,32 +830,6 @@ function PaymentForm({
     
     setCurrentAmount(amount);
   }, [paymentType, discountValidation, baseAmount]);
-
-  useEffect(() => {
-    if (!selectedSlot) {
-      setReservationStatus('idle');
-      setReservationCountdown(0);
-      setReservationErrorDetail(null);
-      setReservationAttempts(0);
-      setReservationLoading(false);
-      return;
-    }
-
-    if (reservationStatus === 'held' && reservation?.startTime === selectedSlot.startTime) {
-      return;
-    }
-
-    if (reservationLoading) {
-      return;
-    }
-
-    if (reservation && reservation.startTime === selectedSlot.startTime) {
-      return;
-    }
-
-    setReservationLoading(true);
-    reserveSlot(selectedSlot);
-  }, [selectedSlot, reservation, reservationLoading, reservationStatus, reserveSlot]);
 
   useEffect(() => {
     if (reservationStatus === 'error' && reservationErrorDetail) {
