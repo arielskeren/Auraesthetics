@@ -3,16 +3,13 @@ import { calRequest } from '@/lib/calClient';
 
 type ReserveRequestBody = {
   eventTypeId?: number;
+  slotStart?: string;
   startTime?: string;
   endTime?: string | null;
+  slotDuration?: number | string | null;
+  reservationDuration?: number | string | null;
+  timeZone?: string;
   timezone?: string;
-  attendee?: {
-    name?: string;
-    email?: string;
-    smsReminderNumber?: string;
-  };
-  notes?: string;
-  metadata?: Record<string, any>;
 };
 
 function normalizeReservationResponse(payload: any) {
@@ -22,11 +19,11 @@ function normalizeReservationResponse(payload: any) {
 
   const data = payload.data ?? payload;
   return {
-    id: data.id ?? data.reservationId ?? null,
-    expiresAt: data.expiresAt ?? data.expires_at ?? null,
-    startTime: data.startTime ?? data.slot?.start ?? null,
-    endTime: data.endTime ?? data.slot?.end ?? null,
-    timezone: data.timezone ?? data.slot?.timezone ?? null,
+    id: data.reservationUid ?? data.id ?? data.reservationId ?? null,
+    expiresAt: data.reservationUntil ?? data.expiresAt ?? data.expires_at ?? null,
+    startTime: data.slotStart ?? data.startTime ?? data.slot?.start ?? null,
+    endTime: data.slotEnd ?? data.endTime ?? data.slot?.end ?? null,
+    timezone: data.timeZone ?? data.timezone ?? data.slot?.timezone ?? null,
     raw: data,
   };
 }
@@ -34,45 +31,43 @@ function normalizeReservationResponse(payload: any) {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ReserveRequestBody;
-    const { eventTypeId, startTime, endTime, timezone, attendee, notes, metadata } = body;
+  const eventTypeId = body.eventTypeId;
+  const slotStart = body.slotStart ?? body.startTime;
+  const reservationDurationRaw = body.reservationDuration;
 
-    if (!eventTypeId || !startTime || !timezone) {
+    if (!eventTypeId || !slotStart) {
       return NextResponse.json(
-        { error: 'Missing required fields: eventTypeId, startTime, timezone' },
+        { error: 'Missing required fields: eventTypeId, slotStart' },
         { status: 400 }
       );
     }
 
-    if (!attendee?.email || !attendee?.name) {
-      return NextResponse.json(
-        { error: 'Missing attendee information: name and email are required' },
-        { status: 400 }
-      );
-    }
-
-    const payload = {
-      slot: {
-        start: startTime,
-        end: endTime ?? null,
-        timezone,
-      },
-      attendee: {
-        name: attendee.name,
-        email: attendee.email,
-        smsReminderNumber: attendee.smsReminderNumber ?? null,
-        timeZone: timezone,
-      },
-      metadata: {
-        notes: notes ?? '',
-        ...(metadata || {}),
-      },
+    const payload: Record<string, any> = {
+      eventTypeId,
+      slotStart,
     };
 
-    const response = await calRequest<any>(
-      'post',
-      `event-types/${eventTypeId}/reserve`,
-      payload
-    );
+    const durationMinutes =
+      typeof body.slotDuration === 'number'
+        ? body.slotDuration
+        : body.slotDuration
+        ? Number(body.slotDuration)
+        : null;
+    if (durationMinutes && Number.isFinite(durationMinutes)) {
+      payload.slotDuration = durationMinutes;
+    }
+
+    const reservationDuration =
+      typeof reservationDurationRaw === 'number'
+        ? reservationDurationRaw
+        : reservationDurationRaw
+        ? Number(reservationDurationRaw)
+        : 2;
+    if (reservationDuration && Number.isFinite(reservationDuration)) {
+      payload.reservationDuration = reservationDuration;
+    }
+
+    const response = await calRequest<any>('post', 'slots/reservations', payload);
 
     const reservation = normalizeReservationResponse(response.data);
 

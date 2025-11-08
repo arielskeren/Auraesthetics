@@ -15,7 +15,7 @@ export async function DELETE(
   }
 
   try {
-    await calRequest('delete', `reservations/${reservationId}`);
+    await calRequest('delete', `slots/reservations/${reservationId}`);
 
     return NextResponse.json({
       success: true,

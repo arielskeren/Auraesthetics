@@ -508,31 +508,16 @@ function PaymentForm({
       setReservationStatus('holding');
 
       const start = slot.startTime;
-      let end: string | null = null;
-      if (slot.duration && Number.isFinite(slot.duration)) {
-        const startDate = new Date(start);
-        const endDate = new Date(startDate.getTime() + slot.duration * 60 * 1000);
-        end = endDate.toISOString();
-      }
-
       try {
         const response = await fetch('/api/cal/reservations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             eventTypeId: slot.eventTypeId,
-            startTime: start,
-            endTime: end,
-            timezone: slot.timezone,
-            attendee: {
-              name: contact.name,
-              email: contact.email,
-              smsReminderNumber: contact.phone,
-            },
-            notes: contact.notes,
-            metadata: {
-              serviceSlug,
-            },
+            slotStart: start,
+            slotDuration: slot.duration ?? null,
+            reservationDuration: 2,
+            timeZone: slot.timezone,
           }),
         });
 
@@ -548,7 +533,7 @@ function PaymentForm({
           id: reservationPayload.id,
           expiresAt: reservationPayload.expiresAt ?? null,
           startTime: reservationPayload.startTime ?? start,
-          endTime: reservationPayload.endTime ?? end,
+          endTime: reservationPayload.endTime ?? null,
           timezone: reservationPayload.timezone ?? slot.timezone,
         };
 
@@ -564,9 +549,20 @@ function PaymentForm({
         if (reservation && reservation.id && reservation.id !== newReservation.id) {
           void releaseReservation(reservation.id, { preserveState: true });
         }
-        setReservation(newReservation);
+        const expiresAt = newReservation.expiresAt ? new Date(newReservation.expiresAt).getTime() : null;
+        const countdownSeconds =
+          expiresAt && Number.isFinite(expiresAt)
+            ? Math.max(0, Math.round((expiresAt - Date.now()) / 1000))
+            : 120;
+
+        setReservation({
+          ...newReservation,
+          startTime: newReservation.startTime ?? start,
+          endTime: newReservation.endTime ?? null,
+          timezone: newReservation.timezone ?? slot.timezone ?? null,
+        });
         setReservationStatus('held');
-        setReservationCountdown(120);
+        setReservationCountdown(countdownSeconds > 0 ? countdownSeconds : 120);
         setReservationLoading(false);
         setReservationErrorDetail(null);
         setPreserveReservation(false);
@@ -590,10 +586,11 @@ function PaymentForm({
           setReservationErrorDetail(message);
           activeSlotKeyRef.current = null;
           setReservation(null);
+          setSelectedSlot(null);
         }
       }
     },
-    [clearPendingReserve, reservation, releaseReservation, serviceSlug]
+    [clearPendingReserve, reservation, releaseReservation]
   );
 
   const reserveSlot = useCallback(
