@@ -310,9 +310,9 @@ function AvailabilityPanel({
         )}
 
         {!loading && serviceSlug && !error && orderedDays.length > 0 && (
-          <div className={daysPerPage === 7 ? 'overflow-x-auto' : ''}>
+          <div className={daysPerPage === 7 ? 'overflow-x-auto lg:overflow-visible' : ''}>
             <div
-              className={`grid gap-3 ${daysPerPage === 7 ? 'min-w-[940px]' : ''}`}
+              className={`grid gap-3 ${daysPerPage === 7 ? 'min-w-[940px] lg:min-w-0' : ''}`}
               style={{ gridTemplateColumns: `repeat(${daysPerPage}, minmax(0, 1fr))` }}
             >
               {orderedDays.map(({ key, date, slots }) => (
@@ -914,7 +914,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl relative"
+              className="bg-white rounded-lg max-w-5xl w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto shadow-xl relative px-2 pt-2 pb-6 md:px-4"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -930,7 +930,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
               </button>
 
               {/* Content */}
-              <div className="p-8">
+              <div className="px-4 pb-4 md:px-8 md:pb-8">
                 <div className="mb-6">
                   <span className="inline-block px-3 py-1 bg-dark-sage/20 text-dark-sage text-xs font-medium rounded-full mb-3">
                     {service.category}
