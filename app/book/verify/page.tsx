@@ -115,25 +115,32 @@ function VerifyBookingContent() {
           setStatus('valid');
           setBookingInfo(data.booking);
           
-          const calParams = new URLSearchParams({
-            token: token || '',
-            paymentIntentId: paymentIntentId || '',
-            paymentType: searchParams.get('paymentType') || 'full',
-          });
-          if (slotPayload?.startTime) {
-            calParams.append('slotStart', slotPayload.startTime);
-          }
-          if (slotPayload?.timezone) {
-            calParams.append('timezone', slotPayload.timezone);
-          }
-          if (reservationPayload?.id) {
-            calParams.append('reservationId', reservationPayload.id);
-          }
+          if (privateLinkUrl) {
+            setFallbackUrl(privateLinkUrl);
+            // Redirect immediately to the private link so the reserved slot is honored.
+            window.location.href = privateLinkUrl;
+            fallbackTimer = window.setTimeout(() => {
+              window.location.href = privateLinkUrl;
+            }, 4000);
+          } else {
+            const calParams = new URLSearchParams({
+              token: token || '',
+              paymentIntentId: paymentIntentId || '',
+              paymentType: searchParams.get('paymentType') || 'full',
+            });
+            if (slotPayload?.startTime) {
+              calParams.append('slotStart', slotPayload.startTime);
+            }
+            if (slotPayload?.timezone) {
+              calParams.append('timezone', slotPayload.timezone);
+            }
+            if (reservationPayload?.id) {
+              calParams.append('reservationId', reservationPayload.id);
+            }
 
-          const calUrl = privateLinkUrl
-            ? privateLinkUrl
-            : `https://cal.com/${calLink}?${calParams.toString()}`;
-          setFallbackUrl(calUrl);
+            const calUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
+            setFallbackUrl(calUrl);
+          }
 
           let slotForCal:
             | {
@@ -165,19 +172,21 @@ function VerifyBookingContent() {
             privateLink: privateLinkUrl || null,
           };
 
-          openCalBooking({
-            calLink,
-            namespace: searchParams.get('serviceSlug') || undefined,
-            slot: slotForCal,
-            prefill: contactPrefill || undefined,
-            metadata: metadataForCal,
-            onClose: () => {
-              if (fallbackTimer) {
-                window.clearTimeout(fallbackTimer);
-              }
-              router.push('/book');
-            },
-          });
+          if (!privateLinkUrl) {
+            openCalBooking({
+              calLink,
+              namespace: searchParams.get('serviceSlug') || undefined,
+              slot: slotForCal,
+              prefill: contactPrefill || undefined,
+              metadata: metadataForCal,
+              onClose: () => {
+                if (fallbackTimer) {
+                  window.clearTimeout(fallbackTimer);
+                }
+                router.push('/book');
+              },
+            });
+          }
 
           fallbackTimer = window.setTimeout(() => {
             window.location.href = calUrl;

@@ -13,6 +13,8 @@ interface CreatePrivateLinkOptions {
   maxUsageCount?: number;
 }
 
+const PRIVATE_LINK_API_VERSION = '2024-09-04';
+
 export async function createCalPrivateLink(
   eventTypeId: number,
   options: CreatePrivateLinkOptions = {}
@@ -27,7 +29,11 @@ export async function createCalPrivateLink(
     payload.maxUsageCount = options.maxUsageCount;
   }
 
-  const data = await calPost<CalPrivateLink>(`event-types/${eventTypeId}/private-links`, payload);
+  const data = await calPost<CalPrivateLink>(`event-types/${eventTypeId}/private-links`, payload, {
+    headers: {
+      'cal-api-version': PRIVATE_LINK_API_VERSION,
+    },
+  });
   return data;
 }
 
