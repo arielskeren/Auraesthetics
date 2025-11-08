@@ -448,7 +448,12 @@ function PaymentForm({
 
   const serviceSlug = deriveServiceSlug(service);
   const serviceIdentifier = serviceSlug || (service?.name ? service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'service');
-  const shouldShowPaymentSections = reservationStatus === 'held' && !!reservation;
+  // Flow note: previous implementation mingled availability, contact, and payment states,
+  // causing slot holds to drop when contact inputs were edited. We now stage the UI so
+  // reservations happen immediately after a slot is selected, and details are collected only after.
+  const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
+  const shouldShowPaymentSections = modalStage === 'details' && reservationStatus === 'held' && !!reservation;
+  const isAvailabilityStage = modalStage === 'availability';
 
   const isContactInfoComplete = useCallback(() => {
     return Boolean(
@@ -671,7 +676,14 @@ function PaymentForm({
     [clearPendingReserve, performReserve]
   );
 
-  const resetReservationState = useCallback((message?: string) => {
+  const resetReservationState = useCallback(
+    (
+      message?: string,
+      options?: {
+        resetContact?: boolean;
+        resetPayment?: boolean;
+      }
+    ) => {
     activeSlotKeyRef.current = null;
     setReservation(null);
     setSelectedSlot(null);
@@ -683,18 +695,46 @@ function PaymentForm({
     setReservationLoading(false);
     setCardComplete(false);
     setPreserveReservation(false);
-  }, []);
+    setModalStage('availability');
+    if (options?.resetContact) {
+      setContactDetails({
+        name: '',
+        email: '',
+        phone: '',
+        notes: '',
+      });
+      setContactErrors({});
+    }
+    if (options?.resetPayment) {
+      setDiscountCode('');
+      setDiscountValidation(null);
+      setPaymentType('full');
+      setDepositAcknowledged(false);
+    }
+  },
+  [
+    setContactDetails,
+    setContactErrors,
+    setDiscountCode,
+    setDiscountValidation,
+    setPaymentType,
+    setDepositAcknowledged,
+    setModalStage,
+  ]);
 
   const handleReleaseSlot = useCallback(async (message?: string) => {
     if (!reservation?.id) {
-      resetReservationState(message);
+      resetReservationState(message, { resetContact: true, resetPayment: true });
       return;
     }
     setReservationLoading(true);
     setPreserveReservation(true);
     try {
       await releaseReservation(reservation.id, { preserveState: true });
-      resetReservationState(message ?? 'Slot released. Select a new time to continue.');
+      resetReservationState(message ?? 'Slot released. Select a new time to continue.', {
+        resetContact: true,
+        resetPayment: true,
+      });
     } catch (error) {
       console.warn('Release slot failed', error);
       resetReservationState();
@@ -737,8 +777,9 @@ function PaymentForm({
       setReservationStatus('holding');
       setReservationErrorDetail(null);
       setPreserveReservation(false);
+      setModalStage('availability');
     },
-    [clearPendingReserve, releaseReservation, reservation]
+    [clearPendingReserve, releaseReservation, reservation, setModalStage]
   );
 
   // Extract numeric price from string (e.g., "from $150" -> 150)
@@ -776,13 +817,6 @@ function PaymentForm({
       return;
     }
 
-    if (!contactInfoReady) {
-      setReservationStatus('idle');
-      setReservationErrorDetail('Enter your contact information to hold this time.');
-      setReservationLoading(false);
-      return;
-    }
-
     if (reservationLoading) {
       return;
     }
@@ -792,7 +826,7 @@ function PaymentForm({
     }
 
     reserveSlot(selectedSlot);
-  }, [selectedSlot, contactInfoReady, reservation, reservationLoading, reserveSlot]);
+  }, [selectedSlot, reservation, reservationLoading, reserveSlot]);
 
   useEffect(() => {
     if (reservationStatus === 'error' && reservationErrorDetail) {
@@ -832,6 +866,17 @@ function PaymentForm({
       }
     };
   }, [reservation, preserveReservation, releaseReservation, clearPendingReserve]);
+
+  useEffect(() => {
+    if (reservationStatus === 'held' && reservation) {
+      setModalStage('details');
+      return;
+    }
+
+    if (!reservation && reservationStatus !== 'holding') {
+      setModalStage('availability');
+    }
+  }, [reservationStatus, reservation]);
 
   useEffect(() => {
     if (reservationStatus !== 'held' || reservationCountdown <= 0) {
@@ -1100,171 +1145,190 @@ function PaymentForm({
         </div>
       </div>
 
-      {/* Contact Information */}
-      <div className="border border-sand rounded-lg p-3 sm:p-4">
-        <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2.5 sm:mb-3">Your Information</h3>
-        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-name">
-              Full Name
-            </label>
-            <input
-              id="booking-name"
-              type="text"
-              value={contactDetails.name}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, name: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, name: undefined }));
-              }}
-              onBlur={validateContactDetails}
-              placeholder="Jane Doe"
-              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing}
-            />
-            {contactErrors.name && (
-              <p className="text-xs text-red-600 mt-1">{contactErrors.name}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
-              Email Address
-            </label>
-            <input
-              id="booking-email"
-              type="email"
-              value={contactDetails.email}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, email: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, email: undefined }));
-              }}
-              onBlur={validateContactDetails}
-              placeholder="you@example.com"
-              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing}
-            />
-            {contactErrors.email && (
-              <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:gap-4 md:grid-cols-2 mt-3 sm:mt-4">
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
-              Phone Number
-            </label>
-            <input
-              id="booking-phone"
-              type="tel"
-              value={contactDetails.phone}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, phone: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, phone: undefined }));
-              }}
-              onBlur={validateContactDetails}
-              placeholder="(555) 123-4567"
-              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing}
-            />
-            {contactErrors.phone && (
-              <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
-              Notes (Optional)
-            </label>
-            <textarea
-              id="booking-notes"
-              value={contactDetails.notes}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
-              }}
-              placeholder="Let us know any preferences or special requests."
-              rows={3}
-              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
-              disabled={processing}
-            />
-          </div>
-        </div>
-      </div>
-
-      {reservationStatus === 'held' && reservation && selectedSlot ? (
-        <div className="mb-4 sm:mb-6 border border-dark-sage rounded-lg bg-dark-sage/10 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2.5">
-          <div>
-            <p className="text-sm font-medium text-charcoal">Reserved Slot</p>
-            <p className="text-sm text-warm-gray">{selectedSlot.label}</p>
-            <p className="text-xs text-warm-gray">
-              Complete checkout within {reservationCountdown}s to keep this time.
+      {isAvailabilityStage && (
+        <div className="space-y-4 sm:space-y-5">
+          <div className="border border-sand rounded-lg p-3 sm:p-4 bg-white">
+            <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2">Step 1 · Choose your time</h3>
+            <p className="text-xs sm:text-sm text-warm-gray leading-relaxed">
+              Select an available slot to place a short hold while you enter your contact and payment details.
+              Holds typically last about two minutes—plenty of time to complete checkout.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleChangeTime}
-              className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
-            >
-              Change time
-            </button>
-            <button
-              type="button"
-              onClick={() => handleReleaseSlot('Slot released. Select a new time to continue.')}
-              className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-            >
-              Release slot
-            </button>
-          </div>
-          {reservationSuccessDetail && (
-            <div className="text-xs text-green-700">{reservationSuccessDetail}</div>
+
+          <AvailabilityPanel
+            serviceSlug={serviceSlug}
+            selectedSlot={selectedSlot}
+            onSelectSlot={handleSlotSelection}
+            hiddenSlotStart={reservation?.startTime ?? null}
+            isSelectionDisabled={reservationStatus === 'holding' || reservationLoading}
+          />
+
+          {selectedSlot && (
+            <div className="bg-dark-sage/10 border border-dark-sage/30 rounded-lg px-3 sm:px-4 py-2.5 text-sm text-charcoal">
+              <p className="font-medium">Selected Slot</p>
+              <p>{selectedSlot.label}</p>
+              <p className="text-xs text-warm-gray">
+                {selectedSlot.duration
+                  ? `Duration: ${selectedSlot.duration} minutes`
+                  : `Duration: ${service.duration}`}
+              </p>
+            </div>
           )}
-        </div>
-      ) : (
-        <AvailabilityPanel
-          serviceSlug={serviceSlug}
-          selectedSlot={selectedSlot}
-          onSelectSlot={handleSlotSelection}
-          hiddenSlotStart={reservation?.startTime ?? null}
-          isSelectionDisabled={reservationStatus === 'holding' || reservationLoading}
-        />
-      )}
 
-      {slotError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
-          <AlertCircle size={16} />
-          {slotError}
-        </div>
-      )}
+          {reservationStatus === 'holding' && (
+            <div className="flex items-center gap-2 text-sm text-warm-gray">
+              <Loader2 className="animate-spin" size={16} />
+              {reservationErrorDetail
+                ? reservationErrorDetail
+                : `Reserving your selected time... (attempt ${reservationAttempts || 1}/3)`}
+            </div>
+          )}
 
-      {reservationStatus !== 'held' && selectedSlot && (
-        <div className="bg-dark-sage/10 border border-dark-sage/40 rounded-lg px-3 sm:px-4 py-2.5 mb-2 text-sm text-charcoal flex flex-col gap-1">
-          <span className="font-medium">Selected Slot</span>
-          <span>{selectedSlot.label}</span>
-          <span className="text-xs text-warm-gray">
-            Duration: {selectedSlot.duration ? `${selectedSlot.duration} minutes` : service.duration}
-          </span>
+          {reservationStatus === 'error' && reservationErrorDetail && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
+              <AlertCircle size={16} />
+              {reservationErrorDetail}
+            </div>
+          )}
+
+          <div className="text-xs sm:text-sm text-warm-gray">
+            We’ll open the next step once your time is successfully on hold.
+          </div>
         </div>
       )}
 
-      {reservationStatus === 'holding' && (
-        <div className="mb-3 flex items-center gap-2 text-sm text-warm-gray">
-          <Loader2 className="animate-spin" size={16} />
-          {reservationErrorDetail
-            ? reservationErrorDetail
-            : `Reserving your selected time... (attempt ${reservationAttempts || 1}/3)`}
-        </div>
-      )}
+      {!isAvailabilityStage && reservation && selectedSlot && (
+        <div className="space-y-5 sm:space-y-6">
+          <div className="border border-dark-sage rounded-lg bg-dark-sage/10 px-3 sm:px-4 py-3 sm:py-4 flex flex-col gap-2.5">
+            <div>
+              <p className="text-sm font-medium text-charcoal">Step 2 · Confirm and checkout</p>
+              <p className="text-sm text-charcoal">{selectedSlot.label}</p>
+              <p className="text-xs text-warm-gray">
+                Complete checkout within {reservationCountdown}s to keep this time reserved.
+              </p>
+            </div>
 
-      {reservationStatus === 'error' && reservationErrorDetail && (
-        <div className="mb-3 sm:mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
-          <AlertCircle size={16} />
-          {reservationErrorDetail}
-        </div>
-      )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleChangeTime}
+                className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
+              >
+                Update selection
+              </button>
+              <button
+                type="button"
+                onClick={() => handleReleaseSlot('Slot released. Select a new time to continue.')}
+                className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Release slot
+              </button>
+            </div>
 
-      {shouldShowPaymentSections ? (
-        <>
+            {reservationSuccessDetail && (
+              <div className="text-xs text-green-700">{reservationSuccessDetail}</div>
+            )}
+
+            {reservationStatus === 'error' && reservationErrorDetail && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs sm:text-sm text-red-600 flex items-center gap-2">
+                <AlertCircle size={16} />
+                {reservationErrorDetail}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-sand rounded-lg p-3 sm:p-4 bg-white">
+            <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2.5 sm:mb-3">Your Information</h3>
+            <div className="grid gap-3 md:gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-name">
+                  Full Name
+                </label>
+                <input
+                  id="booking-name"
+                  type="text"
+                  value={contactDetails.name}
+                  onChange={(event) => {
+                    setContactDetails((prev) => ({ ...prev, name: event.target.value }));
+                    setContactErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  onBlur={validateContactDetails}
+                  placeholder="Jane Doe"
+                  className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                  disabled={processing}
+                />
+                {contactErrors.name && (
+                  <p className="text-xs text-red-600 mt-1">{contactErrors.name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
+                  Email Address
+                </label>
+                <input
+                  id="booking-email"
+                  type="email"
+                  value={contactDetails.email}
+                  onChange={(event) => {
+                    setContactDetails((prev) => ({ ...prev, email: event.target.value }));
+                    setContactErrors((prev) => ({ ...prev, email: undefined }));
+                  }}
+                  onBlur={validateContactDetails}
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                  disabled={processing}
+                />
+                {contactErrors.email && (
+                  <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:gap-4 md:grid-cols-2 mt-3 sm:mt-4">
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
+                  Phone Number
+                </label>
+                <input
+                  id="booking-phone"
+                  type="tel"
+                  value={contactDetails.phone}
+                  onChange={(event) => {
+                    setContactDetails((prev) => ({ ...prev, phone: event.target.value }));
+                    setContactErrors((prev) => ({ ...prev, phone: undefined }));
+                  }}
+                  onBlur={validateContactDetails}
+                  placeholder="(555) 123-4567"
+                  className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                  disabled={processing}
+                />
+                {contactErrors.phone && (
+                  <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  id="booking-notes"
+                  value={contactDetails.notes}
+                  onChange={(event) => {
+                    setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
+                  }}
+                  placeholder="Let us know any preferences or special requests."
+                  rows={3}
+                  className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
+                  disabled={processing}
+                />
+              </div>
+            </div>
+          </div>
+
+          {shouldShowPaymentSections ? (
+            <>
       {/* Discount Code */}
       <div>
         <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
@@ -1476,11 +1540,26 @@ function PaymentForm({
           )}
         </button>
       </div>
-        </>
-      ) : (
-        <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-warm-gray">
-          {reservationSuccessDetail ??
-            'Select an available time and complete your contact information to continue to payment.'}
+            </>
+          ) : (
+            <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-warm-gray">
+              {reservationSuccessDetail ??
+                'Securing your slot now. Once confirmed, your payment details will appear here.'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isAvailabilityStage && (!reservation || !selectedSlot) && (
+        <div className="p-3 bg-sand/30 border border-sand rounded-lg text-xs sm:text-sm text-warm-gray">
+          Preparing your reserved slot...
+        </div>
+      )}
+
+      {slotError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
+          <AlertCircle size={16} />
+          {slotError}
         </div>
       )}
     </form>
