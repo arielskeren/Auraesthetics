@@ -940,7 +940,7 @@ function PaymentForm({
     if (!reservation && reservationStatus !== 'holding') {
       setModalStage('availability');
     }
-  }, [reservationStatus, reservation, setModalStage]);
+  }, [reservationStatus, reservation, setModalStage, setModalStage]);
 
   useEffect(() => {
     console.log('[PaymentForm state]', {

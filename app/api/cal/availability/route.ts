@@ -85,15 +85,15 @@ export async function GET(request: NextRequest) {
 
   const eventTypes = loadEventTypes();
   const eventType = eventTypes.eventTypes.find((event) => event.slug === slug);
-  const publicBookingUrl = getCalEventBookingUrl(eventType.id);
-  const urlParts = getCalUrlParts(publicBookingUrl);
-
   if (!eventType) {
     return NextResponse.json(
       { error: `No Cal.com event type found for slug: ${slug}` },
       { status: 404 }
     );
   }
+
+  const publicBookingUrl = getCalEventBookingUrl(eventType.id);
+  const urlParts = getCalUrlParts(publicBookingUrl);
 
   const numberOfDays = Math.max(1, Math.min(parseInt(daysParam || '7', 10) || 7, 30));
   const startDate = startParam ? new Date(startParam) : new Date();
