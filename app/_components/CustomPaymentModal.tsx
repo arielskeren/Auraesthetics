@@ -990,7 +990,7 @@ function PaymentForm({
   };
 
   return (
-    <form onSubmit={handlePayment} className="space-y-6">
+    <form onSubmit={handlePayment} className="space-y-5 sm:space-y-6">
       {/* Service Summary */}
       <div className="bg-sand/30 p-4 rounded-lg">
         <h3 className="font-serif text-lg text-charcoal mb-2">{service.name}</h3>
@@ -1001,11 +1001,11 @@ function PaymentForm({
       </div>
 
       {/* Contact Information */}
-      <div className="border border-sand rounded-lg p-4">
-        <h3 className="font-serif text-lg text-charcoal mb-3">Your Information</h3>
-        <div className="grid gap-4 md:grid-cols-2">
+      <div className="border border-sand rounded-lg p-3 sm:p-4">
+        <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2.5 sm:mb-3">Your Information</h3>
+        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-name">
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-name">
               Full Name
             </label>
             <input
@@ -1018,7 +1018,7 @@ function PaymentForm({
               }}
               onBlur={validateContactDetails}
               placeholder="Jane Doe"
-              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
               disabled={processing}
             />
             {contactErrors.name && (
@@ -1027,7 +1027,7 @@ function PaymentForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
               Email Address
             </label>
             <input
@@ -1040,7 +1040,7 @@ function PaymentForm({
               }}
               onBlur={validateContactDetails}
               placeholder="you@example.com"
-              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
               disabled={processing}
             />
             {contactErrors.email && (
@@ -1049,9 +1049,9 @@ function PaymentForm({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 mt-4">
+        <div className="grid gap-3 md:gap-4 md:grid-cols-2 mt-3 sm:mt-4">
           <div>
-            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
               Phone Number
             </label>
             <input
@@ -1064,7 +1064,7 @@ function PaymentForm({
               }}
               onBlur={validateContactDetails}
               placeholder="(555) 123-4567"
-              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
               disabled={processing}
             />
             {contactErrors.phone && (
@@ -1073,7 +1073,7 @@ function PaymentForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
               Notes (Optional)
             </label>
             <textarea
@@ -1084,7 +1084,7 @@ function PaymentForm({
               }}
               placeholder="Let us know any preferences or special requests."
               rows={3}
-              className="w-full px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
               disabled={processing}
             />
           </div>
@@ -1092,7 +1092,7 @@ function PaymentForm({
       </div>
 
       {reservationStatus === 'held' && reservation && selectedSlot ? (
-        <div className="mb-6 border border-dark-sage rounded-lg bg-dark-sage/10 px-4 py-3 flex flex-col gap-3">
+        <div className="mb-4 sm:mb-6 border border-dark-sage rounded-lg bg-dark-sage/10 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2.5">
           <div>
             <p className="text-sm font-medium text-charcoal">Reserved Slot</p>
             <p className="text-sm text-warm-gray">{selectedSlot.label}</p>
@@ -1103,7 +1103,7 @@ function PaymentForm({
           <button
             type="button"
             onClick={handleChangeTime}
-            className="self-start px-4 py-2 text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
+            className="self-start px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
           >
             Change time
           </button>
@@ -1124,7 +1124,7 @@ function PaymentForm({
       )}
 
       {selectedSlot && (
-        <div className="bg-dark-sage/10 border border-dark-sage/40 rounded-lg px-4 py-3 mb-2 text-sm text-charcoal flex flex-col gap-1">
+        <div className="bg-dark-sage/10 border border-dark-sage/40 rounded-lg px-3 sm:px-4 py-2.5 mb-2 text-sm text-charcoal flex flex-col gap-1">
           <span className="font-medium">Selected Slot</span>
           <span>{selectedSlot.label}</span>
           <span className="text-xs text-warm-gray">
@@ -1143,7 +1143,7 @@ function PaymentForm({
       )}
 
       {reservationStatus === 'error' && reservationErrorDetail && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
+        <div className="mb-3 sm:mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
           <AlertCircle size={16} />
           {reservationErrorDetail}
         </div>
@@ -1151,7 +1151,7 @@ function PaymentForm({
 
       {/* Discount Code */}
       <div>
-        <label className="block text-sm font-medium text-charcoal mb-2">
+        <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
           Discount Code (Optional)
         </label>
         <div className="flex gap-2">
@@ -1173,7 +1173,7 @@ function PaymentForm({
               }
             }}
             placeholder="Enter code"
-            className="flex-1 px-4 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+            className="flex-1 px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
             disabled={processing || validatingDiscount}
           />
           <button
@@ -1184,7 +1184,7 @@ function PaymentForm({
               validateDiscount();
             }}
             disabled={processing || validatingDiscount || !discountCode.trim()}
-            className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg font-medium hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 sm:px-4 py-2 bg-dark-sage text-charcoal rounded-lg font-medium text-sm hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {validatingDiscount ? '...' : 'Apply'}
           </button>
@@ -1205,18 +1205,18 @@ function PaymentForm({
 
       {/* Payment Type Selection */}
       <div>
-        <label className="block text-sm font-medium text-charcoal mb-3">
+        <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2.5 sm:mb-3">
           Payment Option
         </label>
         <div className="space-y-2">
-          <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+          <label className="flex items-center p-3 sm:p-4 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
             <input
               type="radio"
               name="paymentType"
               value="full"
               checked={paymentType === 'full'}
               onChange={(e) => setPaymentType(e.target.value as PaymentType)}
-              className="mr-3"
+              className="mr-2.5"
               disabled={processing}
             />
             <div className="flex-1">
@@ -1226,14 +1226,14 @@ function PaymentForm({
               </div>
             </div>
           </label>
-          <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+          <label className="flex items-center p-3 sm:p-4 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
             <input
               type="radio"
               name="paymentType"
               value="deposit"
               checked={paymentType === 'deposit'}
               onChange={(e) => setPaymentType(e.target.value as PaymentType)}
-              className="mr-3"
+              className="mr-2.5"
               disabled={processing}
             />
             <div className="flex-1">
@@ -1264,25 +1264,25 @@ function PaymentForm({
 
       {/* Card Input (required for all payment types) */}
       <div>
-        <label className="block text-sm font-medium text-charcoal mb-2">
+        <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1.5 sm:mb-2">
           Card Information
         </label>
-        <div className="p-4 border border-sage-dark rounded-lg bg-white">
+        <div className="p-3 sm:p-4 border border-sage-dark rounded-lg bg-white">
           <CardElement options={cardElementOptions} />
         </div>
       </div>
 
       {/* Total Amount */}
-      <div className="bg-dark-sage/10 p-4 rounded-lg">
+      <div className="bg-dark-sage/10 p-3 sm:p-4 rounded-lg">
         <div className="flex justify-between items-center">
-          <span className="font-medium text-charcoal">
+          <span className="font-medium text-charcoal text-sm sm:text-base">
             {paymentType === 'deposit' ? 'Deposit Due Today' : 'Total Amount'}
           </span>
-          <span className="text-2xl font-serif font-bold text-charcoal">
+          <span className="text-xl sm:text-2xl font-serif font-bold text-charcoal">
             ${currentAmount.toFixed(2)}
           </span>
         </div>
-        <div className="mt-2 text-sm text-warm-gray space-y-1">
+        <div className="mt-2 text-xs sm:text-sm text-warm-gray space-y-1">
           <div>
             Original: ${baseAmount.toFixed(2)}
             {discountValidation?.valid && (
@@ -1317,7 +1317,7 @@ function PaymentForm({
       )}
 
       {/* Submit Button */}
-      <div className="flex gap-3">
+      <div className="flex gap-2.5 sm:gap-3">
         <button
           type="button"
           onClick={() => {
@@ -1328,7 +1328,7 @@ function PaymentForm({
             onClose();
           }}
           disabled={processing || success}
-          className="flex-1 px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-white border-2 border-dark-sage text-dark-sage hover:bg-sage-light hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-white border-2 border-dark-sage text-dark-sage hover:bg-sage-light hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>
@@ -1341,7 +1341,7 @@ function PaymentForm({
             reservationLoading ||
             (paymentType === 'deposit' && !depositAcknowledged)
           }
-          className="flex-1 px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {processing ? (
             <>
@@ -1490,24 +1490,24 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
               </button>
 
               {/* Content */}
-              <div className="px-4 pb-4 md:px-8 md:pb-8">
-                <div className="mb-6">
-                  <span className="inline-block px-3 py-1 bg-dark-sage/20 text-dark-sage text-xs font-medium rounded-full mb-3">
+              <div className="px-4 pt-1 pb-5 sm:px-8 sm:pb-8">
+                <div className="mb-4 sm:mb-6">
+                  <span className="inline-block px-2.5 py-0.5 bg-dark-sage/20 text-dark-sage text-[11px] sm:text-xs font-medium rounded-full mb-2.5 sm:mb-3">
                     {service.category}
                   </span>
-                  <h2 className="text-2xl font-serif text-charcoal mb-2">Complete Your Booking</h2>
-                  <p className="text-sm text-warm-gray">
+                  <h2 className="text-xl sm:text-2xl font-serif text-charcoal mb-1.5 sm:mb-2">Complete Your Booking</h2>
+                  <p className="text-xs sm:text-sm text-warm-gray">
                     Secure your appointment with a payment
                   </p>
                 </div>
 
                 {primaryPhoto && (
-                  <div className="mb-6 rounded-lg overflow-hidden shadow-sm">
+                  <div className="mb-4 sm:mb-6 rounded-lg overflow-hidden shadow-sm">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={primaryPhoto}
                       alt={`${service.name} preview`}
-                      className="w-full h-40 object-cover"
+                      className="w-full h-32 sm:h-40 object-cover"
                     />
                   </div>
                 )}
