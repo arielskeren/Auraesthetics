@@ -503,8 +503,8 @@ function PaymentForm({
             }
             return current;
           });
+          setSelectedSlot(null);
         }
-        setSelectedSlot(null);
       }
     },
     []
