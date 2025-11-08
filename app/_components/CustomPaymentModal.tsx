@@ -1712,8 +1712,8 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
 
               {/* Content */}
               <div className="px-4 pt-1 pb-5 sm:px-8 sm:pb-8">
-                <div className="mb-4 sm:mb-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="mb-4 sm:mb-5 relative">
+                  <div className="flex flex-col gap-3 sm:gap-4">
                     <div className="flex items-start gap-3 sm:gap-4">
                       {primaryPhoto ? (
                         <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-sand/40 flex-shrink-0 shadow-sm">
@@ -1752,22 +1752,36 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                         </p>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex sm:flex-col gap-2 sm:items-end">
-                      <div className="min-w-[180px] rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3 py-2 shadow-sm">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
-                          Current Step
-                        </p>
-                        <p className="text-sm sm:text-base font-medium text-charcoal">
-                          {modalStage === 'availability' ? 'Step 1 · Choose your time' : 'Step 2 · Confirm & pay'}
-                        </p>
-                        <p className="text-xs text-warm-gray mt-1 leading-snug">
-                          {modalStage === 'availability'
-                            ? 'Select an available slot to place a short hold.'
-                            : 'Enter your details and payment to secure the booking.'}
-                        </p>
-                      </div>
+                  <div className="hidden md:block absolute right-0 top-1/2 md:translate-y-[-10%] lg:translate-y-[-15%]">
+                    <div className="min-w-[190px] rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3.5 py-2.5 shadow-sm text-right">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
+                        Current Step
+                      </p>
+                      <p className="text-sm font-semibold text-charcoal">
+                        {modalStage === 'availability' ? 'Step 1 · Choose your time' : 'Step 2 · Confirm & pay'}
+                      </p>
+                      <p className="text-xs text-warm-gray mt-1 leading-snug">
+                        {modalStage === 'availability'
+                          ? 'Select an available slot to place a short hold.'
+                          : 'Enter your details and payment to secure the booking.'}
+                      </p>
                     </div>
+                  </div>
+
+                  <div className="md:hidden mt-3 rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3 py-2 shadow-sm">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
+                      Current Step
+                    </p>
+                    <p className="text-sm font-semibold text-charcoal">
+                      {modalStage === 'availability' ? 'Step 1 · Choose your time' : 'Step 2 · Confirm & pay'}
+                    </p>
+                    <p className="text-xs text-warm-gray mt-1 leading-snug">
+                      {modalStage === 'availability'
+                        ? 'Select an available slot to place a short hold.'
+                        : 'Enter your details and payment to secure the booking.'}
+                    </p>
                   </div>
                 </div>
 
