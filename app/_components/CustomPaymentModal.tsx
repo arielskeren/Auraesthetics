@@ -1754,7 +1754,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                     </div>
                   </div>
 
-                  <div className="hidden md:block absolute right-0 top-1/2 md:translate-y-[-10%] lg:translate-y-[-15%]">
+                  <div className="hidden md:block absolute right-0 top-[58px]">
                     <div className="min-w-[190px] rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3.5 py-2.5 shadow-sm text-right">
                       <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
                         Current Step
