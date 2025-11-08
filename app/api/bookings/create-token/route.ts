@@ -69,65 +69,120 @@ async function upsertBrevoBookingContact(attendee: {
   const { firstName, lastName } = splitName(attendee.name || 'Guest Client');
   const formattedPhone = formatPhoneForBrevo(attendee.phone);
 
-  const payload: Record<string, any> = {
-    email: attendee.email,
-    listIds: [listIdNumber],
-    updateEnabled: true,
-    attributes: {
-      FIRSTNAME: firstName,
-      LASTNAME: lastName,
-      SIGNUP_SOURCE: 'booking',
-    },
+  const desiredBaseAttributes: Record<string, any> = {
+    FIRSTNAME: firstName,
+    LASTNAME: lastName,
   };
 
   if (formattedPhone) {
-    payload.attributes.SMS = formattedPhone;
-    payload.attributes.LANDLINE_NUMBER = formattedPhone;
+    desiredBaseAttributes.SMS = formattedPhone;
+    desiredBaseAttributes.LANDLINE_NUMBER = formattedPhone;
+  }
+
+  let existingContact: any = null;
+  try {
+    const lookup = await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(attendee.email)}`, {
+      method: 'GET',
+      headers: {
+        'api-key': BREVO_API_KEY,
+        Accept: 'application/json',
+      },
+    });
+
+    if (lookup.ok) {
+      existingContact = await lookup.json();
+    } else if (lookup.status !== 404) {
+      console.warn('[Brevo] Lookup failed', lookup.status);
+    }
+  } catch (lookupError) {
+    console.warn('[Brevo] Lookup error', lookupError);
+  }
+
+  if (!existingContact) {
+    const payload: Record<string, any> = {
+      email: attendee.email,
+      listIds: [listIdNumber],
+      updateEnabled: true,
+      attributes: {
+        ...desiredBaseAttributes,
+        SIGNUP_SOURCE: 'booking',
+      },
+    };
+
+    try {
+      const response = await fetch('https://api.brevo.com/v3/contacts', {
+        method: 'POST',
+        headers: {
+          'api-key': BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        console.warn('[Brevo] Failed to create contact', {
+          status: response.status,
+          body: errorBody,
+        });
+      }
+    } catch (createError) {
+      console.warn('[Brevo] Contact creation error', createError);
+    }
+    return;
+  }
+
+  const existingAttributes = existingContact.attributes ?? {};
+  const attributesToUpdate: Record<string, any> = {};
+
+  Object.entries(desiredBaseAttributes).forEach(([key, value]) => {
+    if (value && existingAttributes[key] !== value) {
+      attributesToUpdate[key] = value;
+    }
+  });
+
+  if (!existingAttributes.SIGNUP_SOURCE) {
+    attributesToUpdate.SIGNUP_SOURCE = 'booking';
+  }
+
+  const existingListIds: number[] = Array.isArray(existingContact.listIds)
+    ? existingContact.listIds
+    : [];
+  const listIdsChanged = !existingListIds.includes(listIdNumber);
+  const updatePayload: Record<string, any> = {};
+
+  if (Object.keys(attributesToUpdate).length > 0) {
+    updatePayload.attributes = attributesToUpdate;
+  }
+  if (listIdsChanged) {
+    updatePayload.listIds = Array.from(new Set([...existingListIds, listIdNumber]));
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    return;
   }
 
   try {
-    const response = await fetch('https://api.brevo.com/v3/contacts', {
-      method: 'POST',
+    const response = await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(attendee.email)}`, {
+      method: 'PUT',
       headers: {
         'api-key': BREVO_API_KEY,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(updatePayload),
     });
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null);
-      // Handle duplicate contact gracefully (Brevo may return 400 duplicate_parameter)
-      if (response.status === 400 && errorBody?.code === 'duplicate_parameter') {
-        // Contact exists; attempt to update lists to ensure membership
-        try {
-          await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(attendee.email)}`, {
-            method: 'PUT',
-            headers: {
-              'api-key': BREVO_API_KEY,
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-            body: JSON.stringify({
-              listIds: [listIdNumber],
-              attributes: payload.attributes,
-              updateEnabled: true,
-            }),
-          });
-        } catch (updateError) {
-          console.warn('[Brevo] Failed to update existing contact', updateError);
-        }
-        return;
-      }
-
-      console.warn('[Brevo] Failed to sync booking contact', {
+      console.warn('[Brevo] Failed to update contact', {
         status: response.status,
         body: errorBody,
       });
     }
-  } catch (error) {
-    console.warn('[Brevo] Contact sync error', error);
+  } catch (updateError) {
+    console.warn('[Brevo] Contact update error', updateError);
   }
 }
 

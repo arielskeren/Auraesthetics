@@ -115,11 +115,13 @@ interface AvailabilityData {
   };
 }
 
-function formatDateHeading(date: Date) {
+function formatDateHeading(date: Date, options?: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone: 'America/New_York',
+    ...options,
   }).format(date);
 }
 
@@ -127,6 +129,8 @@ function formatTimeLabel(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
   }).format(date);
 }
 
@@ -181,8 +185,6 @@ function AvailabilityPanel({
     startDate.setDate(startDate.getDate() + pageOffset * daysPerPage);
   }
   const startKey = startDate.toISOString();
-  const timezoneFromData = data?.meta?.timezone || 'America/New_York';
-
   useEffect(() => {
     let isMounted = true;
 
@@ -263,9 +265,9 @@ function AvailabilityPanel({
     if (!data) return;
     const startTime = slot.slot;
     const duration = slot.duration ?? data.duration ?? null;
-    const timezone = data.meta?.timezone || slot.attendeeTimezone || 'America/New_York';
+    const timezone = 'America/New_York';
     const slotDate = new Date(startTime);
-    const label = `${formatDateHeading(slotDate)} at ${formatTimeLabel(slotDate)} (${timezone})`;
+    const label = `${formatDateHeading(slotDate)} at ${formatTimeLabel(slotDate)}`;
     onSelectSlot({
       startTime,
       eventTypeId: data.eventTypeId,
@@ -289,6 +291,7 @@ function AvailabilityPanel({
               {formatDateHeading(startDate)} →{' '}
               {formatDateHeading(new Date(startDate.getTime() + (daysPerPage - 1) * dayMs))}
             </p>
+            <p className="text-[11px] sm:text-xs text-warm-gray/90">All times Eastern (EST)</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -337,27 +340,19 @@ function AvailabilityPanel({
         {!loading && serviceSlug && !error && orderedDays.length > 0 && (
           <div className={daysPerPage === 7 ? 'overflow-x-auto lg:overflow-visible' : ''}>
             <div
-              className={`grid gap-3 ${daysPerPage === 7 ? 'min-w-[940px] lg:min-w-0' : ''}`}
+              className={`grid gap-2.5 ${daysPerPage === 7 ? 'min-w-[900px] lg:min-w-0' : ''}`}
               style={{ gridTemplateColumns: `repeat(${daysPerPage}, minmax(0, 1fr))` }}
             >
               {orderedDays.map(({ key, date, slots }) => (
-                <div key={key} className="border border-sand rounded-lg p-3 flex flex-col gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-charcoal">
-                      {formatDateHeading(date)}
-                    </p>
-                    <p className="text-xs text-warm-gray">
-                      {new Intl.DateTimeFormat('en-US', {
-                        weekday: 'long',
-                        timeZone: timezoneFromData,
-                      }).format(date)}
-                    </p>
-                  </div>
+                <div key={key} className="border border-sand rounded-lg p-2.5 flex flex-col gap-2.5">
+                  <p className="text-sm font-medium text-charcoal">
+                    {formatDateHeading(date)}
+                  </p>
 
                   {slots.length === 0 ? (
-                    <div className="text-xs text-warm-gray italic">No availability</div>
+                    <div className="text-[11px] text-warm-gray italic">No availability</div>
                   ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1.5">
                       {slots.map((slot) => {
                         if (hiddenSlotStart && slot.slot === hiddenSlotStart) {
                           return null;
@@ -371,7 +366,7 @@ function AvailabilityPanel({
                             type="button"
                             onClick={() => handleSlotClick(slot)}
                             disabled={isSelectionDisabled}
-                            className={`block w-full px-3 py-2 rounded-md border text-sm font-medium leading-tight text-center transition-colors ${
+                            className={`block w-full px-2.5 py-2 rounded-md border text-xs sm:text-sm font-medium leading-tight text-center transition-colors ${
                               isSelected
                                 ? 'bg-dark-sage text-charcoal border-dark-sage'
                                 : 'border-sage-dark text-sage-dark hover:bg-sand/30'
@@ -388,10 +383,6 @@ function AvailabilityPanel({
             </div>
           </div>
         )}
-
-        <div className="mt-3 text-xs text-warm-gray">
-          Times adjust automatically to your browser timezone.
-        </div>
 
         {!serviceSlug && (
           <div className="text-sm text-warm-gray bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
@@ -1175,6 +1166,27 @@ function PaymentForm({
       {/* Service Summary */}
       {isAvailabilityStage && (
         <div className="space-y-4 sm:space-y-5">
+          {(reservationStatus === 'holding' || (reservationStatus === 'error' && reservationErrorDetail)) && (
+            <div
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm ${
+                reservationStatus === 'error'
+                  ? 'bg-red-50 border border-red-200 text-red-600'
+                  : 'bg-sand/50 border border-sand text-warm-gray'
+              }`}
+            >
+              {reservationStatus === 'error' ? (
+                <AlertCircle size={16} />
+              ) : (
+                <Loader2 className="animate-spin" size={16} />
+              )}
+              {reservationStatus === 'holding'
+                ? reservationErrorDetail
+                  ? reservationErrorDetail
+                  : `Reserving your selected time... (attempt ${reservationAttempts || 1}/3)`
+                : reservationErrorDetail}
+            </div>
+          )}
+
           <AvailabilityPanel
             serviceSlug={serviceSlug}
             selectedSlot={selectedSlot}
@@ -1194,26 +1206,6 @@ function PaymentForm({
               </p>
             </div>
           )}
-
-          {reservationStatus === 'holding' && (
-            <div className="flex items-center gap-2 text-sm text-warm-gray">
-              <Loader2 className="animate-spin" size={16} />
-              {reservationErrorDetail
-                ? reservationErrorDetail
-                : `Reserving your selected time... (attempt ${reservationAttempts || 1}/3)`}
-            </div>
-          )}
-
-          {reservationStatus === 'error' && reservationErrorDetail && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
-              <AlertCircle size={16} />
-              {reservationErrorDetail}
-            </div>
-          )}
-
-          <div className="text-xs sm:text-sm text-warm-gray">
-            We’ll open the next step once your time is successfully on hold.
-          </div>
         </div>
       )}
 
