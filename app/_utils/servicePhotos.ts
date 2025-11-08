@@ -6,6 +6,7 @@
 export const SERVICE_PHOTO_MAP: Record<string, string> = {
   // Exact matches don't need mapping, but we list them for clarity
   'aura-facial': 'aura-facial',
+  'anti-aging-facial': 'anti-aging-facial',
   'hydrafacial': 'hydrafacial',
   'signature-detox-facial': 'signature-detox-facial', // Also has detox-facial.jpg as fallback
   'lymphatic-drainage-facial': 'lymphatic-drainage-facial',
@@ -14,8 +15,11 @@ export const SERVICE_PHOTO_MAP: Record<string, string> = {
   'microneedling': 'microneedling',
   'oxygen-peel': 'oxygen-peel',
   'brow-lamination': 'brow-lamination',
+  'brow-lamination-lash-lift-combo': 'brow-lamination-and-lash-lift',
   'brow-tint': 'brow-tint',
+  'brow-wax-tint': 'brow-wax',
   'brow-wax': 'brow-wax',
+  'glass-skin-facial': 'glass-skin-facial',
   
   // Mismatched names
   'lip-wax': 'upper-lip-wax',

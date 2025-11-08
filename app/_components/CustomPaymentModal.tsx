@@ -739,8 +739,26 @@ function PaymentForm({
       setReservationLoading(false);
       void releaseReservation(reservation.id);
       setReservation(null);
+      setSelectedSlot(null);
+      activeSlotKeyRef.current = null;
     }
   }, [reservationStatus, reservationCountdown, reservation, releaseReservation]);
+
+  const handleChangeTime = useCallback(async () => {
+    clearPendingReserve();
+    activeSlotKeyRef.current = null;
+    if (reservation?.id) {
+      await releaseReservation(reservation.id);
+    }
+    setSelectedSlot(null);
+    setReservation(null);
+    setReservationStatus('idle');
+    setReservationCountdown(0);
+    setReservationErrorDetail(null);
+    setReservationAttempts(0);
+    setReservationLoading(false);
+    setSlotError(null);
+  }, [clearPendingReserve, releaseReservation, reservation]);
 
   const validateDiscount = async () => {
     if (!discountCode.trim()) {
@@ -1073,11 +1091,30 @@ function PaymentForm({
         </div>
       </div>
 
-      <AvailabilityPanel
-        serviceSlug={serviceSlug}
-        selectedSlot={selectedSlot}
-        onSelectSlot={handleSlotSelection}
-      />
+      {reservationStatus === 'held' && reservation && selectedSlot ? (
+        <div className="mb-6 border border-dark-sage rounded-lg bg-dark-sage/10 px-4 py-3 flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-medium text-charcoal">Reserved Slot</p>
+            <p className="text-sm text-warm-gray">{selectedSlot.label}</p>
+            <p className="text-xs text-warm-gray">
+              Complete checkout within {reservationCountdown}s to keep this time.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleChangeTime}
+            className="self-start px-4 py-2 text-sm font-medium rounded-lg border border-dark-sage text-dark-sage hover:bg-sand/40 transition-colors"
+          >
+            Change time
+          </button>
+        </div>
+      ) : (
+        <AvailabilityPanel
+          serviceSlug={serviceSlug}
+          selectedSlot={selectedSlot}
+          onSelectSlot={handleSlotSelection}
+        />
+      )}
 
       {slotError && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
@@ -1102,13 +1139,6 @@ function PaymentForm({
           {reservationErrorDetail
             ? reservationErrorDetail
             : `Reserving your selected time... (attempt ${reservationAttempts || 1}/3)`}
-        </div>
-      )}
-
-      {reservationStatus === 'held' && reservation && selectedSlot && (
-        <div className="mb-3 flex items-center gap-2 text-sm text-green-600">
-          <CheckCircle2 size={16} />
-          Slot reserved. Complete checkout within {reservationCountdown}s.
         </div>
       )}
 
