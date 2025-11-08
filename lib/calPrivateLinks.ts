@@ -15,7 +15,7 @@ interface CreatePrivateLinkOptions {
   maxUsageCount?: number;
 }
 
-const PRIVATE_LINK_API_VERSION = '2024-09-04';
+const PRIVATE_LINK_API_VERSION = '2024-06-20';
 
 type PrivateLinkScope = 'user' | 'team' | 'unknown';
 
