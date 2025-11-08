@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { useState, useEffect, FormEvent, useCallback, useMemo } from 'react';
+import { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -410,13 +410,14 @@ function PaymentForm({
   const stripe = useStripe();
   const elements = useElements();
   
-  const [paymentType, setPaymentType] = useState<PaymentType>('deposit');
+  const [paymentType, setPaymentType] = useState<PaymentType>('full');
   const [discountCode, setDiscountCode] = useState('');
   const [discountValidation, setDiscountValidation] = useState<DiscountValidation | null>(null);
   const [validatingDiscount, setValidatingDiscount] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [depositAcknowledged, setDepositAcknowledged] = useState(false);
   const [contactDetails, setContactDetails] = useState<ContactDetails>({
     name: '',
     email: '',
@@ -428,25 +429,15 @@ function PaymentForm({
   const [slotError, setSlotError] = useState<string | null>(null);
   const [reservation, setReservation] = useState<ReservationInfo | null>(null);
   const [reservationLoading, setReservationLoading] = useState(false);
-  const [reservationError, setReservationError] = useState<string | null>(null);
   const [preserveReservation, setPreserveReservation] = useState(false);
+  const [reservationStatus, setReservationStatus] = useState<'idle' | 'holding' | 'held' | 'error'>('idle');
+  const [reservationCountdown, setReservationCountdown] = useState(0);
+  const [reservationAttempts, setReservationAttempts] = useState(0);
+  const [reservationErrorDetail, setReservationErrorDetail] = useState<string | null>(null);
+  const reserveRetryTimeoutRef = useRef<number | null>(null);
 
   const serviceSlug = deriveServiceSlug(service);
   const serviceIdentifier = serviceSlug || (service?.name ? service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'service');
-
-  const reservationExpiryLabel = useMemo(() => {
-    if (!reservation?.expiresAt) {
-      return null;
-    }
-    const expires = new Date(reservation.expiresAt);
-    if (Number.isNaN(expires.getTime())) {
-      return null;
-    }
-    return expires.toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  }, [reservation?.expiresAt]);
 
   const isContactInfoComplete = useCallback(() => {
     return Boolean(
@@ -495,16 +486,26 @@ function PaymentForm({
             return current;
           });
         }
+        setSelectedSlot(null);
       }
     },
     []
   );
 
-  const reserveSlot = useCallback(
-    async (slot: SlotSelectionPayload, contact: ContactDetails) => {
-      const previousReservation = reservation;
-      setReservationLoading(true);
-      setReservationError(null);
+  const clearPendingReserve = useCallback(() => {
+    if (reserveRetryTimeoutRef.current) {
+      window.clearTimeout(reserveRetryTimeoutRef.current);
+      reserveRetryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const activeSlotKeyRef = useRef<string | null>(null);
+
+  const performReserve = useCallback(
+    async (slot: SlotSelectionPayload, contact: ContactDetails, attempt = 1) => {
+      activeSlotKeyRef.current = slot.startTime;
+      setReservationAttempts(attempt);
+      setReservationStatus('holding');
 
       const start = slot.startTime;
       let end: string | null = null;
@@ -555,28 +556,70 @@ function PaymentForm({
           throw new Error('Failed to reserve slot: missing reservation ID');
         }
 
-        setReservation(newReservation);
-        setReservationError(null);
-
-        if (previousReservation && previousReservation.id !== newReservation.id) {
-          void releaseReservation(previousReservation.id, { preserveState: true });
+        if (activeSlotKeyRef.current !== slot.startTime) {
+          return;
         }
-      } catch (error: any) {
-        console.error('Failed to reserve slot:', error);
-        setReservationError(error.message || 'Unable to reserve this time. Please try again.');
-      } finally {
+
+        clearPendingReserve();
+        if (reservation && reservation.id && reservation.id !== newReservation.id) {
+          void releaseReservation(reservation.id, { preserveState: true });
+        }
+        setReservation(newReservation);
+        setReservationStatus('held');
+        setReservationCountdown(120);
         setReservationLoading(false);
+        setReservationErrorDetail(null);
+        setPreserveReservation(false);
+      } catch (error: any) {
+        if (activeSlotKeyRef.current !== slot.startTime) {
+          return;
+        }
+
+        console.error('Failed to reserve slot:', error);
+        const message = error?.message || 'Unable to reserve this time. Please try again.';
+
+        if (attempt < 3) {
+          setReservationErrorDetail(`${message} Retrying (${attempt + 1}/3)...`);
+          reserveRetryTimeoutRef.current = window.setTimeout(() => {
+            performReserve(slot, contact, attempt + 1);
+          }, 1500 * attempt);
+        } else {
+          clearPendingReserve();
+          setReservationLoading(false);
+          setReservationStatus('error');
+          setReservationErrorDetail(message);
+          activeSlotKeyRef.current = null;
+          setReservation(null);
+        }
       }
     },
-    [reservation, releaseReservation, serviceSlug]
+    [clearPendingReserve, reservation, releaseReservation, serviceSlug]
+  );
+
+  const reserveSlot = useCallback(
+    (slot: SlotSelectionPayload, contact: ContactDetails) => {
+      clearPendingReserve();
+      setReservationLoading(true);
+      setReservationErrorDetail(null);
+      setReservationAttempts(0);
+      setReservationStatus('holding');
+      performReserve(slot, contact, 1);
+    },
+    [clearPendingReserve, performReserve]
   );
 
   const handleSlotSelection = useCallback(
     (slot: SlotSelectionPayload | null) => {
+      clearPendingReserve();
+
       if (!slot) {
         setSelectedSlot(null);
         setSlotError(null);
-        setReservationError(null);
+        setReservationStatus('idle');
+        setReservationCountdown(0);
+        setReservationErrorDetail(null);
+        setReservationAttempts(0);
+        setReservationLoading(false);
         setPreserveReservation(false);
         if (reservation?.id) {
           void releaseReservation(reservation.id);
@@ -586,10 +629,11 @@ function PaymentForm({
 
       setSelectedSlot(slot);
       setSlotError(null);
-      setReservationError(null);
+      setReservationStatus('holding');
+      setReservationErrorDetail(null);
       setPreserveReservation(false);
     },
-    [releaseReservation, reservation]
+    [clearPendingReserve, releaseReservation, reservation]
   );
 
   // Extract numeric price from string (e.g., "from $150" -> 150)
@@ -617,14 +661,22 @@ function PaymentForm({
     setCurrentAmount(amount);
   }, [paymentType, discountValidation, baseAmount]);
 
+  const { name: contactName, email: contactEmail, phone: contactPhone, notes: contactNotes } = contactDetails;
+
   useEffect(() => {
     if (!selectedSlot) {
-      setReservationError(null);
+      setReservationStatus('idle');
+      setReservationCountdown(0);
+      setReservationErrorDetail(null);
+      setReservationAttempts(0);
+      setReservationLoading(false);
       return;
     }
 
     if (!isContactInfoComplete()) {
-      setReservationError('Enter your contact information to hold this time.');
+      setReservationStatus('idle');
+      setReservationErrorDetail('Enter your contact information to hold this time.');
+      setReservationLoading(false);
       return;
     }
 
@@ -633,21 +685,23 @@ function PaymentForm({
     }
 
     if (reservation && reservation.startTime === selectedSlot.startTime) {
-      setReservationError(null);
       return;
     }
 
     const contact: ContactDetails = {
-      name: contactDetails.name.trim(),
-      email: contactDetails.email.trim(),
-      phone: contactDetails.phone.trim(),
-      notes: contactDetails.notes.trim(),
+      name: contactName.trim(),
+      email: contactEmail.trim(),
+      phone: contactPhone.trim(),
+      notes: contactNotes.trim(),
     };
 
-    void reserveSlot(selectedSlot, contact);
+    reserveSlot(selectedSlot, contact);
   }, [
     selectedSlot,
-    contactDetails,
+    contactName,
+    contactEmail,
+    contactPhone,
+    contactNotes,
     isContactInfoComplete,
     reservation,
     reservationLoading,
@@ -655,12 +709,42 @@ function PaymentForm({
   ]);
 
   useEffect(() => {
+    if (paymentType !== 'deposit') {
+      setDepositAcknowledged(false);
+    }
+  }, [paymentType]);
+
+  useEffect(() => {
     return () => {
+      clearPendingReserve();
       if (reservation?.id && !preserveReservation) {
         void releaseReservation(reservation.id);
       }
     };
-  }, [reservation, preserveReservation, releaseReservation]);
+  }, [reservation, preserveReservation, releaseReservation, clearPendingReserve]);
+
+  useEffect(() => {
+    if (reservationStatus !== 'held' || reservationCountdown <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setReservationCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [reservationStatus, reservationCountdown]);
+
+  useEffect(() => {
+    if (reservationStatus === 'held' && reservationCountdown === 0 && reservation?.id) {
+      setReservationStatus('error');
+      const expirationMessage = 'Reservation timed out. Please select another time.';
+      setReservationErrorDetail(expirationMessage);
+      setReservationLoading(false);
+      void releaseReservation(reservation.id);
+      setReservation(null);
+    }
+  }, [reservationStatus, reservationCountdown, reservation, releaseReservation]);
 
   const validateDiscount = async () => {
     if (!discountCode.trim()) {
@@ -711,6 +795,11 @@ function PaymentForm({
       return;
     }
 
+    if (paymentType === 'deposit' && !depositAcknowledged) {
+      setError('Please acknowledge that the remaining balance will be due at the appointment.');
+      return;
+    }
+
     if (!selectedSlot) {
       setSlotError('Please choose an appointment time before continuing.');
       return;
@@ -730,7 +819,7 @@ function PaymentForm({
 
     if (!reservation || reservation.startTime !== selectedSlot.startTime) {
       setSlotError('We need to hold your selected time before continuing. Please wait a moment or reselect the slot.');
-      setReservationError((prev) =>
+      setReservationErrorDetail((prev) =>
         prev || 'We are securing this time for you. If this message persists, pick the time again.'
       );
       return;
@@ -1011,24 +1100,26 @@ function PaymentForm({
         </div>
       )}
 
-      {reservationLoading && (
+      {reservationStatus === 'holding' && (
         <div className="mb-3 flex items-center gap-2 text-sm text-warm-gray">
           <Loader2 className="animate-spin" size={16} />
-          Holding your selected time...
+          {reservationErrorDetail
+            ? reservationErrorDetail
+            : `Reserving your selected time... (attempt ${reservationAttempts || 1}/3)`}
         </div>
       )}
 
-      {reservation && selectedSlot && reservation.startTime === selectedSlot.startTime && (
+      {reservationStatus === 'held' && reservation && selectedSlot && (
         <div className="mb-3 flex items-center gap-2 text-sm text-green-600">
           <CheckCircle2 size={16} />
-          Slot reserved{reservationExpiryLabel ? ` until ${reservationExpiryLabel}` : ''}.
+          Slot reserved. Complete checkout within {reservationCountdown}s.
         </div>
       )}
 
-      {reservationError && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700 flex items-center gap-2">
+      {reservationStatus === 'error' && reservationErrorDetail && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
           <AlertCircle size={16} />
-          {reservationError}
+          {reservationErrorDetail}
         </div>
       )}
 
@@ -1127,6 +1218,22 @@ function PaymentForm({
             </div>
           </label>
         </div>
+
+        {paymentType === 'deposit' && (
+          <div className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+            <input
+              id="deposit-ack"
+              type="checkbox"
+              checked={depositAcknowledged}
+              onChange={(event) => setDepositAcknowledged(event.target.checked)}
+              className="mt-1"
+              disabled={processing}
+            />
+            <label htmlFor="deposit-ack" className="text-xs text-yellow-700 leading-relaxed">
+              I understand the remaining balance will be due at the start of my appointment.
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Card Input (required for all payment types) */}
@@ -1201,7 +1308,13 @@ function PaymentForm({
         </button>
         <button
           type="submit"
-          disabled={processing || success || !stripe || reservationLoading}
+          disabled={
+            processing ||
+            success ||
+            !stripe ||
+            reservationLoading ||
+            (paymentType === 'deposit' && !depositAcknowledged)
+          }
           className="flex-1 px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {processing ? (
