@@ -3,12 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import {
-  useCalEmbed,
-  openCalBooking,
-  type CalPrefillOptions,
-  extractCalLink,
-} from '@/app/_hooks/useCalEmbed';
+import { useCalEmbed, extractCalLink } from '@/app/_hooks/useCalEmbed';
 
 function VerifyBookingContent() {
   const searchParams = useSearchParams();
@@ -34,7 +29,6 @@ function VerifyBookingContent() {
     const selectedSlotParam = searchParams.get('selectedSlot');
     const contactParam = searchParams.get('contact');
     const reservationParam = searchParams.get('reservation');
-    const metadataParam = searchParams.get('metadata');
 
     if (!token && !paymentIntentId) {
       setStatus('invalid');
@@ -59,19 +53,12 @@ function VerifyBookingContent() {
       }
     }
 
-    let contactPrefill: CalPrefillOptions | null = null;
     if (contactParam) {
       try {
         const parsed = JSON.parse(contactParam);
-        contactPrefill = {
-          name: parsed.name || '',
-          email: parsed.email || '',
-          smsReminderNumber: parsed.phone || '',
-          notes: parsed.notes || '',
-        };
+        console.log('Contact info for booking verification', parsed);
       } catch (error) {
         console.warn('Failed to parse contact prefill payload:', error);
-        contactPrefill = null;
       }
     }
 
@@ -90,17 +77,6 @@ function VerifyBookingContent() {
       }
     }
 
-    let metadataPayload: Record<string, any> | undefined;
-    if (metadataParam) {
-      try {
-        metadataPayload = JSON.parse(metadataParam);
-      } catch (error) {
-        console.warn('Failed to parse metadata payload:', error);
-      }
-    }
-
-    let fallbackTimer: number | undefined;
-
     // Verify token
     const verifyToken = async () => {
       try {
@@ -115,13 +91,10 @@ function VerifyBookingContent() {
           setStatus('valid');
           setBookingInfo(data.booking);
           
-          let publicCalUrl: string | null = null;
-
-          if (privateLinkUrl) {
-            setFallbackUrl(privateLinkUrl);
-            // Redirect immediately to the private link so the reserved slot is honored.
-            window.location.href = privateLinkUrl;
-          } else {
+          const resolvedLink = (() => {
+            if (privateLinkUrl) {
+              return privateLinkUrl;
+            }
             const calParams = new URLSearchParams({
               token: token || '',
               paymentIntentId: paymentIntentId || '',
@@ -136,63 +109,9 @@ function VerifyBookingContent() {
             if (reservationPayload?.id) {
               calParams.append('reservationId', reservationPayload.id);
             }
-
-            publicCalUrl = `https://cal.com/${calLink}?${calParams.toString()}`;
-            setFallbackUrl(publicCalUrl);
-          }
-
-          let slotForCal:
-            | {
-                startTime: string;
-                endTime?: string | null;
-                timezone?: string | null;
-              }
-            | undefined;
-
-          if (reservationPayload?.startTime) {
-            slotForCal = {
-              startTime: reservationPayload.startTime,
-              endTime: reservationPayload.endTime ?? undefined,
-              timezone: reservationPayload.timezone ?? slotPayload?.timezone ?? undefined,
-            };
-          } else if (slotPayload?.startTime) {
-            slotForCal = {
-              startTime: slotPayload.startTime,
-              endTime: undefined,
-              timezone: slotPayload.timezone ?? undefined,
-            };
-          }
-
-          const metadataForCal = {
-            ...(metadataPayload || {}),
-            token,
-            paymentIntentId,
-            reservationId: reservationPayload?.id,
-            privateLink: privateLinkUrl || null,
-          };
-
-          if (!privateLinkUrl) {
-            openCalBooking({
-              calLink,
-              namespace: searchParams.get('serviceSlug') || undefined,
-              slot: slotForCal,
-              prefill: contactPrefill || undefined,
-              metadata: metadataForCal,
-              onClose: () => {
-                if (fallbackTimer) {
-                  window.clearTimeout(fallbackTimer);
-                }
-                router.push('/book');
-              },
-            });
-          }
-
-          const fallbackDestination = privateLinkUrl ?? publicCalUrl;
-          if (fallbackDestination) {
-            fallbackTimer = window.setTimeout(() => {
-              window.location.href = fallbackDestination;
-            }, privateLinkUrl ? 4000 : 6000);
-          }
+            return `https://cal.com/${calLink}?${calParams.toString()}`;
+          })();
+          setFallbackUrl(resolvedLink);
         } else {
           setStatus('invalid');
           if (data.expired) {
@@ -212,11 +131,6 @@ function VerifyBookingContent() {
 
     verifyToken();
 
-    return () => {
-      if (fallbackTimer) {
-        window.clearTimeout(fallbackTimer);
-      }
-    };
   }, [searchParams, router]);
 
   return (
@@ -246,7 +160,7 @@ function VerifyBookingContent() {
               </div>
             )}
             <p className="text-warm-gray mb-4">
-              We opened the scheduling form in a popup. If it doesn&apos;t appear, use the button below.
+              Your payment is confirmed and the time is on hold. Use the button below to finish confirming the appointment in Cal.com.
             </p>
             {fallbackUrl && (
               <button

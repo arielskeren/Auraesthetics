@@ -33,7 +33,7 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 function formatPhoneForBrevo(phone?: string | null): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, '');
-  if (!digits) return null;
+  if (!digits || digits.length < 10 || digits.length > 15) return null;
   if (digits.length === 10) {
     return `+1${digits}`;
   }
@@ -349,8 +349,15 @@ export async function POST(request: NextRequest) {
           expiresAt,
           maxUsageCount: 1,
         });
-      } catch (error) {
-        console.warn('Failed to create Cal.com private link', error);
+      } catch (error: any) {
+        const status = error?.response?.status ?? error?.status ?? null;
+        if (status === 404) {
+          console.warn(
+            `[Cal.com] Private link not available for event type ${numericEventTypeId}. Continuing without private link.`
+          );
+        } else {
+          console.warn('Failed to create Cal.com private link', error);
+        }
       }
     }
 
