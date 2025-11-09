@@ -46,6 +46,21 @@ function formatPhoneForBrevo(phone?: string | null): string | null {
   return `+${digits}`;
 }
 
+function normalizePhoneForPrefill(phone?: string | null): string | undefined {
+  const formatted = formatPhoneForBrevo(phone);
+  if (formatted) {
+    return formatted;
+  }
+  const digits = phone?.replace(/\D/g, '') ?? '';
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  if (digits.length > 10 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  return undefined;
+}
+
 async function upsertBrevoBookingContact(attendee: {
   name: string;
   email: string;
@@ -344,7 +359,7 @@ export async function POST(request: NextRequest) {
           params: {
             name: attendeeDetails.name,
             email: attendeeDetails.email,
-            smsReminderNumber: normalizePhoneForSubmit(attendeeDetails.phone),
+          smsReminderNumber: normalizePhoneForPrefill(attendeeDetails.phone),
             notes: attendeeDetails.notes || undefined,
             "prefill[metadata]": JSON.stringify({
               slot: {

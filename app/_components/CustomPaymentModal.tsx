@@ -705,8 +705,8 @@ function PaymentForm({
           setSelectedSlot(null);
         }
       }
-    },
-    [clearPendingReserve, reservation, releaseReservation]
+  },
+  [clearPendingReserve, reservation, releaseReservation, setModalStage]
   );
 
   const reserveSlot = useCallback(
@@ -933,7 +933,7 @@ function PaymentForm({
     if (!reservation && reservationStatus !== 'holding') {
       setModalStage('availability');
     }
-  }, [reservationStatus, reservation, setModalStage, setModalStage]);
+  }, [reservationStatus, reservation, setModalStage]);
 
   useEffect(() => {
     console.log('[PaymentForm state]', {
