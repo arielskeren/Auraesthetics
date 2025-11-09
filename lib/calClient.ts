@@ -1,4 +1,4 @@
-const CAL_API_KEY = process.env.CAL_API_KEY;
+const CAL_API_KEY = process.env.CAL_API_KEY || process.env.CAL_COM_API_KEY;
 const CAL_API_VERSION_SLOTS = process.env.CAL_API_VERSION_SLOTS;
 const CAL_API_VERSION_BOOKINGS = process.env.CAL_API_VERSION_BOOKINGS;
 
@@ -124,7 +124,7 @@ async function applyRateLimit(responseHeaders: Record<string, any>) {
 }
 
 function createClient(): AxiosInstance {
-  const apiKey = process.env.CAL_COM_API_KEY;
+  const apiKey = process.env.CAL_API_KEY || process.env.CAL_COM_API_KEY;
   if (!apiKey) {
     throw new Error('CAL_COM_API_KEY is not set');
   }
