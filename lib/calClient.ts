@@ -15,7 +15,7 @@ const resolveFamily = (path: string, explicit?: CalApiFamily): CalApiFamily => {
   return path.startsWith('slots') ? 'slots' : 'bookings';
 };
 
-const resolveVersion = (family: CalApiFamily) => {
+const resolveFamilyVersion = (family: CalApiFamily) => {
   const version =
     family === 'slots' ? CAL_API_VERSION_SLOTS : CAL_API_VERSION_BOOKINGS;
   if (!version) {
@@ -36,7 +36,7 @@ export async function calFetch(
   }
 
   const family = resolveFamily(path, init?.family);
-  const version = resolveVersion(family);
+  const version = resolveFamilyVersion(family);
   const url = `https://api.cal.com/v2/${path}`;
 
   const headers = new Headers(init?.headers);
@@ -126,7 +126,7 @@ async function applyRateLimit(responseHeaders: Record<string, any>) {
 function createClient(): AxiosInstance {
   const apiKey = process.env.CAL_API_KEY || process.env.CAL_COM_API_KEY;
   if (!apiKey) {
-    throw new Error('CAL_COM_API_KEY is not set');
+    throw new Error('CAL_API_KEY is not configured');
   }
 
   const instance = axios.create({
