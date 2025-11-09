@@ -156,7 +156,6 @@ async function autoConfirmCalBooking({
         eventTypeId: Number(selectedSlot.eventTypeId),
         start: selectedSlot.startTime,
         timezone: selectedSlot.timezone ?? null,
-        paymentIntentId: paymentIntent.id,
         ...attemptInfo,
       },
     };
