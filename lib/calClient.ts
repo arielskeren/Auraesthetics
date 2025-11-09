@@ -1,3 +1,60 @@
+const CAL_API_KEY = process.env.CAL_API_KEY;
+const CAL_API_VERSION_SLOTS = process.env.CAL_API_VERSION_SLOTS;
+const CAL_API_VERSION_BOOKINGS = process.env.CAL_API_VERSION_BOOKINGS;
+
+type CalApiFamily = 'slots' | 'bookings';
+
+interface CalFetchInit extends RequestInit {
+  family?: CalApiFamily;
+}
+
+const resolveFamily = (path: string, explicit?: CalApiFamily): CalApiFamily => {
+  if (explicit) {
+    return explicit;
+  }
+  return path.startsWith('slots') ? 'slots' : 'bookings';
+};
+
+const resolveVersion = (family: CalApiFamily) => {
+  const version =
+    family === 'slots' ? CAL_API_VERSION_SLOTS : CAL_API_VERSION_BOOKINGS;
+  if (!version) {
+    throw new Error(
+      `Missing Cal.com API version for ${family}. Set CAL_API_VERSION_${family.toUpperCase()}.`
+    );
+  }
+  return version;
+};
+
+export async function calFetch(
+  path: string,
+  body?: unknown,
+  init?: CalFetchInit
+): Promise<Response> {
+  if (!CAL_API_KEY) {
+    throw new Error('CAL_API_KEY is not configured.');
+  }
+
+  const family = resolveFamily(path, init?.family);
+  const version = resolveVersion(family);
+  const url = `https://api.cal.com/v2/${path}`;
+
+  const headers = new Headers(init?.headers);
+  headers.set('Content-Type', 'application/json');
+  headers.set('Authorization', `Bearer ${CAL_API_KEY}`);
+  headers.set('cal-api-version', version);
+
+  const fetchInit: RequestInit = {
+    method: init?.method ?? (body ? 'POST' : 'GET'),
+    ...init,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
+  };
+
+  return fetch(url, fetchInit);
+}
+
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 const CAL_API_BASE_URL = 'https://api.cal.com/v2/';

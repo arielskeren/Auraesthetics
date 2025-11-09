@@ -1,12 +1,190 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getSqlClient } from '@/app/_utils/db';
+import { calFetch } from '@/lib/calClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+const normalizeToE164 = (phone?: string | null): string | undefined => {
+  if (!phone) return undefined;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  if (digits.length > 10 && digits.length <= 15) {
+    return digits.startsWith('+') ? digits : `+${digits}`;
+  }
+  if (phone.trim().startsWith('+') && digits.length >= 10 && digits.length <= 15) {
+    return phone.trim();
+  }
+  return undefined;
+};
+
+type SqlClient = ReturnType<typeof getSqlClient>;
+
+interface BookingRow {
+  id: string | number;
+  metadata?: any;
+}
+
+const shouldSkipAutoConfirm = (metadata: any, paymentIntentId: string) =>
+  metadata?.calBooking?.status === 'confirmed' &&
+  metadata?.calBooking?.paymentIntentId === paymentIntentId;
+
+async function autoConfirmCalBooking({
+  sql,
+  booking,
+  paymentIntent,
+}: {
+  sql: SqlClient;
+  booking: BookingRow;
+  paymentIntent: Stripe.PaymentIntent;
+}) {
+  const metadata =
+    booking.metadata && typeof booking.metadata === 'object'
+      ? booking.metadata
+      : {};
+
+  const selectedSlot = metadata.selectedSlot;
+  const attendee = metadata.attendee;
+
+  if (!selectedSlot?.eventTypeId || !selectedSlot?.startTime || !attendee?.name || !attendee?.email) {
+    return;
+  }
+
+  if (!process.env.CAL_API_KEY) {
+    console.warn('[Cal] CAL_API_KEY not configured; skipping auto-confirm.');
+    return;
+  }
+
+  if (shouldSkipAutoConfirm(metadata, paymentIntent.id)) {
+    return;
+  }
+
+  const attendeePayload: Record<string, unknown> = {
+    name: attendee.name,
+    email: attendee.email,
+    timeZone: selectedSlot.timezone ?? 'America/New_York',
+  };
+
+  const sms = normalizeToE164(attendee.phone);
+  if (sms) {
+    attendeePayload.smsReminderNumber = sms;
+  }
+
+  const attemptInfo = {
+    lastAttemptAt: new Date().toISOString(),
+    paymentIntentId: paymentIntent.id,
+  };
+
+  try {
+    const createResponse = await calFetch(
+      'bookings',
+      {
+        start: selectedSlot.startTime,
+        eventTypeId: Number(selectedSlot.eventTypeId),
+        attendee: attendeePayload,
+        metadata: {
+          source: 'website',
+          paymentId: paymentIntent.id,
+          reservationId: metadata.reservation?.id ?? null,
+          bookingId: booking.id,
+        },
+      },
+      { family: 'bookings' }
+    );
+
+    if (!createResponse.ok) {
+      const text = await createResponse.text();
+      console.warn('[Cal] Booking creation failed', text);
+      const failedMetadata = {
+        ...metadata,
+        calBooking: {
+          status: 'error',
+          error: text,
+          ...attemptInfo,
+        },
+      };
+      await sql`
+        UPDATE bookings
+        SET metadata = ${JSON.stringify(failedMetadata)}::jsonb,
+            updated_at = NOW()
+        WHERE id = ${booking.id}
+      `;
+      return;
+    }
+
+    const calBooking = await createResponse.json();
+
+    const confirmResponse = await calFetch(
+      `bookings/${calBooking.uid}/confirm`,
+      undefined,
+      { family: 'bookings', method: 'POST' }
+    );
+
+    if (!confirmResponse.ok) {
+      const text = await confirmResponse.text();
+      console.warn('[Cal] Booking confirm failed', text);
+      const failedMetadata = {
+        ...metadata,
+        calBooking: {
+          status: 'error',
+          uid: calBooking.uid,
+          error: text,
+          ...attemptInfo,
+        },
+      };
+      await sql`
+        UPDATE bookings
+        SET metadata = ${JSON.stringify(failedMetadata)}::jsonb,
+            updated_at = NOW()
+        WHERE id = ${booking.id}
+      `;
+      return;
+    }
+
+    const successMetadata = {
+      ...metadata,
+      calBooking: {
+        status: 'confirmed',
+        uid: calBooking.uid,
+        confirmedAt: new Date().toISOString(),
+        eventTypeId: Number(selectedSlot.eventTypeId),
+        start: selectedSlot.startTime,
+        timezone: selectedSlot.timezone ?? null,
+        paymentIntentId: paymentIntent.id,
+        ...attemptInfo,
+      },
+    };
+
+    await sql`
+      UPDATE bookings
+      SET metadata = ${JSON.stringify(successMetadata)}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${booking.id}
+    `;
+  } catch (error) {
+    console.error('[Cal] Auto-confirm error', error);
+    const failedMetadata = {
+      ...metadata,
+      calBooking: {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        ...attemptInfo,
+      },
+    };
+    await sql`
+      UPDATE bookings
+      SET metadata = ${JSON.stringify(failedMetadata)}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${booking.id}
+    `;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -117,6 +295,11 @@ export async function POST(request: NextRequest) {
                 updated_at = NOW()
               WHERE id = ${booking.id}
             `;
+            await autoConfirmCalBooking({
+              sql,
+              booking: { id: booking.id, metadata: updatedMetadata },
+              paymentIntent,
+            });
           } catch (error) {
             console.error('Error updating booking:', error);
           }
