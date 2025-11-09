@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
-import { createCalPrivateLink, CalPrivateLink } from '@/lib/calPrivateLinks';
 import { buildPublicCalUrl } from '@/lib/calPublicUrl';
 import crypto from 'crypto';
 
@@ -332,7 +331,6 @@ export async function POST(request: NextRequest) {
       depositPercent: paymentIntent.metadata?.depositPercent || '50',
     };
 
-    let calPrivateLink: CalPrivateLink | null = null;
     const rawEventTypeId = slotDetails.eventTypeId;
     const numericEventTypeId =
       typeof rawEventTypeId === 'string'
@@ -346,31 +344,20 @@ export async function POST(request: NextRequest) {
           params: {
             name: attendeeDetails.name,
             email: attendeeDetails.email,
+            smsReminderNumber: normalizePhoneForSubmit(attendeeDetails.phone),
             notes: attendeeDetails.notes || undefined,
+            "prefill[metadata]": JSON.stringify({
+              slot: {
+                startTime: slotDetails.startTime,
+                timezone: slotDetails.timezone,
+                duration: slotDetails.duration,
+                label: slotDetails.label,
+              },
+              reservation: reservationDetails,
+            }),
           },
         })
       : null;
-
-    if (Number.isFinite(numericEventTypeId)) {
-      try {
-        const expiresAtMs = Date.now() + 30 * 60 * 1000; // 30 minutes
-        const expiresAt = new Date(expiresAtMs).toISOString();
-
-        calPrivateLink = await createCalPrivateLink(numericEventTypeId, {
-          expiresAt,
-          maxUsageCount: 1,
-        });
-      } catch (error: any) {
-        const status = error?.response?.status ?? error?.status ?? null;
-        if (status === 404) {
-          console.warn(
-            `[Cal.com] Private link not available for event type ${numericEventTypeId}. Continuing without private link.`
-          );
-        } else {
-          console.warn('Failed to create Cal.com private link', error);
-        }
-      }
-    }
 
     const existingRows = Array.isArray(existingResult)
       ? existingResult
@@ -400,7 +387,6 @@ export async function POST(request: NextRequest) {
           ...stripeMetadata,
           lastSucceededIntentAt: new Date().toISOString(),
         },
-        calPrivateLink: calPrivateLink ?? existingMetadata?.calPrivateLink ?? null,
         publicCalBooking: {
           url: publicCalUrl?.url ?? existingMetadata?.publicCalBooking?.url ?? null,
           parts: publicCalUrl?.parts ?? existingMetadata?.publicCalBooking?.parts ?? null,
@@ -454,7 +440,6 @@ export async function POST(request: NextRequest) {
         stripe: {
           lastSucceededIntentAt: new Date().toISOString(),
         },
-        calPrivateLink: calPrivateLink ?? null,
         publicCalBooking: {
           url: publicCalUrl?.url ?? null,
           parts: publicCalUrl?.parts ?? null,
@@ -509,13 +494,6 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
       paymentIntentId,
       paymentStatus: paymentIntent.status,
-      calPrivateLink: calPrivateLink
-        ? {
-            bookingUrl: calPrivateLink.bookingUrl,
-            expiresAt: calPrivateLink.expiresAt,
-            linkId: calPrivateLink.linkId,
-          }
-        : null,
       publicBookingUrl: publicCalUrl?.url ?? null,
     });
   } catch (error: any) {

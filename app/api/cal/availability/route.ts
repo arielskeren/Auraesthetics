@@ -146,6 +146,12 @@ export async function GET(request: NextRequest) {
         source: 'cal.com',
         bookingUrl: publicBookingUrl,
         calUrlParts: urlParts,
+        slugMapping: {
+          username: urlParts.username ?? null,
+          organizationSlug: urlParts.organizationSlug ?? null,
+          teamSlug: urlParts.teamSlug ?? null,
+          eventSlug: urlParts.eventSlug ?? eventType.slug ?? null,
+        },
       },
       })
     );
@@ -158,6 +164,12 @@ export async function GET(request: NextRequest) {
         {
           error: 'Failed to fetch availability from Cal.com',
           details: error.response?.data || error.message,
+          slugMapping: {
+            organizationSlug: urlParts.organizationSlug ?? null,
+            teamSlug: urlParts.teamSlug ?? null,
+            username: urlParts.username ?? null,
+            eventSlug: urlParts.eventSlug ?? null,
+          },
         },
         { status }
       )

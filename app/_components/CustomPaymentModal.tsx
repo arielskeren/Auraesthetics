@@ -72,12 +72,6 @@ interface ReservationInfo {
   timezone: string | null;
 }
 
-interface CalPrivateLinkInfo {
-  bookingUrl: string;
-  expiresAt: string;
-  linkId: string;
-}
-
 function formatPhoneInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 15);
   if (!digits) return '';
@@ -458,7 +452,6 @@ function PaymentForm({
     slot: SlotSelectionPayload;
     contact: ContactDetails;
     reservation: ReservationInfo;
-    calPrivateLink?: CalPrivateLinkInfo | null;
     publicBookingUrl?: string | null;
   }) => void;
   onClose: () => void;
@@ -1171,7 +1164,6 @@ function PaymentForm({
                 slot: selectedSlot,
                 contact: trimmedContact,
                 reservation: reservationSnapshot,
-                calPrivateLink: tokenData.calPrivateLink ?? null,
                 publicBookingUrl: tokenData.publicBookingUrl ?? null,
               });
             } catch (redirectError) {
@@ -1641,7 +1633,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [contactDetails, setContactDetails] = useState<ContactDetails | null>(null);
   const [reservationInfo, setReservationInfo] = useState<ReservationInfo | null>(null);
   const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
-  const [calPrivateLinkInfo, setCalPrivateLinkInfo] = useState<CalPrivateLinkInfo | null>(null);
   const [publicBookingUrl, setPublicBookingUrl] = useState<string | null>(null);
   const serviceSlug = deriveServiceSlug(service);
   const primaryPhoto = useMemo(() => {
@@ -1653,7 +1644,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   useEffect(() => {
     if (!isOpen) {
       setModalStage('availability');
-      setCalPrivateLinkInfo(null);
       setPublicBookingUrl(null);
     }
   }, [isOpen, setModalStage]);
@@ -1666,7 +1656,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     slot,
     contact,
     reservation,
-    calPrivateLink,
     publicBookingUrl: publicUrl,
   }: {
     paymentIntentId: string;
@@ -1676,7 +1665,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     slot: SlotSelectionPayload;
     contact: ContactDetails;
     reservation: ReservationInfo;
-    calPrivateLink?: CalPrivateLinkInfo | null;
     publicBookingUrl?: string | null;
   }) => {
     setPaymentIntentId(paymentIntentId);
@@ -1685,13 +1673,10 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     setSlotSelection(slot);
     setContactDetails(contact);
     setReservationInfo(reservation);
-    setCalPrivateLinkInfo(calPrivateLink ?? null);
     setPublicBookingUrl(publicUrl ?? null);
     
     // Redirect to verification page first, then to Cal.com
-    const baseCalLink = calPrivateLink?.bookingUrl
-      ? extractCalLink(calPrivateLink.bookingUrl)
-      : publicUrl
+    const baseCalLink = publicUrl
       ? extractCalLink(publicUrl)
       : service?.calBookingUrl
       ? extractCalLink(service.calBookingUrl)
@@ -1707,7 +1692,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
           serviceSlug,
           contact,
           reservation,
-          calPrivateLink,
         };
         
         // Build verify URL with all required parameters
@@ -1728,10 +1712,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
       if (contact) {
         params.append('contact', JSON.stringify(contact));
       }
-      if (calPrivateLink?.bookingUrl) {
-        params.append('privateLink', calPrivateLink.bookingUrl);
-        params.append('privateLinkExpiresAt', calPrivateLink.expiresAt);
-      }
       if (publicUrl) {
         params.append('publicUrl', publicUrl);
       }
@@ -1748,7 +1728,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
         }
     } else {
       console.error('No Cal.com link or booking token found:', {
-        calPrivateLink,
+        publicUrl,
         serviceLink: service?.calBookingUrl,
         bookingToken,
         service,
