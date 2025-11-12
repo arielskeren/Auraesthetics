@@ -1,16 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Lock,
-} from 'lucide-react';
+import { X, Loader2, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
@@ -137,60 +128,7 @@ function deriveServiceSlug(service: { slug?: string; calBookingUrl?: string | nu
   return '';
 }
 
-interface AvailabilitySlot {
-  slot: string;
-  duration?: number | null;
-  attendeeTimezone?: string | null;
-}
-
-interface AvailabilityData {
-  slug: string;
-  eventTypeId: number;
-  title: string;
-  requiresConfirmation: boolean;
-  duration: number | null;
-  availability: AvailabilitySlot[];
-  meta: {
-    fetchedAt: string;
-    startTime: string;
-    endTime: string;
-    timezone: string;
-    rateLimitRemaining: number | null;
-    source: string;
-  };
-}
-
-function formatDateHeading(date: Date, options?: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'America/New_York',
-    ...options,
-  }).format(date);
-}
-
-function formatTimeLabel(date: Date) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'America/New_York',
-  }).format(date);
-}
-
 function LegacyAvailabilityPanel({
-  serviceSlug,
-  selectedSlot,
-  onSelectSlot,
-  hiddenSlotStart,
-  isSelectionDisabled,
-}: {
-  serviceSlug: string;
-  selectedSlot: SlotSelectionPayload | null;
-  onSelectSlot: (slot: SlotSelectionPayload | null) => void;
-  hiddenSlotStart?: string | null;
-  isSelectionDisabled?: boolean;
-}) {
   const [pageOffset, setPageOffset] = useState(0);
   const [daysPerPage, setDaysPerPage] = useState(7);
   const [loading, setLoading] = useState(false);
