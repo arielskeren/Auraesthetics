@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X, Loader2, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
@@ -216,7 +216,7 @@ function ModernPaymentSection({ service, onSuccess, onClose }: ModernPaymentSect
   }, [discountCode, baseAmount]);
 
   const handlePayment = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!stripe || !elements) {
         setError('Stripe is not loaded. Please refresh the page.');
@@ -609,7 +609,6 @@ function ModernPaymentSection({ service, onSuccess, onClose }: ModernPaymentSect
                   : undefined
                 : undefined
             }
-            onClick={disableSubmit ? undefined : undefined}
           >
             {processing ? (
               <>
