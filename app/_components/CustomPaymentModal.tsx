@@ -2086,7 +2086,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   useBodyScrollLock(isOpen);
   useCalEmbed();
 
-  const [hasContinued, setHasContinued] = useState(false);
   const [paymentUnlocked, setPaymentUnlocked] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessPayload | null>(null);
   const [hasMountedCal, setHasMountedCal] = useState(false);
@@ -2126,7 +2125,6 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
 
   useEffect(() => {
     if (!isOpen) {
-      setHasContinued(false);
       setPaymentUnlocked(false);
       setPaymentSuccess(null);
       setHasMountedCal(false);
@@ -2245,25 +2243,11 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     (payload: PaymentSuccessPayload) => {
       setPaymentSuccess(payload);
       setPaymentUnlocked(true);
-      if (!hasContinued) {
-        setHasContinued(true);
-      }
     },
-    [hasContinued]
+    []
   );
 
   if (!service) return null;
-
-  const stepLabel = !hasContinued
-    ? 'Step 1 · Review availability'
-    : !paymentUnlocked
-    ? 'Step 2 · Pay & unlock scheduling'
-    : 'Step 3 · Choose appointment time';
-  const stepDescription = !hasContinued
-    ? 'Availability is informational only. Continue to payment when ready.'
-    : !paymentUnlocked
-    ? 'Enter your details and payment to unlock the scheduler.'
-    : 'Scheduler is now unlocked. Pick the time that works best for you.';
 
   return (
     <AnimatePresence>
@@ -2330,44 +2314,18 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-warm-gray">
-                          Review availability, complete payment, then schedule right away.
+                          Enter your details, complete payment, then pick your appointment without leaving this page.
                         </p>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="hidden md:block absolute right-0 top-[58px]">
-                    <div className="min-w-[220px] rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3.5 py-2.5 shadow-sm text-right">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
-                        Current Step
-                      </p>
-                      <p className="text-sm font-semibold text-charcoal">{stepLabel}</p>
-                      <p className="text-xs text-warm-gray mt-1 leading-snug">{stepDescription}</p>
-                    </div>
-                  </div>
-
-                  <div className="md:hidden mt-3 rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3 py-2 shadow-sm">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
-                      Current Step
-                    </p>
-                    <p className="text-sm font-semibold text-charcoal">{stepLabel}</p>
-                    <p className="text-xs text-warm-gray mt-1 leading-snug">{stepDescription}</p>
                   </div>
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)]">
                   <div className="space-y-6">
-                    <AvailabilityPreview
-                      serviceSlug={serviceSlug}
-                      serviceDuration={service.duration}
-                      onContinue={() => setHasContinued(true)}
-                      hasContinued={hasContinued}
-                    />
-
                     <Elements stripe={stripePromise}>
                       <ModernPaymentSection
                         service={service}
-                        isActive={hasContinued}
                         onSuccess={handlePaymentSuccess}
                         onClose={onClose}
                       />
