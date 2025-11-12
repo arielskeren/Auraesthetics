@@ -1851,9 +1851,16 @@ function AvailabilityPreview({ serviceSlug, serviceDuration, onContinue, hasCont
         </div>
 
         <Button
-          onClick={onContinue}
+          onClick={loading || !serviceSlug ? undefined : onContinue}
           className="w-full md:w-auto"
-          disabled={loading || !serviceSlug}
+          variant={loading || !serviceSlug ? 'disabled' : 'primary'}
+          tooltip={
+            !serviceSlug
+              ? 'Availability is still being linked for this service.'
+              : loading
+              ? 'Hang tight—availability is loading.'
+              : undefined
+          }
         >
           {hasContinued ? 'Scroll to payment section ↓' : 'Continue to pay and book'}
         </Button>
