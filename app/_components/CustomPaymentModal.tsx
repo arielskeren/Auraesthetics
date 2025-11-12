@@ -39,6 +39,7 @@ interface ModernPaymentSectionProps {
   service: ServiceSummary;
   onClose: () => void;
   onSuccess: (payload: PaymentSuccessPayload) => void;
+  onContactChange: (contact: ContactDetails) => void;
 }
 
 interface PaymentSuccessPayload {
@@ -116,7 +117,7 @@ function extractNumericPrice(priceString: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-function ModernPaymentSection({ service, onSuccess, onClose }: ModernPaymentSectionProps) {
+function ModernPaymentSection({ service, onSuccess, onClose, onContactChange }: ModernPaymentSectionProps) {
   const stripe = useStripe();
   const elements = useElements();
 
@@ -140,6 +141,10 @@ function ModernPaymentSection({ service, onSuccess, onClose }: ModernPaymentSect
     phone: '',
     notes: '',
   });
+  useEffect(() => {
+    onContactChange(contactDetails);
+  }, [contactDetails, onContactChange]);
+
   const [contactErrors, setContactErrors] = useState<Partial<Record<keyof ContactDetails, string>>>({});
 
   const baseAmount = useMemo(() => extractNumericPrice(service.price), [service.price]);
@@ -646,6 +651,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
   const [paymentUnlocked, setPaymentUnlocked] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessPayload | null>(null);
   const [hasMountedCal, setHasMountedCal] = useState(false);
+  const [contactPrefill, setContactPrefill] = useState<ContactDetails | null>(null);
 
   const serviceSlug = deriveServiceSlug(service);
   const primaryPhoto = useMemo(() => {
@@ -685,6 +691,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
       setPaymentUnlocked(false);
       setPaymentSuccess(null);
       setHasMountedCal(false);
+      setContactPrefill(null);
       const container = document.getElementById(inlineElementId);
       if (container) {
         container.innerHTML = '';
@@ -765,29 +772,50 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     return () => window.clearInterval(interval);
   }, [isOpen, calLink, inlineElementId, namespace, inlineConfig, uiConfig]);
 
+  const applyCalPrefill = useCallback(
+    (details: ContactDetails | null) => {
+      if (!details || typeof window === 'undefined') {
+        return;
+      }
+      const formattedPhone = normalizePhoneForSubmit(details.phone);
+      const prefillPayload: Record<string, string> = {};
+      if (details.name.trim()) prefillPayload.name = details.name.trim();
+      if (details.email.trim()) prefillPayload.email = details.email.trim();
+      if (formattedPhone.trim()) prefillPayload.smsReminderNumber = formattedPhone;
+      if (details.notes.trim()) prefillPayload.notes = details.notes.trim();
+
+      if (Object.keys(prefillPayload).length === 0) {
+        return;
+      }
+
+      try {
+        window.Cal?.('config', { prefill: prefillPayload });
+      } catch (error) {
+        console.warn('Cal config prefill failed', error);
+      }
+
+      if (namespace && window.Cal?.ns?.[namespace]) {
+        try {
+          window.Cal.ns[namespace]('prefill', prefillPayload);
+        } catch (error) {
+          console.warn('Cal namespace prefill failed', error);
+        }
+      }
+    },
+    [namespace]
+  );
+
   useEffect(() => {
-    if (!isOpen || !paymentSuccess) {
+    if (!paymentUnlocked) {
       return;
     }
-
-    const contact = paymentSuccess.contact;
-    const formattedPhone = normalizePhoneForSubmit(contact.phone);
-
-    try {
-      window.Cal?.('config', {
-        name: contact.name,
-        email: contact.email,
-        smsReminderNumber: formattedPhone,
-        notes: contact.notes,
-      });
-    } catch (error) {
-      console.warn('Failed to prefill Cal embed metadata', error);
-    }
-  }, [isOpen, paymentSuccess]);
+    applyCalPrefill(contactPrefill);
+  }, [paymentUnlocked, contactPrefill, applyCalPrefill]);
 
   const handlePaymentSuccess = useCallback((payload: PaymentSuccessPayload) => {
     setPaymentSuccess(payload);
     setPaymentUnlocked(true);
+    setContactPrefill(payload.contact);
   }, []);
 
   if (!service) {
@@ -865,6 +893,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                         service={service}
                         onSuccess={handlePaymentSuccess}
                         onClose={onClose}
+                        onContactChange={setContactPrefill}
                       />
                     </Elements>
 
