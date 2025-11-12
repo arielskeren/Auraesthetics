@@ -318,6 +318,7 @@ function ModernPaymentSection({ service, onSuccess, onClose }: ModernPaymentSect
       discountValidation,
       discountCode,
       amountDueToday,
+      onSuccess,
     ]
   );
 
@@ -826,6 +827,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                   <div className="flex items-start gap-3 sm:gap-4">
                     {primaryPhoto ? (
                       <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-sand/40 flex-shrink-0 shadow-sm">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={primaryPhoto}
                           alt={`${service.name} preview`}
