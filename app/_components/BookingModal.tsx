@@ -155,7 +155,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                   {/* Info */}
                   <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
                     <p className="text-xs text-warm-gray">
-                      <strong className="text-dark-sage">Note:</strong> Booking opens in a popup calendar through Cal.com with Stripe payment integration.
+                      <strong className="text-dark-sage">Note:</strong> The booking modal now shows live availability first. Complete payment to unlock the Cal.com scheduler without leaving the page.
                     </p>
                   </div>
                 </div>

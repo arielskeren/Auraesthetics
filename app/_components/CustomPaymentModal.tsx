@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from 'lucide-react';
 import { useState, useEffect, FormEvent, useCallback, useMemo, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
@@ -18,10 +19,11 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
-import { extractCalLink } from '../_hooks/useCalEmbed';
+import { extractCalLink, useCalEmbed } from '../_hooks/useCalEmbed';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import Button from './Button';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
+import { getCalEmbedConfigBySlug } from '@/lib/calEventMapping';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -176,7 +178,7 @@ function formatTimeLabel(date: Date) {
   }).format(date);
 }
 
-function AvailabilityPanel({
+function LegacyAvailabilityPanel({
   serviceSlug,
   selectedSlot,
   onSelectSlot,
@@ -436,7 +438,7 @@ function AvailabilityPanel({
   );
 }
 
-function PaymentForm({ 
+function LegacyPaymentForm({ 
   service, 
   onSuccess, 
   onClose,
@@ -1229,7 +1231,7 @@ function PaymentForm({
             </div>
           )}
 
-          <AvailabilityPanel
+          <LegacyAvailabilityPanel
             serviceSlug={serviceSlug}
             selectedSlot={selectedSlot}
             onSelectSlot={handleSlotSelection}
@@ -1624,16 +1626,789 @@ function PaymentForm({
   );
 }
 
+interface AvailabilityPreviewProps {
+  serviceSlug: string;
+  serviceDuration?: string;
+  onContinue: () => void;
+  hasContinued: boolean;
+}
+
+function AvailabilityPreview({ serviceSlug, serviceDuration, onContinue, hasContinued }: AvailabilityPreviewProps) {
+  const [pageOffset, setPageOffset] = useState(0);
+  const [daysPerPage, setDaysPerPage] = useState(7);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<AvailabilityData | null>(null);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      if (typeof window === 'undefined') return;
+      const nextDays = window.innerWidth >= 1024 ? 7 : 3;
+      setDaysPerPage((prev) => {
+        if (prev !== nextDays) {
+          setPageOffset(0);
+        }
+        return nextDays;
+      });
+    };
+
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    setPageOffset(0);
+  }, [serviceSlug]);
+
+  useEffect(() => {
+    if (!serviceSlug) {
+      setData(null);
+      setError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    if (pageOffset > 0) {
+      startDate.setDate(startDate.getDate() + pageOffset * daysPerPage);
+    }
+    const startKey = startDate.toISOString();
+
+    async function fetchAvailability() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `/api/cal/availability?slug=${serviceSlug}&start=${startKey}&days=${daysPerPage}`,
+          { signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to load availability');
+        }
+
+        const payload = (await response.json()) as AvailabilityData;
+        setData(payload);
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        setError(err.message || 'Failed to load availability');
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchAvailability();
+
+    return () => {
+      controller.abort();
+    };
+  }, [serviceSlug, pageOffset, daysPerPage]);
+
+  const startDate = useMemo(() => {
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    if (pageOffset > 0) {
+      base.setDate(base.getDate() + pageOffset * daysPerPage);
+    }
+    return base;
+  }, [pageOffset, daysPerPage]);
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const groupedSlots = useMemo(() => {
+    const availability = data?.availability ?? [];
+    return availability.reduce((acc, slot) => {
+      const date = new Date(slot.slot);
+      const key = date.toISOString().split('T')[0];
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(slot);
+      return acc;
+    }, {} as Record<string, AvailabilitySlot[]>);
+  }, [data]);
+
+  const orderedDays = useMemo(() => {
+    return Array.from({ length: daysPerPage }, (_, idx) => {
+      const day = new Date(startDate);
+      day.setDate(startDate.getDate() + idx);
+      const key = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()))
+        .toISOString()
+        .split('T')[0];
+      return {
+        key,
+        date: day,
+        slots: groupedSlots[key] || [],
+      };
+    });
+  }, [daysPerPage, startDate, groupedSlots]);
+
+  const hasAvailability = (data?.availability?.length ?? 0) > 0;
+
+  return (
+    <div className="border border-sand rounded-lg">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-sand/30 border-b border-sand">
+        <div className="flex items-center gap-2 text-charcoal">
+          <CalendarDays size={18} />
+          <div>
+            <p className="text-sm font-medium">Availability</p>
+            <p className="text-xs text-warm-gray">
+              {formatDateHeading(startDate)} →{' '}
+              {formatDateHeading(new Date(startDate.getTime() + Math.max(daysPerPage - 1, 0) * dayMs))}
+            </p>
+            <p className="text-[11px] text-warm-gray/90">Review before paying — slots are not held yet.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPageOffset((prev) => Math.max(0, prev - 1))}
+            disabled={pageOffset <= 0 || loading}
+            className="p-2 rounded-full border border-sage-dark text-sage-dark hover:bg-sand/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label={`Previous ${daysPerPage} days`}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPageOffset((prev) => prev + 1)}
+            disabled={loading}
+            className="p-2 rounded-full border border-sage-dark text-sage-dark hover:bg-sand/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label={`Next ${daysPerPage} days`}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-warm-gray">
+            <Loader2 className="animate-spin" size={16} />
+            Loading available times...
+          </div>
+        )}
+
+        {error && (
+          <div className="text-sm text-red-600 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && !serviceSlug && (
+          <div className="text-sm text-warm-gray bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+            Availability will appear once this service is linked to a Cal.com event type.
+          </div>
+        )}
+
+        {!loading && !error && serviceSlug && orderedDays.length > 0 && (
+          <div className={daysPerPage === 7 ? 'overflow-x-auto lg:overflow-visible' : ''}>
+            <div
+              className={`grid gap-2.5 ${daysPerPage === 7 ? 'min-w-[900px] lg:min-w-0' : ''}`}
+              style={{ gridTemplateColumns: `repeat(${daysPerPage}, minmax(0, 1fr))` }}
+            >
+              {orderedDays.map(({ key, date, slots }) => (
+                <div key={key} className="border border-sand rounded-lg p-2.5 flex flex-col gap-2">
+                  <p className="text-sm font-medium text-charcoal">{formatDateHeading(date)}</p>
+
+                  {slots.length === 0 ? (
+                    <div className="text-[11px] text-warm-gray italic">No availability</div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {slots.map((slot) => (
+                        <div
+                          key={slot.slot}
+                          className="px-2.5 py-1.5 rounded-md border border-sage-dark text-[13px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap text-sage-dark bg-white"
+                        >
+                          {/* Legacy clickable selection has been disabled to avoid creating unusable reservations. */}
+                          {formatTimeLabel(new Date(slot.slot))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && serviceSlug && orderedDays.length === 0 && (
+          <p className="text-sm text-warm-gray">
+            No openings this week. Try the next week or contact us directly to inquire about availability.
+          </p>
+        )}
+
+        <div className="rounded-lg border border-dark-sage/30 bg-dark-sage/10 px-3 py-3 text-sm text-charcoal">
+          <p className="font-medium">Treatment duration: {serviceDuration || 'See service details'}</p>
+          <p className="text-xs text-warm-gray mt-1">
+            We show live availability before payment. Your time is not held until after checkout.
+          </p>
+        </div>
+
+        <Button
+          onClick={onContinue}
+          className="w-full md:w-auto"
+          disabled={loading || !serviceSlug}
+        >
+          {hasContinued ? 'Scroll to payment section ↓' : 'Continue to pay and book'}
+        </Button>
+
+        {!hasAvailability && !loading && serviceSlug && (
+          <p className="text-xs text-warm-gray/80">
+            Booking opens as soon as new slots are published. You can still continue to payment and schedule later.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface PaymentSuccessPayload {
+  paymentIntentId: string;
+  paymentType: PaymentType;
+  discountCode?: string;
+  amountPaid: number;
+  contact: ContactDetails;
+}
+
+function ModernPaymentSection({
+  service,
+  isActive,
+  onSuccess,
+  onClose,
+}: {
+  service: NonNullable<CustomPaymentModalProps['service']>;
+  isActive: boolean;
+  onSuccess: (payload: PaymentSuccessPayload) => void;
+  onClose: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const [paymentType, setPaymentType] = useState<PaymentType>('full');
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountValidation, setDiscountValidation] = useState<DiscountValidation | null>(null);
+  const [validatingDiscount, setValidatingDiscount] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [depositAcknowledged, setDepositAcknowledged] = useState(false);
+  const [contactDetails, setContactDetails] = useState<ContactDetails>({
+    name: '',
+    email: '',
+    phone: '',
+    notes: '',
+  });
+  const [contactErrors, setContactErrors] = useState<Partial<Record<keyof ContactDetails, string>>>({});
+  const [cardComplete, setCardComplete] = useState(false);
+
+  const extractPrice = (priceString: string): number => {
+    const match = priceString.match(/\$?(\d+(\.\d{1,2})?)/);
+    return match ? parseFloat(match[1]) : 0;
+  };
+
+  const baseAmount = extractPrice(service.price);
+  const currentFinalAmount = discountValidation?.finalAmount || baseAmount;
+  const currentAmount = paymentType === 'deposit' ? currentFinalAmount * 0.5 : currentFinalAmount;
+  const balanceDue =
+    paymentType === 'deposit'
+      ? Number(Math.max(0, currentFinalAmount - currentAmount).toFixed(2))
+      : 0;
+
+  const contactInfoReady = useMemo(() => {
+    return (
+      hasFirstAndLastName(contactDetails.name) &&
+      isValidEmail(contactDetails.email) &&
+      isValidPhoneDisplay(contactDetails.phone)
+    );
+  }, [contactDetails]);
+
+  const validateContactDetails = useCallback(() => {
+    const errors: Partial<Record<keyof ContactDetails, string>> = {};
+
+    if (!hasFirstAndLastName(contactDetails.name)) {
+      errors.name = 'Enter first and last name';
+    }
+
+    if (!isValidEmail(contactDetails.email)) {
+      errors.email = 'Enter a valid email';
+    }
+
+    if (!isValidPhoneDisplay(contactDetails.phone)) {
+      errors.phone = 'Enter a valid phone number';
+    }
+
+    setContactErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [contactDetails]);
+
+  useEffect(() => {
+    if (paymentType !== 'deposit') {
+      setDepositAcknowledged(false);
+    }
+  }, [paymentType]);
+
+  const validateDiscount = async () => {
+    if (!discountCode.trim()) {
+      setDiscountValidation(null);
+      return;
+    }
+
+    setValidatingDiscount(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/payments/validate-discount', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: discountCode.trim().toUpperCase(),
+          amount: baseAmount,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.valid) {
+        setDiscountValidation(data);
+      } else {
+        setDiscountValidation({
+          valid: false,
+          discountAmount: 0,
+          finalAmount: baseAmount,
+          originalAmount: baseAmount,
+        });
+        setError(data.error || 'Invalid discount code');
+      }
+    } catch (err) {
+      setError('Failed to validate discount code');
+      setDiscountValidation(null);
+    } finally {
+      setValidatingDiscount(false);
+    }
+  };
+
+  const handlePayment = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!isActive) {
+      setError('Review availability first, then continue to payment.');
+      return;
+    }
+
+    if (!stripe || !elements) {
+      setError('Stripe is not loaded. Please refresh the page.');
+      return;
+    }
+
+    if (!validateContactDetails()) {
+      setError('Please correct the highlighted contact information.');
+      return;
+    }
+
+    if (paymentType === 'deposit' && !depositAcknowledged) {
+      setError('Please acknowledge that the remaining balance will be due at the appointment.');
+      return;
+    }
+
+    const trimmedContact: ContactDetails = {
+      name: contactDetails.name.trim(),
+      email: contactDetails.email.trim(),
+      phone: normalizePhoneForSubmit(contactDetails.phone),
+      notes: contactDetails.notes.trim(),
+    };
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const intentResponse = await fetch('/api/payments/create-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceId: service.slug || service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-'),
+          serviceName: service.name,
+          amount: baseAmount,
+          discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
+          paymentType,
+          depositPercent: 50,
+          clientName: trimmedContact.name,
+          clientEmail: trimmedContact.email,
+          clientPhone: trimmedContact.phone,
+          clientNotes: trimmedContact.notes,
+        }),
+      });
+
+      if (!intentResponse.ok) {
+        const errorData = await intentResponse.json();
+        throw new Error(errorData.error || 'Failed to create payment intent');
+      }
+
+      const { clientSecret, paymentIntentId, amount: amountCharged } = await intentResponse.json();
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) {
+        throw new Error('Card element not found');
+      }
+
+      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: cardElement,
+        },
+      });
+
+      if (confirmError) {
+        throw new Error(confirmError.message || 'Payment failed');
+      }
+
+      if (
+        paymentIntent?.status === 'succeeded' ||
+        paymentIntent?.status === 'requires_capture' ||
+        paymentIntent?.status === 'processing'
+      ) {
+        setSuccess(true);
+        onSuccess({
+          paymentIntentId,
+          paymentType,
+          discountCode: discountValidation?.valid ? discountCode.toUpperCase() : undefined,
+          amountPaid: typeof amountCharged === 'number' ? amountCharged : currentAmount,
+          contact: trimmedContact,
+        });
+      } else {
+        throw new Error(`Payment status: ${paymentIntent?.status}. Please try again.`);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const disableInputs = !isActive || processing || success;
+
+  return (
+    <form onSubmit={handlePayment} className="space-y-5 sm:space-y-6">
+      <div className="border border-sand rounded-lg p-3 sm:p-4 bg-white space-y-4">
+        <div>
+          <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2">Your Information</h3>
+          {!isActive && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Start by reviewing availability above, then click “Continue to pay and book”.
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="modern-booking-name">
+              Full Name
+            </label>
+            <input
+              id="modern-booking-name"
+              type="text"
+              value={contactDetails.name}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, name: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, name: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="Jane Doe"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+              disabled={disableInputs}
+            />
+            {contactErrors.name && <p className="text-xs text-red-600 mt-1">{contactErrors.name}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="modern-booking-email">
+              Email Address
+            </label>
+            <input
+              id="modern-booking-email"
+              type="email"
+              value={contactDetails.email}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, email: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, email: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="you@example.com"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+              disabled={disableInputs}
+            />
+            {contactErrors.email && <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="modern-booking-phone">
+              Phone Number
+            </label>
+            <input
+              id="modern-booking-phone"
+              type="tel"
+              value={contactDetails.phone}
+              onChange={(event) => {
+                setContactDetails((prev) => ({
+                  ...prev,
+                  phone: formatPhoneInput(event.target.value),
+                }));
+                setContactErrors((prev) => ({ ...prev, phone: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="(555) 123-4567"
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+              disabled={disableInputs}
+            />
+            {contactErrors.phone && <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="modern-booking-notes">
+              Notes (Optional)
+            </label>
+            <textarea
+              id="modern-booking-notes"
+              value={contactDetails.notes}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
+              }}
+              placeholder="Let us know any preferences or special requests."
+              rows={3}
+              className="w-full px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
+              disabled={disableInputs}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-sand rounded-lg p-3 sm:p-4 bg-white space-y-4">
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
+            Discount Code (Optional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={discountCode}
+              onChange={(event) => {
+                setDiscountCode(event.target.value.toUpperCase());
+                setDiscountValidation(null);
+                setError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  if (discountCode.trim() && !processing && !validatingDiscount) {
+                    validateDiscount();
+                  }
+                }
+              }}
+              placeholder="Enter code"
+              className="flex-1 px-3 py-2 sm:px-4 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+              disabled={disableInputs}
+            />
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                validateDiscount();
+              }}
+              disabled={disableInputs || !discountCode.trim()}
+              className="px-3 sm:px-4 py-2 bg-dark-sage text-charcoal rounded-lg font-medium text-sm hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {validatingDiscount ? '...' : 'Apply'}
+            </button>
+          </div>
+          {discountValidation?.valid && (
+            <p className="mt-2 text-sm text-green-600 flex items-center gap-1">
+              <CheckCircle2 size={16} />
+              Discount applied! ${discountValidation.discountAmount.toFixed(2)} off
+            </p>
+          )}
+          {discountValidation && !discountValidation.valid && discountCode && (
+            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+              <AlertCircle size={16} />
+              Invalid discount code
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2.5 sm:mb-3">
+            Payment Option
+          </label>
+          <div className="space-y-2">
+            <label className="flex items-center p-3 sm:p-4 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+              <input
+                type="radio"
+                name="modernPaymentType"
+                value="full"
+                checked={paymentType === 'full'}
+                onChange={(event) => setPaymentType(event.target.value as PaymentType)}
+                className="mr-2.5"
+                disabled={disableInputs}
+              />
+              <div className="flex-1">
+                <div className="font-medium text-charcoal">Pay Full Amount</div>
+                <div className="text-sm text-warm-gray">${currentFinalAmount.toFixed(2)}</div>
+              </div>
+            </label>
+            <label className="flex items-center p-3 sm:p-4 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+              <input
+                type="radio"
+                name="modernPaymentType"
+                value="deposit"
+                checked={paymentType === 'deposit'}
+                onChange={(event) => setPaymentType(event.target.value as PaymentType)}
+                className="mr-2.5"
+                disabled={disableInputs}
+              />
+              <div className="flex-1">
+                <div className="font-medium text-charcoal">Pay 50% Deposit</div>
+                <div className="text-sm text-warm-gray">
+                  ${(currentFinalAmount * 0.5).toFixed(2)} now, remainder later
+                </div>
+              </div>
+            </label>
+          </div>
+          {paymentType === 'deposit' && (
+            <div className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+              <input
+                id="deposit-ack-modern"
+                type="checkbox"
+                checked={depositAcknowledged}
+                onChange={(event) => setDepositAcknowledged(event.target.checked)}
+                className="mt-1"
+                disabled={disableInputs}
+              />
+              <label htmlFor="deposit-ack-modern" className="text-xs text-yellow-700 leading-relaxed">
+                I understand the remaining balance will be due at the start of my appointment.
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1.5 sm:mb-2">
+            Card Information
+          </label>
+          <div className="p-3 sm:p-4 border border-sage-dark rounded-lg bg-white">
+            <CardElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#3F3A37',
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    '::placeholder': { color: '#9CA3AF' },
+                  },
+                  invalid: { color: '#EF4444', iconColor: '#EF4444' },
+                },
+              }}
+              onChange={(event) => setCardComplete(event.complete)}
+            />
+          </div>
+        </div>
+
+        <div className="bg-dark-sage/10 p-3 sm:p-4 rounded-lg">
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-charcoal text-sm sm:text-base">
+              {paymentType === 'deposit' ? 'Deposit Due Today' : 'Total Amount'}
+            </span>
+            <span className="text-xl sm:text-2xl font-serif font-bold text-charcoal">
+              ${currentAmount.toFixed(2)}
+            </span>
+          </div>
+          <div className="mt-2 text-xs sm:text-sm text-warm-gray space-y-1">
+            <div>
+              Original: ${baseAmount.toFixed(2)}
+              {discountValidation?.valid && (
+                <>
+                  <span className="mx-2">-</span>
+                  <span className="text-green-600">
+                    Discount: ${discountValidation.discountAmount.toFixed(2)}
+                  </span>
+                </>
+              )}
+            </div>
+            {paymentType === 'deposit' && (
+              <div>Balance due at appointment: ${balanceDue.toFixed(2)}</div>
+            )}
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2">
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm flex items-center gap-2">
+            <CheckCircle2 size={16} />
+            Payment successful! You can now choose your appointment time.
+          </div>
+        )}
+
+        <div className="flex gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={processing}
+            className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-white border-2 border-dark-sage text-dark-sage hover:bg-sage-light hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={
+              disableInputs ||
+              !stripe ||
+              !cardComplete ||
+              !contactInfoReady ||
+              (paymentType === 'deposit' && !depositAcknowledged)
+            }
+            className="flex-1 px-6 sm:px-8 py-3 rounded font-medium transition-all duration-200 min-h-[44px] inline-flex items-center justify-center bg-dark-sage text-charcoal hover:bg-sage-dark hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {processing ? (
+              <>
+                <Loader2 className="animate-spin mr-2" size={18} />
+                Processing...
+              </>
+            ) : success ? (
+              <>
+                <CheckCircle2 className="mr-2" size={18} />
+                Success!
+              </>
+            ) : paymentType === 'deposit' ? (
+              `Pay Deposit $${currentAmount.toFixed(2)}`
+            ) : (
+              `Pay $${currentAmount.toFixed(2)}`
+            )}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 export default function CustomPaymentModal({ isOpen, onClose, service }: CustomPaymentModalProps) {
   useBodyScrollLock(isOpen);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
-  const [discountCode, setDiscountCode] = useState<string | undefined>();
-  const [redirectError, setRedirectError] = useState<string | null>(null);
-  const [slotSelection, setSlotSelection] = useState<SlotSelectionPayload | null>(null);
-  const [contactDetails, setContactDetails] = useState<ContactDetails | null>(null);
-  const [reservationInfo, setReservationInfo] = useState<ReservationInfo | null>(null);
-  const [modalStage, setModalStage] = useState<'availability' | 'details'>('availability');
-  const [publicBookingUrl, setPublicBookingUrl] = useState<string | null>(null);
+  useCalEmbed();
+
+  const [hasContinued, setHasContinued] = useState(false);
+  const [paymentUnlocked, setPaymentUnlocked] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessPayload | null>(null);
+  const [hasMountedCal, setHasMountedCal] = useState(false);
+
   const serviceSlug = deriveServiceSlug(service);
   const primaryPhoto = useMemo(() => {
     if (!service?.slug) return null;
@@ -1641,109 +2416,177 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     return photos.length > 0 ? photos[0] : null;
   }, [service?.slug]);
 
+  const embedConfig = useMemo(
+    () => (serviceSlug ? getCalEmbedConfigBySlug(serviceSlug) : null),
+    [serviceSlug]
+  );
+
+  const namespace = embedConfig?.namespace ?? serviceSlug ?? 'booking';
+  const inlineElementId = embedConfig?.elementId ?? `cal-inline-${namespace}`;
+  const calLink = embedConfig?.calLink ?? (service?.calBookingUrl ? extractCalLink(service.calBookingUrl) : null);
+  const inlineConfig = useMemo(
+    () =>
+      embedConfig?.inlineConfig ?? {
+        layout: 'column_view',
+        theme: 'light',
+      },
+    [embedConfig]
+  );
+  const uiConfig = useMemo(
+    () =>
+      embedConfig?.uiConfig ?? {
+        theme: 'light',
+        hideEventTypeDetails: false,
+        layout: 'column_view',
+      },
+    [embedConfig]
+  );
+
   useEffect(() => {
     if (!isOpen) {
-      setModalStage('availability');
-      setPublicBookingUrl(null);
+      setHasContinued(false);
+      setPaymentUnlocked(false);
+      setPaymentSuccess(null);
+      setHasMountedCal(false);
+      const element = document.getElementById(inlineElementId);
+      if (element) {
+        element.innerHTML = '';
+      }
     }
-  }, [isOpen, setModalStage]);
+  }, [isOpen, inlineElementId]);
 
-  const handlePaymentSuccess = ({
-    paymentIntentId,
-    discountCode: code,
-    bookingToken,
-    paymentType,
-    slot,
-    contact,
-    reservation,
-    publicBookingUrl: publicUrl,
-  }: {
-    paymentIntentId: string;
-    discountCode?: string;
-    bookingToken: string;
-    paymentType: PaymentType;
-    slot: SlotSelectionPayload;
-    contact: ContactDetails;
-    reservation: ReservationInfo;
-    publicBookingUrl?: string | null;
-  }) => {
-    setPaymentIntentId(paymentIntentId);
-    setDiscountCode(code);
-    setRedirectError(null);
-    setSlotSelection(slot);
-    setContactDetails(contact);
-    setReservationInfo(reservation);
-    setPublicBookingUrl(publicUrl ?? null);
-    
-    // Redirect to verification page first, then to Cal.com
-    const baseCalLink = publicUrl
-      ? extractCalLink(publicUrl)
-      : service?.calBookingUrl
-      ? extractCalLink(service.calBookingUrl)
-      : null;
+  useEffect(() => {
+    if (!isOpen || !calLink) {
+      return;
+    }
 
-    if (baseCalLink && bookingToken) {
-        const metadata = {
-          paymentIntentId,
-          discountCode: code || '',
-          paymentType,
-          bookingToken: bookingToken, // Secure token for verification
-          selectedSlot: slot,
-          serviceSlug,
-          contact,
-          reservation,
-        };
-        
-        // Build verify URL with all required parameters
-        const params = new URLSearchParams({
-          token: bookingToken,
-          paymentIntentId,
-          paymentType,
-          calLink: baseCalLink,
-          metadata: JSON.stringify(metadata),
-          selectedSlot: JSON.stringify(slot),
-        });
-      if (serviceSlug) {
-        params.append('serviceSlug', serviceSlug);
+    const element = document.getElementById(inlineElementId);
+    if (element) {
+      element.innerHTML = '';
+    }
+
+    const mountCal = () => {
+      if (!window.Cal) {
+        return false;
       }
-      if (reservation) {
-        params.append('reservation', JSON.stringify(reservation));
+
+      try {
+        window.Cal('config', { forwardQueryParams: true });
+      } catch (error) {
+        // ignore configuration errors
       }
-      if (contact) {
-        params.append('contact', JSON.stringify(contact));
-      }
-      if (publicUrl) {
-        params.append('publicUrl', publicUrl);
-      }
-        
-        // Redirect to verification page first (prevents direct Cal.com access)
-        const verifyUrl = `/book/verify?${params.toString()}`;
-        console.log('Redirecting to verify page:', verifyUrl);
-        
+
+      if (namespace) {
         try {
-          window.location.href = verifyUrl;
+          window.Cal('init', namespace, { origin: 'https://app.cal.com' });
         } catch (error) {
-          console.error('Redirect error:', error);
-          setRedirectError('Failed to redirect. Please manually navigate to the booking page.');
+          console.warn('Failed to initialize Cal namespace', error);
         }
-    } else {
-      console.error('No Cal.com link or booking token found:', {
-        publicUrl,
-        serviceLink: service?.calBookingUrl,
-        bookingToken,
-        service,
-      });
-      setRedirectError('Missing booking information. Please contact support.');
+
+        const attemptNamespaceMount = (tries = 0) => {
+          const namespaceApi = window.Cal?.ns?.[namespace];
+          if (!namespaceApi) {
+            if (tries > 20) {
+              console.error(`Cal namespace "${namespace}" did not initialize in time`);
+              return;
+            }
+            setTimeout(() => attemptNamespaceMount(tries + 1), 120);
+            return;
+          }
+          try {
+            namespaceApi('inline', {
+              elementOrSelector: `#${inlineElementId}`,
+              calLink,
+              config: inlineConfig,
+            });
+            namespaceApi('ui', uiConfig);
+            setHasMountedCal(true);
+          } catch (error) {
+            console.error('Failed to initialize Cal inline namespace', error);
+          }
+        };
+
+        attemptNamespaceMount();
+        return true;
+      }
+
+      try {
+        window.Cal('inline', {
+          elementOrSelector: `#${inlineElementId}`,
+          calLink,
+          config: inlineConfig,
+        });
+        window.Cal('ui', uiConfig);
+        setHasMountedCal(true);
+      } catch (error) {
+        console.error('Failed to initialize Cal inline embed', error);
+      }
+      return true;
+    };
+
+    if (mountCal()) {
+      return;
     }
-  };
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (mountCal() || attempts > 25) {
+        window.clearInterval(timer);
+      }
+    }, 150);
+
+    return () => window.clearInterval(timer);
+  }, [isOpen, calLink, inlineElementId, namespace, inlineConfig, uiConfig]);
+
+  useEffect(() => {
+    if (!isOpen || !paymentSuccess) {
+      return;
+    }
+
+    const contact = paymentSuccess.contact;
+    const formattedPhone = normalizePhoneForSubmit(contact.phone);
+
+    try {
+      window.Cal?.('config', {
+        name: contact.name,
+        email: contact.email,
+        smsReminderNumber: formattedPhone,
+        notes: contact.notes,
+      });
+    } catch (error) {
+      console.warn('Failed to prefill Cal embed metadata', error);
+    }
+  }, [isOpen, paymentSuccess]);
+
+  const handlePaymentSuccess = useCallback(
+    (payload: PaymentSuccessPayload) => {
+      setPaymentSuccess(payload);
+      setPaymentUnlocked(true);
+      if (!hasContinued) {
+        setHasContinued(true);
+      }
+    },
+    [hasContinued]
+  );
 
   if (!service) return null;
+
+  const stepLabel = !hasContinued
+    ? 'Step 1 · Review availability'
+    : !paymentUnlocked
+    ? 'Step 2 · Pay & unlock scheduling'
+    : 'Step 3 · Choose appointment time';
+  const stepDescription = !hasContinued
+    ? 'Availability is informational only. Continue to payment when ready.'
+    : !paymentUnlocked
+    ? 'Enter your details and payment to unlock the scheduler.'
+    : 'Scheduler is now unlocked. Pick the time that works best for you.';
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-50"
             initial={{ opacity: 0 }}
@@ -1752,16 +2595,14 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
             onClick={onClose}
           />
 
-          {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              className="bg-white rounded-lg max-w-5xl w-[min(95vw,1100px)] max-h-[90vh] overflow-y-auto shadow-xl relative px-2 pt-2 pb-6 md:px-4"
+              className="bg-white rounded-lg max-w-6xl w-[min(95vw,1200px)] max-h-[92vh] overflow-y-auto shadow-xl relative px-2 pt-2 pb-6 md:px-4"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.3 }}
             >
-              {/* Close Button */}
               <button
                 onClick={onClose}
                 className="absolute top-4 right-4 z-10 p-2 hover:bg-sand/30 rounded-full transition-colors"
@@ -1770,9 +2611,8 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                 <X size={20} className="text-charcoal" />
               </button>
 
-              {/* Content */}
               <div className="px-4 pt-1 pb-5 sm:px-8 sm:pb-8">
-                <div className="mb-4 sm:mb-5 relative">
+                <div className="mb-5 relative">
                   <div className="flex flex-col gap-3 sm:gap-4">
                     <div className="flex items-start gap-3 sm:gap-4">
                       {primaryPhoto ? (
@@ -1808,25 +2648,19 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm text-warm-gray">
-                          Secure your appointment with a payment
+                          Review availability, complete payment, then schedule right away.
                         </p>
                       </div>
                     </div>
                   </div>
 
                   <div className="hidden md:block absolute right-0 top-[58px]">
-                    <div className="min-w-[190px] rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3.5 py-2.5 shadow-sm text-right">
+                    <div className="min-w-[220px] rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-3.5 py-2.5 shadow-sm text-right">
                       <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
                         Current Step
                       </p>
-                      <p className="text-sm font-semibold text-charcoal">
-                        {modalStage === 'availability' ? 'Step 1 · Choose your time' : 'Step 2 · Confirm & pay'}
-                      </p>
-                      <p className="text-xs text-warm-gray mt-1 leading-snug">
-                        {modalStage === 'availability'
-                          ? 'Select an available slot to place a short hold.'
-                          : 'Enter your details and payment to secure the booking.'}
-                      </p>
+                      <p className="text-sm font-semibold text-charcoal">{stepLabel}</p>
+                      <p className="text-xs text-warm-gray mt-1 leading-snug">{stepDescription}</p>
                     </div>
                   </div>
 
@@ -1834,31 +2668,88 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                     <p className="text-[11px] font-medium uppercase tracking-wide text-dark-sage/80">
                       Current Step
                     </p>
-                    <p className="text-sm font-semibold text-charcoal">
-                      {modalStage === 'availability' ? 'Step 1 · Choose your time' : 'Step 2 · Confirm & pay'}
-                    </p>
-                    <p className="text-xs text-warm-gray mt-1 leading-snug">
-                      {modalStage === 'availability'
-                        ? 'Select an available slot to place a short hold.'
-                        : 'Enter your details and payment to secure the booking.'}
-                    </p>
+                    <p className="text-sm font-semibold text-charcoal">{stepLabel}</p>
+                    <p className="text-xs text-warm-gray mt-1 leading-snug">{stepDescription}</p>
                   </div>
                 </div>
 
-                {redirectError && (
-                  <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-600">{redirectError}</p>
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)]">
+                  <div className="space-y-6">
+                    <AvailabilityPreview
+                      serviceSlug={serviceSlug}
+                      serviceDuration={service.duration}
+                      onContinue={() => setHasContinued(true)}
+                      hasContinued={hasContinued}
+                    />
+
+                    <Elements stripe={stripePromise}>
+                      <ModernPaymentSection
+                        service={service}
+                        isActive={hasContinued}
+                        onSuccess={handlePaymentSuccess}
+                        onClose={onClose}
+                      />
+                    </Elements>
+
+                    {paymentSuccess && (
+                      <div className="rounded-lg border border-dark-sage/40 bg-dark-sage/10 px-4 py-3 text-sm text-charcoal">
+                        <p className="font-medium text-dark-sage">
+                          Payment confirmed — scheduler unlocked.
+                        </p>
+                        <p>
+                          Reference ID:{' '}
+                          <span className="font-mono text-xs">{paymentSuccess.paymentIntentId}</span>
+                        </p>
+                        <p className="text-xs text-warm-gray mt-1">
+                          Finish booking on the right. We’ll match your appointment to this payment.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
-                <Elements stripe={stripePromise}>
-                  <PaymentForm 
-                    service={service} 
-                    onSuccess={handlePaymentSuccess}
-                    onClose={onClose}
-                    modalStage={modalStage}
-                    setModalStage={setModalStage}
-                  />
-                </Elements>
+
+                  <div className="relative border border-sand rounded-lg bg-white overflow-hidden">
+                    <div
+                      id={inlineElementId}
+                      className="min-h-[640px] rounded-lg bg-white"
+                    >
+                      {!calLink && (
+                        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-warm-gray">
+                          The Cal.com scheduler for this service is still being published. After payment,
+                          we will contact you directly to confirm a time.
+                        </div>
+                      )}
+                    </div>
+
+                    {calLink && !paymentUnlocked && (
+                      <div className="absolute inset-0 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-center px-6">
+                        <div className="w-12 h-12 rounded-full bg-dark-sage/15 flex items-center justify-center">
+                          <Lock className="text-dark-sage" size={24} />
+                        </div>
+                        <div>
+                          <p className="text-base font-semibold text-charcoal">
+                            Complete payment to unlock scheduling
+                          </p>
+                          <p className="text-sm text-warm-gray mt-1">
+                            Once payment succeeds, the scheduler unlocks automatically — no need to refresh.
+                          </p>
+                          {!hasMountedCal && (
+                            <p className="text-xs text-warm-gray/80 mt-2">
+                              Loading live availability from Cal.com&hellip;
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentUnlocked && (
+                      <div className="absolute inset-x-0 top-0">
+                        <div className="mx-4 mt-4 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-700 shadow-sm">
+                          Scheduler unlocked — pick your appointment time to finalize booking.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
