@@ -1823,12 +1823,10 @@ interface PaymentSuccessPayload {
 
 function ModernPaymentSection({
   service,
-  isActive,
   onSuccess,
   onClose,
 }: {
   service: NonNullable<CustomPaymentModalProps['service']>;
-  isActive: boolean;
   onSuccess: (payload: PaymentSuccessPayload) => void;
   onClose: () => void;
 }) {
@@ -1941,11 +1939,6 @@ function ModernPaymentSection({
   const handlePayment = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!isActive) {
-      setError('Review availability first, then continue to payment.');
-      return;
-    }
-
     if (!stripe || !elements) {
       setError('Stripe is not loaded. Please refresh the page.');
       return;
@@ -2033,19 +2026,12 @@ function ModernPaymentSection({
     }
   };
 
-  const disableInputs = !isActive || processing || success;
+  const disableInputs = processing || success;
 
   return (
     <form onSubmit={handlePayment} className="space-y-5 sm:space-y-6">
       <div className="border border-sand rounded-lg p-3 sm:p-4 bg-white space-y-4">
-        <div>
-          <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2">Your Information</h3>
-          {!isActive && (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Start by reviewing availability above, then click “Continue to pay and book”.
-            </div>
-          )}
-        </div>
+        <h3 className="font-serif text-base sm:text-lg text-charcoal mb-2">Your Information</h3>
 
         <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div>
