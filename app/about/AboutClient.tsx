@@ -7,16 +7,19 @@ import Section from '../_components/Section';
 export default function AboutClient() {
   const approaches = [
     {
-      title: 'Gentle by design',
-      description: 'Barrier‑supportive, mindful touch that respects your skin\'s natural rhythm and resilience.'
+      title: 'Care',
+      description:
+        'Every service begins with listening. Treatments are personalized with intention, honoring what your skin needs in the moment.'
     },
     {
-      title: 'Customization',
-      description: 'Each service adapts to your current skin state, not a one‑size‑fits‑all protocol.'
+      title: 'Calm',
+      description:
+        'The studio invites you to slow down. Soft light, grounded energy, and an unrushed pace help you exhale and reset.'
     },
     {
-      title: 'Education',
-      description: 'Clear guidance for home care that fits your life, budget, and goals.'
+      title: 'Craft',
+      description:
+        'Precision and thoughtfulness guide each technique, blending modern modalities with intuitive touch for lasting results.'
     }
   ];
 
@@ -35,7 +38,7 @@ export default function AboutClient() {
           className="text-center max-w-3xl mx-auto pt-16 md:pt-0"
         >
           <h1 className="text-h1 md:text-display font-serif text-charcoal mb-6">
-            Meet Amy
+            About
           </h1>
           <p className="text-lg text-warm-gray leading-relaxed">
             An aesthetician who believes in calm, customized care and the beauty of slowing down.
@@ -74,7 +77,7 @@ export default function AboutClient() {
             transition={{ duration: 0.6 }}
             className="order-1 md:order-2"
           >
-            <h2 className="text-h2 font-serif text-charcoal mb-6">About Amy</h2>
+            <h2 className="text-h2 font-serif text-charcoal mb-6">My Story</h2>
             <div className="space-y-4 text-warm-gray leading-relaxed">
               <p>
                 Amy takes a thoughtful, intuitive approach to skin care, focusing on balance, calm, and long-term skin health. Her studio blends modern aesthetics with natural warmth — soft light, earthy tones, and a sense of calm that defines every treatment.
@@ -110,7 +113,7 @@ export default function AboutClient() {
         >
           <h2 className="text-h1 font-serif text-charcoal mb-4">Philosophy & Approach</h2>
           <p className="text-warm-gray max-w-2xl mx-auto leading-relaxed">
-            Rooted in skin health, guided by intuition, and delivered with care.
+            Care, Calm, Craft — the principles that shape every experience at Aura Wellness Aesthetics.
           </p>
         </motion.div>
 
@@ -130,25 +133,13 @@ export default function AboutClient() {
             </motion.div>
           ))}
         </div>
-      </Section>
-
-      {/* Brand Values */}
-      <Section background="ivory" className="relative">
-        {/* Subtle green accents */}
-        <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/8 via-transparent to-sage-dark/10" />
-        {/* Decorative bottom line */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         <motion.div
           initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="max-w-3xl mx-auto text-center"
+          className="max-w-3xl mx-auto mt-12 text-center"
         >
-          <h2 className="text-h2 font-serif text-charcoal mb-6">Care, Calm, Craft</h2>
-          <p className="text-warm-gray leading-relaxed mb-6">
-            These three words anchor everything at Aura Wellness Aesthetics. Care in how we listen and treat. Calm in the environment and energy. Craft in the precision and thoughtfulness of every technique.
-          </p>
           <p className="text-warm-gray leading-relaxed">
             You won&apos;t be rushed. You won&apos;t be upsold. You&apos;ll receive honest guidance, skilled hands, and a space designed to help you exhale.
           </p>

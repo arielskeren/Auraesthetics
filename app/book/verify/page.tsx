@@ -3,7 +3,12 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { extractCalLink } from '@/app/_hooks/useCalEmbed';
+import { extractCalLink, useCalEmbed } from '@/app/_hooks/useCalEmbed';
+import {
+  CalServiceEmbedConfig,
+  getCalEmbedConfigByCalLink,
+  getCalEmbedConfigBySlug,
+} from '@/lib/calEventMapping';
 
 declare global {
   interface Window {
@@ -26,6 +31,35 @@ const normalizePhoneForQuery = (phone?: string | null) => {
   return undefined;
 };
 
+const normalizeCalLinkPath = (link: string | null | undefined) => {
+  if (!link) {
+    return null;
+  }
+
+  let value = link.trim();
+  if (!value) {
+    return null;
+  }
+
+  try {
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      const url = new URL(value);
+      value = url.pathname;
+    }
+  } catch {
+    // Ignore parse errors and continue with the original string
+  }
+
+  const queryIndex = value.indexOf('?');
+  if (queryIndex >= 0) {
+    value = value.slice(0, queryIndex);
+  }
+
+  value = value.replace(/^\/+/, '').replace(/\/+$/, '');
+
+  return value || null;
+};
+
 function VerifyBookingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -44,11 +78,11 @@ function VerifyBookingContent() {
     phone?: string;
     notes?: string;
   }>({});
-  const scriptRef = useRef<HTMLScriptElement | null>(null);
   const embedInitializedRef = useRef(false);
-  const calUsername = process.env.NEXT_PUBLIC_CAL_USERNAME ?? '';
-  const calEventSlug = process.env.NEXT_PUBLIC_CAL_EVENT_SLUG ?? '';
-  const calLinkFromEnv = calUsername && calEventSlug ? `${calUsername}/${calEventSlug}` : null;
+  const [calLinkPath, setCalLinkPath] = useState<string | null>(null);
+  const [calEmbedConfig, setCalEmbedConfig] = useState<CalServiceEmbedConfig | null>(null);
+
+  useCalEmbed();
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -56,7 +90,9 @@ function VerifyBookingContent() {
     const privateLinkUrl = searchParams.get('privateLink');
     const publicLinkUrl = searchParams.get('publicUrl');
     const calLinkParam = searchParams.get('calLink');
-    const calLink = privateLinkUrl ? extractCalLink(privateLinkUrl) : calLinkParam;
+    const calLinkFromPrivate = privateLinkUrl ? extractCalLink(privateLinkUrl) : null;
+    const calLinkFromPublic = extractCalLink(publicLinkUrl);
+    const calLink = calLinkFromPrivate || calLinkParam || calLinkFromPublic;
     const selectedSlotParam = searchParams.get('selectedSlot');
     const contactParam = searchParams.get('contact');
     const reservationParam = searchParams.get('reservation');
@@ -72,6 +108,9 @@ function VerifyBookingContent() {
       setError('Missing Cal.com booking link');
       return;
     }
+
+    const normalizedCalLinkPath = normalizeCalLinkPath(calLinkFromPublic || calLink);
+    setCalLinkPath(normalizedCalLinkPath);
 
     let slotPayload: { startTime?: string; label?: string; timezone?: string } | null = null;
     if (selectedSlotParam) {
@@ -134,6 +173,9 @@ function VerifyBookingContent() {
             if (publicLinkUrl) {
               return publicLinkUrl;
             }
+            if (!normalizedCalLinkPath) {
+              return null;
+            }
             const calParams = new URLSearchParams({
               token: token || '',
               paymentIntentId: paymentIntentId || '',
@@ -148,7 +190,7 @@ function VerifyBookingContent() {
             if (reservationPayload?.id) {
               calParams.append('reservationId', reservationPayload.id);
             }
-            return `https://cal.com/${calLink}?${calParams.toString()}`;
+            return `https://cal.com/${normalizedCalLinkPath}?${calParams.toString()}`;
           })();
           setFallbackUrl(resolvedLink);
         } else {
@@ -172,20 +214,47 @@ function VerifyBookingContent() {
 
   }, [searchParams, router]);
 
+  useEffect(() => {
+    if (status !== 'valid') {
+      setCalEmbedConfig(null);
+      return;
+    }
+
+    const slug = bookingInfo?.serviceId;
+    let config = getCalEmbedConfigBySlug(slug);
+
+    if (!config && calLinkPath) {
+      config = getCalEmbedConfigByCalLink(calLinkPath);
+    }
+
+    setCalEmbedConfig(config);
+  }, [status, bookingInfo, calLinkPath]);
+
   const embedName = contactPrefill.name || searchParams.get('name') || '';
   const embedEmail = contactPrefill.email || searchParams.get('email') || '';
   const embedPhone = contactPrefill.phone || searchParams.get('phone') || '';
 
   useEffect(() => {
-    if (status !== 'valid' || !calLinkFromEnv) {
+    if (status !== 'valid') {
       return;
     }
+
+    const calLink = calEmbedConfig?.calLink ?? calLinkPath;
+    if (!calLink) {
+      return;
+    }
+
+    const elementId = calEmbedConfig?.elementId ?? 'cal-inline-generic';
+    const namespace = calEmbedConfig?.namespace ?? null;
 
     const initializeCal = () => {
       if (!window.Cal) {
         return;
       }
-      const config: Record<string, any> = {};
+
+      const config: Record<string, any> = {
+        ...(calEmbedConfig?.inlineConfig ?? { layout: 'column_view', theme: 'light' }),
+      };
       if (embedName) config.name = embedName;
       if (embedEmail) config.email = embedEmail;
       const formattedPhone = normalizePhoneForQuery(embedPhone);
@@ -195,21 +264,55 @@ function VerifyBookingContent() {
       if (contactPrefill.notes) {
         config.notes = contactPrefill.notes;
       }
+
       try {
         window.Cal('config', { forwardQueryParams: true });
       } catch (error) {
         // ignore config errors
       }
-      window.Cal('inline', {
-        elementOrSelector: '#cal-inline',
-        calLink: calLinkFromEnv,
-        config,
-      });
-      window.Cal('ui', { theme: 'light', hideEventTypeDetails: false });
-      embedInitializedRef.current = true;
-      if (scriptRef.current) {
-        scriptRef.current = null;
+
+      if (namespace) {
+        try {
+          window.Cal('init', namespace, { origin: 'https://app.cal.com' });
+        } catch (error) {
+          console.warn('Failed to initialize Cal namespace', error);
+        }
+        const attemptNamespaceMount = (tries = 0) => {
+          const namespaceApi = window.Cal?.ns?.[namespace];
+          if (!namespaceApi) {
+            if (tries > 20) {
+              console.error(`Cal namespace "${namespace}" did not initialize in time`);
+              return;
+            }
+            setTimeout(() => attemptNamespaceMount(tries + 1), 100);
+            return;
+          }
+          try {
+            namespaceApi('inline', {
+              elementOrSelector: `#${elementId}`,
+              calLink,
+              config,
+            });
+            namespaceApi('ui', calEmbedConfig?.uiConfig ?? { theme: 'light' });
+          } catch (error) {
+            console.error('Failed to initialize Cal inline namespace', error);
+          }
+        };
+        attemptNamespaceMount();
+      } else {
+        try {
+          window.Cal('inline', {
+            elementOrSelector: `#${elementId}`,
+            calLink,
+            config,
+          });
+          window.Cal('ui', { theme: 'light', hideEventTypeDetails: false });
+        } catch (error) {
+          console.error('Failed to initialize Cal inline embed', error);
+        }
       }
+
+      embedInitializedRef.current = true;
     };
 
     if (window.Cal) {
@@ -217,23 +320,38 @@ function VerifyBookingContent() {
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://cal.com/embed.js';
-    script.async = true;
-    script.onload = initializeCal;
-    document.head.appendChild(script);
-    scriptRef.current = script;
+    const attemptInitialization = (tries = 0) => {
+      if (window.Cal) {
+        initializeCal();
+        return;
+      }
+
+      if (tries > 25) {
+        console.error('Cal.com embed script failed to load in time');
+        return;
+      }
+
+      setTimeout(() => attemptInitialization(tries + 1), 150);
+    };
+
+    attemptInitialization();
 
     return () => {
-      if (!embedInitializedRef.current && scriptRef.current && scriptRef.current.parentNode) {
-        scriptRef.current.parentNode.removeChild(scriptRef.current);
-        scriptRef.current = null;
-      }
+      embedInitializedRef.current = false;
     };
-  }, [status, calLinkFromEnv, embedName, embedEmail, embedPhone, contactPrefill.notes]);
+  }, [
+    status,
+    calEmbedConfig,
+    calLinkPath,
+    embedName,
+    embedEmail,
+    embedPhone,
+    contactPrefill.notes,
+  ]);
 
   const backupLink = useMemo(() => {
-    if (calLinkFromEnv) {
+    const linkPath = calEmbedConfig?.calLink ?? calLinkPath;
+    if (linkPath) {
       const params = new URLSearchParams();
       if (embedName) params.set('name', embedName);
       if (embedEmail) params.set('email', embedEmail);
@@ -258,10 +376,19 @@ function VerifyBookingContent() {
         params.set('timezone', slotInfo.timezone);
       }
       const query = params.toString();
-      return `https://cal.com/${calLinkFromEnv}${query ? `?${query}` : ''}`;
+      return `https://cal.com/${linkPath}${query ? `?${query}` : ''}`;
     }
     return fallbackUrl;
-  }, [calLinkFromEnv, embedName, embedEmail, embedPhone, contactPrefill.notes, slotInfo, fallbackUrl]);
+  }, [
+    calEmbedConfig,
+    calLinkPath,
+    embedName,
+    embedEmail,
+    embedPhone,
+    contactPrefill.notes,
+    slotInfo,
+    fallbackUrl,
+  ]);
 
   const reservedTimeLabel = useMemo(() => {
     if (!slotInfo?.startTime) return null;
@@ -332,10 +459,10 @@ function VerifyBookingContent() {
 
             <div className="rounded-xl border border-sand bg-ivory/60 p-1">
               <div
-                id="cal-inline"
+                id={calEmbedConfig?.elementId ?? 'cal-inline-generic'}
                 className="min-h-[660px] rounded-lg bg-white"
               >
-                {!calLinkFromEnv && (
+                {!(calEmbedConfig?.calLink || calLinkPath) && (
                   <div className="flex h-full items-center justify-center px-6 text-center text-sm text-warm-gray">
                     The Cal.com scheduler is unavailable right now. Use the backup link below or contact support to finish booking.
                   </div>
