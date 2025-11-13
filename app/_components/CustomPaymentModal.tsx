@@ -245,6 +245,11 @@ function ModernPaymentSection({ service, onSuccess, onClose, onContactChange }: 
         notes: contactDetails.notes.trim(),
       };
 
+      if (!pendingBooking?.hapioBookingId) {
+        setError('Unable to locate booking reference. Please close and reselect your time.');
+        return;
+      }
+
       setProcessing(true);
       setError(null);
 
@@ -263,6 +268,7 @@ function ModernPaymentSection({ service, onSuccess, onClose, onContactChange }: 
             clientEmail: trimmedContact.email,
             clientPhone: trimmedContact.phone,
             clientNotes: trimmedContact.notes,
+            hapioBookingId: pendingBooking.hapioBookingId,
           }),
         });
 
@@ -323,6 +329,7 @@ function ModernPaymentSection({ service, onSuccess, onClose, onContactChange }: 
       discountValidation,
       discountCode,
       amountDueToday,
+      pendingBooking,
       onSuccess,
     ]
   );
@@ -333,7 +340,8 @@ function ModernPaymentSection({ service, onSuccess, onClose, onContactChange }: 
     !stripe ||
     !cardComplete ||
     !contactInfoReady ||
-    (paymentType === 'deposit' && !depositAcknowledged);
+    (paymentType === 'deposit' && !depositAcknowledged) ||
+    !pendingBooking?.hapioBookingId;
 
   return (
     <form onSubmit={handlePayment} className="space-y-6">
@@ -642,9 +650,17 @@ interface CustomPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   service: (ServiceSummary & { summary: string; description?: string }) | null;
+  selectedSlot: SelectedSlot | null;
+  pendingBooking: PendingBooking | null;
 }
 
-export default function CustomPaymentModal({ isOpen, onClose, service }: CustomPaymentModalProps) {
+export default function CustomPaymentModal({
+  isOpen,
+  onClose,
+  service,
+  selectedSlot,
+  pendingBooking,
+}: CustomPaymentModalProps) {
   useBodyScrollLock(isOpen);
   useCalEmbed();
 
@@ -660,10 +676,7 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     return photos.length > 0 ? photos[0] : null;
   }, [service?.slug]);
 
-  const embedConfig = useMemo(
-    () => (serviceSlug ? getCalEmbedConfigBySlug(serviceSlug) : null),
-    [serviceSlug]
-  );
+  const embedConfig = useMemo(() => (serviceSlug ? getCalEmbedConfigBySlug(serviceSlug) : null), [serviceSlug]);
 
   const namespace = embedConfig?.namespace ?? serviceSlug ?? 'booking';
   const inlineElementId = embedConfig?.elementId ?? `cal-inline-${namespace}`;
@@ -822,6 +835,31 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     return null;
   }
 
+  const slotSummary = useMemo(() => {
+    if (!selectedSlot) {
+      return null;
+    }
+    const startDate = new Date(selectedSlot.start);
+    const endDate = new Date(selectedSlot.end);
+    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    const timeFormatter = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    return {
+      date: dateFormatter.format(startDate),
+      start: timeFormatter.format(startDate),
+      end: timeFormatter.format(endDate),
+      resource: selectedSlot.resources?.[0]?.name ?? null,
+    };
+  }, [selectedSlot]);
+  const hapioBookingReference = pendingBooking?.hapioBookingId ?? null;
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -876,8 +914,33 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
                         {service.name}
                       </h2>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-warm-gray mb-2">
-                        <span>Duration: <span className="text-charcoal font-medium">{service.duration}</span></span>
-                        <span>Base Price: <span className="text-charcoal font-medium">{service.price}</span></span>
+                        <span>
+                          Duration:{' '}
+                          <span className="text-charcoal font-medium">{service.duration}</span>
+                        </span>
+                        <span>
+                          Base Price:{' '}
+                          <span className="text-charcoal font-medium">{service.price}</span>
+                        </span>
+                        {slotSummary && (
+                          <span>
+                            Selected:{' '}
+                            <span className="text-charcoal font-medium">
+                              {slotSummary.date} · {slotSummary.start} – {slotSummary.end}
+                            </span>
+                            {slotSummary.resource ? (
+                              <span className="text-warm-gray/70"> · with {slotSummary.resource}</span>
+                            ) : null}
+                          </span>
+                        )}
+                        {hapioBookingReference && (
+                          <span className="text-xs text-warm-gray/80">
+                            Hold ID:{' '}
+                            <span className="font-mono text-[11px] text-charcoal">
+                              {hapioBookingReference}
+                            </span>
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs sm:text-sm text-warm-gray">
                         Complete your payment to unlock the scheduler instantly.
@@ -963,5 +1026,29 @@ export default function CustomPaymentModal({ isOpen, onClose, service }: CustomP
     </AnimatePresence>
   );
 }
+
+type SelectedSlot = {
+  start: string;
+  end: string;
+  bufferStart?: string | null;
+  bufferEnd?: string | null;
+  resources: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    metadata?: Record<string, unknown> | null;
+  }>;
+};
+
+type PendingBooking = {
+  hapioBookingId: string;
+  serviceId: string;
+  locationId: string;
+  resourceId: string | null;
+  startsAt: string;
+  endsAt: string;
+  isTemporary: boolean;
+  timezone: string | null;
+};
 
 

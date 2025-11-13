@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       calBookingId,
+      hapioBookingId,
       serviceId,
       serviceName,
       clientName,
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
     const result = await sql`
       INSERT INTO bookings (
         cal_booking_id,
+        hapio_booking_id,
         service_id,
         service_name,
         client_name,
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
         metadata
       ) VALUES (
         ${calBookingId || null},
+        ${hapioBookingId || null},
         ${serviceId},
         ${serviceName},
         ${clientName || null},
@@ -91,6 +94,7 @@ export async function POST(request: NextRequest) {
       booking: {
         id: booking.id,
         calBookingId,
+        hapioBookingId,
         serviceId,
         serviceName,
         clientEmail,

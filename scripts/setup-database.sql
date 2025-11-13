@@ -5,6 +5,7 @@
 CREATE TABLE IF NOT EXISTS bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   cal_booking_id VARCHAR(255) UNIQUE,
+  hapio_booking_id VARCHAR(255) UNIQUE,
   service_id VARCHAR(100),
   service_name VARCHAR(255),
   client_name VARCHAR(255),
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS discount_codes (
 
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_bookings_cal_id ON bookings(cal_booking_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_hapio_id ON bookings(hapio_booking_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_email ON bookings(client_email);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(payment_status);
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_intent ON bookings(payment_intent_id);

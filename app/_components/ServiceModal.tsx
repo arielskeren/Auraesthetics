@@ -220,6 +220,8 @@ export default function ServiceModal({ isOpen, onClose, service }: ServiceModalP
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         service={service}
+        selectedSlot={null}
+        pendingBooking={null}
       />
     </AnimatePresence>
   );

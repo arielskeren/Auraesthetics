@@ -19,12 +19,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { 
-      serviceId, 
-      serviceName, 
-      amount, 
-      discountCode, 
-      paymentType, 
+    const {
+      hapioBookingId,
+      serviceId,
+      serviceName,
+      amount,
+      discountCode,
+      paymentType,
       depositPercent = 50,
       clientName,
       clientEmail,
@@ -32,7 +33,13 @@ export async function POST(request: NextRequest) {
       clientNotes = '',
     } = body;
 
-    // Validate input
+    if (!hapioBookingId || typeof hapioBookingId !== 'string') {
+      return NextResponse.json(
+        { error: 'Missing required field: hapioBookingId' },
+        { status: 400 }
+      );
+    }
+
     if (!serviceId || !serviceName || !amount || !paymentType) {
       return NextResponse.json(
         { error: 'Missing required fields: serviceId, serviceName, amount, paymentType' },
@@ -43,8 +50,7 @@ export async function POST(request: NextRequest) {
     const trimmedName = typeof clientName === 'string' ? clientName.trim() : '';
     const trimmedEmail = typeof clientEmail === 'string' ? clientEmail.trim() : '';
     const trimmedPhone = typeof clientPhone === 'string' ? clientPhone.trim() : '';
-    const trimmedNotes =
-      typeof clientNotes === 'string' ? clientNotes.trim() : '';
+    const trimmedNotes = typeof clientNotes === 'string' ? clientNotes.trim() : '';
 
     if (!trimmedName || !trimmedEmail || !trimmedPhone) {
       return NextResponse.json(
@@ -60,13 +66,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sql = getSqlClient();
+
     let finalAmount = amount;
     let discountAmount = 0;
-    let stripeCouponId: string | undefined;
 
-    // Apply discount if provided
     if (discountCode) {
-      const sql = getSqlClient();
       const dbResult = await sql`
         SELECT * FROM discount_codes 
         WHERE code = ${discountCode.toUpperCase()} 
@@ -78,20 +83,16 @@ export async function POST(request: NextRequest) {
       if (discountRows.length > 0) {
         const couponId = discountRows[0].stripe_coupon_id as string | null;
         if (couponId) {
-          stripeCouponId = couponId;
-          
           try {
             const coupon = await stripe.coupons.retrieve(couponId);
-          
+
             if (coupon.valid) {
               if (coupon.percent_off) {
                 discountAmount = (amount * coupon.percent_off) / 100;
-                // Apply max discount if specified (for WELCOME15, max $30)
                 let maxDiscount = 0;
                 if (coupon.metadata?.max_discount) {
                   maxDiscount = parseFloat(coupon.metadata.max_discount);
                 } else if (coupon.id === 'L0DshEg5' || discountCode.toUpperCase() === 'WELCOME15') {
-                  // WELCOME15 has a $30 cap
                   maxDiscount = 30;
                 }
                 if (maxDiscount > 0 && discountAmount > maxDiscount) {
@@ -104,13 +105,11 @@ export async function POST(request: NextRequest) {
             }
           } catch (error) {
             console.error('Error applying discount:', error);
-            // Continue without discount if there's an error
           }
         }
       }
     }
 
-    // Calculate payment amount based on payment type
     let paymentAmount = finalAmount;
     let captureMethod: 'automatic' | 'manual' = 'automatic';
     let depositAmount = 0;
@@ -128,21 +127,82 @@ export async function POST(request: NextRequest) {
       balanceDue = 0;
     }
 
-    // Convert to cents for Stripe
+    const bookingResult = await sql`
+      SELECT id, metadata
+      FROM bookings
+      WHERE hapio_booking_id = ${hapioBookingId}
+      LIMIT 1
+    `;
+
+    const bookingRows = normalizeRows(bookingResult);
+    if (bookingRows.length === 0) {
+      return NextResponse.json(
+        { error: 'Pending booking not found for provided hapioBookingId' },
+        { status: 404 }
+      );
+    }
+
+    const booking = bookingRows[0];
+    const existingMetadata =
+      booking.metadata && typeof booking.metadata === 'object'
+        ? booking.metadata
+        : {};
+
+    const updatedCustomer = {
+      name: trimmedName,
+      email: trimmedEmail,
+      phone: trimmedPhone,
+      notes: trimmedNotes,
+    };
+
+    const paymentDetails = {
+      paymentType,
+      depositAmount,
+      finalAmount,
+      balanceDue,
+      depositPercent: depositPercent.toString(),
+    };
+
+    const updatedMetadata = {
+      ...existingMetadata,
+      customer: {
+        ...(existingMetadata.customer || {}),
+        ...updatedCustomer,
+      },
+      attendee: {
+        ...(existingMetadata.attendee || {}),
+        ...updatedCustomer,
+      },
+      paymentType,
+      paymentDetails: {
+        ...(existingMetadata.paymentDetails || {}),
+        ...paymentDetails,
+      },
+      stripe: {
+        ...(existingMetadata.stripe || {}),
+        lastIntentCreatedAt: new Date().toISOString(),
+      },
+      hapio: {
+        ...(existingMetadata.hapio || {}),
+        bookingId: hapioBookingId,
+        status: 'pending',
+      },
+    };
+
     const amountInCents = Math.round(paymentAmount * 100);
 
-    // Create payment intent
     const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
       amount: amountInCents,
       currency: 'usd',
       capture_method: captureMethod,
       metadata: {
+        hapioBookingId,
         serviceId,
         serviceName,
         paymentType,
         originalAmount: amount.toString(),
         finalAmount: finalAmount.toString(),
-        discountCode: discountCode || '',
+        discountCode: discountCode ? discountCode.toUpperCase() : '',
         discountAmount: discountAmount.toString(),
         depositAmount: depositAmount.toString(),
         balanceDue: balanceDue.toString(),
@@ -154,22 +214,39 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Add discount if applicable
-    if (stripeCouponId && discountAmount > 0) {
-      // Create a promotion code or use the coupon directly
-      // Note: PaymentIntents don't directly support coupons, but we can track it in metadata
-      // The discount is already applied to the amount
-    }
-
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+
+    const paymentStatus = paymentType === 'deposit' ? 'deposit_pending' : 'processing';
+
+    await sql`
+      UPDATE bookings 
+      SET 
+        service_id = ${serviceId},
+        service_name = ${serviceName},
+        client_name = ${trimmedName},
+        client_email = ${trimmedEmail},
+        client_phone = ${trimmedPhone},
+        amount = ${amount},
+        deposit_amount = ${depositAmount},
+        final_amount = ${finalAmount},
+        discount_code = ${discountCode ? discountCode.toUpperCase() : null},
+        discount_amount = ${discountAmount},
+        payment_type = ${paymentType},
+        payment_status = ${paymentStatus},
+        payment_intent_id = ${paymentIntent.id},
+        metadata = ${JSON.stringify(updatedMetadata)}::jsonb,
+        updated_at = NOW()
+      WHERE id = ${booking.id}
+    `;
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
+      hapioBookingId,
       amount: paymentAmount,
       originalAmount: amount,
-      finalAmount: finalAmount,
-      discountAmount: discountAmount,
+      finalAmount,
+      discountAmount,
       paymentType,
       captureMethod,
       depositAmount,

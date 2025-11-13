@@ -1,9 +1,8 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { useCalEmbed, initCalService, extractCalLink } from '../_hooks/useCalEmbed';
+import { CalendarDays, Loader2, RefreshCcw, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
@@ -24,23 +23,194 @@ interface BookingModalProps {
 }
 
 export default function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
-  useCalEmbed();
   useBodyScrollLock(isOpen);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const calLink = service ? extractCalLink(service.calBookingUrl) : null;
-  const namespace = service?.slug || 'booking';
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    'idle'
+  );
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [deferredSlot, setDeferredSlot] = useState<AvailabilitySlot | null>(null);
+  const [availabilityTimezone, setAvailabilityTimezone] = useState<string | null>(null);
+  const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(null);
+  const [lockStatus, setLockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [lockError, setLockError] = useState<string | null>(null);
 
-  // Initialize Cal.com when modal opens and service is available
-  useEffect(() => {
-    if (isOpen && service && calLink) {
-      // Small delay to ensure Cal script is loaded
-      const timer = setTimeout(() => {
-        initCalService(namespace, calLink);
-      }, 200);
-      return () => clearTimeout(timer);
+  const userTimezone = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+    } catch {
+      return 'UTC';
     }
-  }, [isOpen, service, calLink, namespace]);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !service?.slug) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    async function loadAvailability() {
+      setAvailabilityStatus('loading');
+      setAvailabilityError(null);
+      setSelectedSlot(null);
+      setDeferredSlot(null);
+      setPendingBooking(null);
+      setLockError(null);
+      setAvailabilityTimezone(null);
+
+      try {
+        const params = new URLSearchParams({
+          slug: service.slug,
+          days: '14',
+          timezone: userTimezone,
+        });
+        const response = await fetch(`/api/availability?${params.toString()}`, {
+          method: 'GET',
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody?.error ?? 'Failed to load availability');
+        }
+
+        const json = (await response.json()) as AvailabilityApiResponse;
+        setSlots(json.availability ?? []);
+        setAvailabilityTimezone(json.meta?.timezone ?? null);
+        setAvailabilityStatus('success');
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to fetch Hapio availability', error);
+        setAvailabilityStatus('error');
+        setAvailabilityError(error?.message ?? 'Unable to load availability');
+      }
+    }
+
+    void loadAvailability();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [isOpen, service?.slug, userTimezone, reloadToken]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setDeferredSlot(null);
+      setSelectedSlot(null);
+      setPendingBooking(null);
+      setLockStatus('idle');
+      setLockError(null);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!selectedSlot) {
+      return;
+    }
+
+    setDeferredSlot(selectedSlot);
+  }, [selectedSlot]);
+
+  useEffect(() => {
+    if (selectedSlot || lockStatus === 'loading') {
+      return;
+    }
+    setPendingBooking(null);
+    setLockError(null);
+  }, [selectedSlot, lockStatus]);
+
+  useEffect(() => {
+    setPendingBooking(null);
+    setLockError(null);
+  }, [service?.slug, reloadToken]);
+
+  const groupedAvailability = useMemo(() => {
+    if (slots.length === 0) {
+      return [];
+    }
+
+    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    const timeFormatter = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    const groups = new Map<string, AvailabilityDay>();
+
+    for (const slot of slots) {
+      const startDate = new Date(slot.start);
+      const endDate = new Date(slot.end);
+      const dayKey = startDate.toISOString().split('T')[0];
+      const dayLabel = dateFormatter.format(startDate);
+
+      if (!groups.has(dayKey)) {
+        groups.set(dayKey, {
+          key: dayKey,
+          label: dayLabel,
+          slots: [],
+        });
+      }
+
+      groups.get(dayKey)!.slots.push({
+        slot,
+        startLabel: timeFormatter.format(startDate),
+        endLabel: timeFormatter.format(endDate),
+      });
+    }
+
+    return Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }, [slots]);
+
+  const hasAvailability = groupedAvailability.length > 0;
+
+  const handleStartPayment = async () => {
+    if (!service?.slug || !selectedSlot) {
+      return;
+    }
+
+    setLockStatus('loading');
+    setLockError(null);
+
+    try {
+      const response = await fetch('/api/bookings/lock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serviceSlug: service.slug,
+          start: selectedSlot.start,
+          end: selectedSlot.end,
+          timezone: availabilityTimezone ?? userTimezone,
+          resourceId: selectedSlot.resources?.[0]?.id ?? null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.error ?? 'Failed to reserve slot. Please try again.');
+      }
+
+      const pending = (await response.json()) as PendingBooking;
+      setPendingBooking(pending);
+      setLockStatus('idle');
+      setShowPaymentModal(true);
+    } catch (error: any) {
+      console.error('Failed to lock Hapio booking', error);
+      setLockStatus('error');
+      setLockError(error?.message ?? 'Failed to hold this time slot. Try another time.');
+    }
+  };
 
   if (!service) return null;
 
@@ -118,44 +288,146 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                     </div>
                   )}
 
-                  {/* Booking CTA */}
-                  {calLink ? (
-                    <div className="mb-6">
-                      <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
-                        <div className="flex items-center justify-center gap-2 mb-3">
-                          <svg className="w-6 h-6 text-dark-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <h4 className="text-lg font-semibold text-charcoal">Book Your Appointment</h4>
+                  {/* Availability Section */}
+                  <div className="mb-6">
+                    <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg px-5 py-4 border-2 border-dark-sage/30">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CalendarDays className="w-5 h-5 text-dark-sage" />
+                        <h4 className="text-lg font-semibold text-charcoal">
+                          Pick a time that works for you
+                        </h4>
+                      </div>
+
+                      {availabilityStatus === 'loading' && (
+                        <div className="flex items-center gap-2 text-sm text-warm-gray">
+                          <Loader2 className="w-4 h-4 animate-spin text-dark-sage" />
+                          Checking live availability…
                         </div>
-                        <p className="text-sm text-warm-gray mb-4">
-                          Click below to complete your payment and secure your booking time.
-                        </p>
-                        <Button
-                          onClick={() => setShowPaymentModal(true)}
-                          className="w-full"
-                        >
-                          Book Now
-                        </Button>
-                        <p className="text-xs text-warm-gray/70 text-center italic mt-3">
-                          Secure payment required to book
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mb-6">
-                      <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
+                      )}
+
+                      {availabilityStatus === 'error' && (
+                        <div className="flex flex-col gap-3 text-sm">
+                          <p className="text-red-600">
+                            {availabilityError || 'We could not load availability. Please try again.'}
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 text-dark-sage font-medium underline underline-offset-4 hover:text-sage-dark"
+                            onClick={() => {
+                              setAvailabilityStatus('loading');
+                              setAvailabilityError(null);
+                              setSlots([]);
+                              setSelectedSlot(null);
+                              setDeferredSlot(null);
+                              setReloadToken((token) => token + 1);
+                            }}
+                          >
+                            <RefreshCcw className="w-4 h-4" />
+                            Try again
+                          </button>
+                        </div>
+                      )}
+
+                      {availabilityStatus === 'success' && !hasAvailability && (
                         <p className="text-sm text-warm-gray">
-                          Booking for this service is being set up. Please check back soon!
+                          We’re refreshing Amy’s calendar—please check back shortly or message us if
+                          you need a specific time.
                         </p>
-                      </div>
+                      )}
+
+                      {availabilityStatus === 'success' && hasAvailability && (
+                        <div className="space-y-4">
+                          {groupedAvailability.map((day) => (
+                            <div key={day.key} className="border border-sand rounded-lg p-3">
+                              <div className="text-sm font-medium text-charcoal mb-2">
+                                {day.label}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {day.slots.map(({ slot, startLabel, endLabel }) => {
+                                  const isSelected =
+                                    selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
+                                  return (
+                                    <button
+                                      key={`${slot.start}-${slot.end}`}
+                                      type="button"
+                                      onClick={() =>
+                                        setSelectedSlot(isSelected ? null : slot)
+                                      }
+                                      className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                                        isSelected
+                                          ? 'bg-dark-sage text-charcoal border-dark-sage'
+                                          : 'border-sand text-warm-gray hover:border-dark-sage hover:text-charcoal'
+                                      }`}
+                                    >
+                                      {startLabel} – {endLabel}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Booking CTA */}
+                  <div className="mb-6">
+                    <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
+                      <div className="flex items-center justify-center gap-2 mb-3">
+                        <svg
+                          className="w-6 h-6 text-dark-sage"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <h4 className="text-lg font-semibold text-charcoal">Secure Your Booking</h4>
+                      </div>
+                      <p className="text-sm text-warm-gray mb-4">
+                        Select a time above and complete payment to hold your appointment instantly.
+                      </p>
+                      <Button
+                        onClick={handleStartPayment}
+                        className="w-full"
+                        disabled={!selectedSlot || lockStatus === 'loading'}
+                        variant={
+                          !selectedSlot || lockStatus === 'loading' ? 'disabled' : 'primary'
+                        }
+                        tooltip={
+                          !selectedSlot
+                            ? 'Choose an available time to continue'
+                            : lockStatus === 'loading'
+                            ? 'Locking your time...'
+                            : undefined
+                        }
+                      >
+                        {lockStatus === 'loading'
+                          ? 'Locking your time…'
+                          : selectedSlot
+                          ? 'Continue to Payment'
+                          : 'Select a time to continue'}
+                      </Button>
+                      <p className="text-xs text-warm-gray/70 text-center italic mt-3">
+                        Payment required to reserve your appointment.
+                      </p>
+                      {lockError && (
+                        <p className="text-xs text-red-600 mt-2">{lockError}</p>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Info */}
                   <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
                     <p className="text-xs text-warm-gray">
-                      <strong className="text-dark-sage">Note:</strong> The booking modal now shows live availability first. Complete payment to unlock the Cal.com scheduler without leaving the page.
+                      <strong className="text-dark-sage">Heads up:</strong> We’ll hold your selected slot
+                      while you pay so no one else can book it.
                     </p>
                   </div>
                 </div>
@@ -170,8 +442,63 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         service={service}
+        selectedSlot={deferredSlot}
+        pendingBooking={pendingBooking}
       />
     </AnimatePresence>
   );
 }
+
+type AvailabilitySlot = {
+  start: string;
+  end: string;
+  bufferStart?: string | null;
+  bufferEnd?: string | null;
+  resources: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    metadata?: Record<string, unknown> | null;
+  }>;
+};
+
+type AvailabilityApiResponse = {
+  availability: Array<{
+    start: string;
+    end: string;
+    bufferStart?: string | null;
+    bufferEnd?: string | null;
+    resources: Array<{
+      id: string;
+      name: string;
+      enabled: boolean;
+      metadata?: Record<string, unknown> | null;
+    }>;
+  }>;
+  meta?: {
+    timezone?: string | null;
+  };
+};
+
+type AvailabilityDay = {
+  key: string;
+  label: string;
+  slots: Array<{
+    slot: AvailabilitySlot;
+    startLabel: string;
+    endLabel: string;
+  }>;
+};
+
+type PendingBooking = {
+  hapioBookingId: string;
+  serviceId: string;
+  locationId: string;
+  resourceId: string | null;
+  startsAt: string;
+  endsAt: string;
+  isTemporary: boolean;
+  timezone: string | null;
+};
+
 

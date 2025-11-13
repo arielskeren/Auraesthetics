@@ -1,0 +1,77 @@
+{
+  "defaultLocationId": "d4ce8490-0d97-42a2-b5f2-58bec3ef0328",
+  "services": {
+    "aura-facial": {
+      "serviceId": "80a76f0a-58a8-40fb-ba70-b0c1f958fe60",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "anti-aging-facial": {
+      "serviceId": "b48279ae-6c8e-45bc-a8f3-e7fc5c382185",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "hydrafacial": {
+      "serviceId": "1b2eb0d1-760a-4d63-bd0b-42b636265be1",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "glass-skin-facial": {
+      "serviceId": "d54e1d81-c7bd-4e78-a518-00b563c8243c",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "signature-detox-facial": {
+      "serviceId": "62c832a1-a4f4-4cab-9354-d18380a5b241",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "lymphatic-drainage-facial": {
+      "serviceId": "5bf0f92f-efc7-4a0a-b6ec-a2970c2e7aee",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "dermaplaning": {
+      "serviceId": "2ecd22c3-af39-46de-87c2-3d3e6ec036ca",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "biorepeel": {
+      "serviceId": "17ec8a35-6d83-4356-8902-78fb3774c53d",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "microneedling": {
+      "serviceId": "de9cefc0-4564-4bc2-9387-634a6ae128b5",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "led-therapy-addon": {
+      "serviceId": "f3b1b97e-5d01-4ac3-b985-a77590059a4d",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "oxygen-peel": {
+      "serviceId": "b3bb09cd-c545-4bba-b152-b2caa7cd8c12",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "brow-tint": {
+      "serviceId": "4f13ad8a-526e-4a83-a286-96fe1c68b742",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "brow-wax-tint": {
+      "serviceId": "f847bade-122d-4eff-9abd-88793643b0b6",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "brow-lamination": {
+      "serviceId": "977ff4b8-f3a5-41d9-9f6d-0655d39e1497",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "lash-lift-tint": {
+      "serviceId": "f60342d2-a0f0-4b80-90d7-9f68d8e47969",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "brow-lamination-lash-lift-combo": {
+      "serviceId": "1706f85a-43fa-4292-a2b2-53a145dae102",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "brow-wax": {
+      "serviceId": "a74b22d1-2684-4f9f-bc61-ed61d8291251",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    },
+    "lip-wax": {
+      "serviceId": "3448cace-c0b6-4094-b7e8-eccf5cd2d020",
+      "resourceId": "f680513c-4f4f-4993-a948-89edf4006b80"
+    }
+  }
+}
