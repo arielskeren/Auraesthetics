@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
-import { calPost } from '@/lib/calClient';
+import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
@@ -140,20 +140,14 @@ export async function POST(
         }
       }
 
-      // Cancel in Cal.com if booking ID exists
-      if (bookingData.cal_booking_id) {
+      if (bookingData.hapio_booking_id) {
         try {
-          const cancelResponse = await calPost(`bookings/${bookingData.cal_booking_id}/cancel`, {
-            reason: 'Cancelled by admin',
-          });
-          console.log('✅ Cal.com booking cancelled:', cancelResponse);
+          await hapioCancelBooking(bookingData.hapio_booking_id);
         } catch (error: any) {
-          console.error('⚠️  Error cancelling Cal.com booking:', error.response?.data || error.message);
-          // Continue with local cancellation even if Cal.com fails
+          console.error('⚠️  Error cancelling Hapio booking:', error?.message ?? error);
         }
       }
 
-      // Update booking status to cancelled (not refunded, since refund is just part of cancellation)
       let updatedMetadata: any = {
         ...(bookingData.metadata || {}),
         cancelledAt: new Date().toISOString(),
