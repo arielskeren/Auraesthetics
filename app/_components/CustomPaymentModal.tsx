@@ -665,7 +665,6 @@ export default function CustomPaymentModal({
     return photos.length > 0 ? photos[0] : null;
   }, [service?.slug]);
 
-      if (details.notes.trim()) prefillPayload.notes = details.notes.trim();
   const handlePaymentSuccess = useCallback((payload: PaymentSuccessPayload) => {
     setPaymentSuccess(payload);
     setContactPrefill(payload.contact);
