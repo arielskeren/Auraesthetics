@@ -14,8 +14,6 @@ interface Service {
   description?: string;
   duration: string;
   price: string;
-  calEventId?: number | null;
-  calBookingUrl?: string | null;
   testPricing?: boolean;
 }
 

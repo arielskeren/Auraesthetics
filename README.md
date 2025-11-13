@@ -6,7 +6,7 @@ A modern, elegant website for Aura Wellness Aesthetics — a serene skincare stu
 
 **Design:** Complete with green color scheme and dark sage accents  
 **Services:** 17 services configured with correct pricing  
-**Booking:** Infrastructure ready, waiting for Cal.com access  
+**Booking:** Hapio + Stripe flow live (availability lock, payment, confirmation)  
 **Email:** Brevo integration active  
 **Dev Server:** Running at http://localhost:5555
 
@@ -15,7 +15,7 @@ A modern, elegant website for Aura Wellness Aesthetics — a serene skincare stu
 - ✅ 17 services with detailed treatment information
 - ✅ Responsive design with bohemian aesthetic + green accents
 - ✅ Email capture with Brevo integration
-- ⏳ Booking system (Cal.com + Stripe ready, waiting on account access)
+- ✅ Booking system (Hapio services + Stripe webhooks)
 - ✅ Fast, modern Next.js architecture
 
 ## 🛠 Tech Stack
@@ -42,9 +42,14 @@ Create `.env.local`:
 BREVO_API_KEY=your_brevo_api_key
 BREVO_LIST_ID=your_list_id
 
-# Cal.com Booking (for when access is restored)
-CAL_COM_API_KEY=your_api_key
-CAL_COM_USERNAME=theauraesthetics
+# Hapio Booking API
+HAPIO_API_TOKEN=your_hapio_api_token
+HAPIO_BASE_URL=https://eu-central-1.hapio.net/v1
+HAPIO_SECRET=your_hapio_webhook_secret
+
+# Stripe
+STRIPE_SECRET_KEY=sk_live_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```
 
 ### Development
@@ -53,9 +58,6 @@ npm run dev                    # Start dev server at http://localhost:5555
 npm run build                  # Build for production
 npm start                      # Start production server
 
-# Cal.com Integration (when access is restored)
-npm run create-cal-events      # Create events in Cal.com via API
-npm run update-cal-events      # Update pricing/duration in Cal.com
 ```
 
 ## 📝 Content Management
@@ -90,12 +92,13 @@ The site is deployed to Vercel and automatically updates on push to `main` branc
 - **Contact Form:** Footer signup on all pages
 - **API Route:** `/api/subscribe`
 
-## 📅 Booking Integration (In Progress)
+## 📅 Booking Integration
 
-- **Provider:** Cal.com
-- **Payment:** Stripe
-- **Status:** Waiting for Cal.com to restore account access
-- **Next Steps:** See `CAL_COM_SETUP_WHEN_READY.md`
+- **Provider:** Hapio (services/resources/locations mapped in `app/_content/hapio-service-map.json`)
+- **Payment:** Stripe (PaymentIntents + webhooks)
+- **Workflow:** Availability → temporary booking lock → payment → Hapio confirm/cancel via webhooks
+- **Webhooks:** `/api/webhooks/stripe` (Stripe) and `/api/webhooks/hapio` (Hapio booking events)
+- **Management:** Admin dashboard uses Hapio IDs; legacy Cal.com data archived in `docs/archive/cal-com/`
 
 ## 💻 Project Structure
 

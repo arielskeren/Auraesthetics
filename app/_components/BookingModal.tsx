@@ -18,7 +18,6 @@ interface BookingModalProps {
     price: string;
     category: string;
     slug?: string;
-    calBookingUrl?: string | null;
   } | null;
 }
 

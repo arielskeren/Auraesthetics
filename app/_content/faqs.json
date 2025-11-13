@@ -4,19 +4,19 @@
     "faqs": [
       {
         "q": "How do I book an appointment?",
-        "a": "All appointments are managed through our secure Cal.com scheduler. Browse available services, choose “Book Now,” and you’ll be guided step-by-step to pick a time that works for you."
+        "a": "All appointments are managed through our secure our online booking portal scheduler. Browse available services, choose \u201cBook Now,\u201d and you\u2019ll be guided step-by-step to pick a time that works for you."
       },
       {
         "q": "Can I book more than one service in the same visit?",
-        "a": "Absolutely. Select your primary treatment in the scheduler and add additional services or enhancements where available. If you’re unsure about timing, reach out and we’ll help customize the visit."
+        "a": "Absolutely. Select your primary treatment in the scheduler and add additional services or enhancements where available. If you\u2019re unsure about timing, reach out and we\u2019ll help customize the visit."
       },
       {
-        "q": "What if I don’t see a time that works?",
-        "a": "Cal.com shows Amy’s live calendar. If nothing fits, join the waitlist option inside the scheduler or email us with your preferred windows—we’ll reach out if a spot opens."
+        "q": "What if I don\u2019t see a time that works?",
+        "a": "our online booking portal shows Amy\u2019s live calendar. If nothing fits, join the waitlist option inside the scheduler or email us with your preferred windows\u2014we\u2019ll reach out if a spot opens."
       },
       {
         "q": "How far in advance can I schedule?",
-        "a": "Spots typically release 6–8 weeks ahead. Set a reminder to check back or join the email list for early access to new availability."
+        "a": "Spots typically release 6\u20138 weeks ahead. Set a reminder to check back or join the email list for early access to new availability."
       }
     ]
   },
@@ -25,11 +25,11 @@
     "faqs": [
       {
         "q": "What is your cancellation policy?",
-        "a": "Plans change—we get it. Cancel or reschedule 72+ hours before your appointment for a full refund (minus processing fees). Within 48–72 hours, 50% is refundable. Same-day cancellations or no-shows are non-refundable, but you’ll receive 25% off your next service (up to 50% of the cancelled value). Late arrivals may shorten service time to keep the schedule running smoothly."
+        "a": "Plans change\u2014we get it. Cancel or reschedule 72+ hours before your appointment for a full refund (minus processing fees). Within 48\u201372 hours, 50% is refundable. Same-day cancellations or no-shows are non-refundable, but you\u2019ll receive 25% off your next service (up to 50% of the cancelled value). Late arrivals may shorten service time to keep the schedule running smoothly."
       },
       {
         "q": "Do you require a deposit to book?",
-        "a": "A small, non-refundable retainer is collected at checkout to secure your appointment. It’s applied to your total service cost when you check out in-studio."
+        "a": "A small, non-refundable retainer is collected at checkout to secure your appointment. It\u2019s applied to your total service cost when you check out in-studio."
       },
       {
         "q": "Which payment methods do you accept?",
@@ -37,7 +37,7 @@
       },
       {
         "q": "Can I use a gift card or promo code?",
-        "a": "Yes. Enter your code in the discount field on the Cal.com checkout screen, or bring your digital/physical gift card to redeem at your visit."
+        "a": "Yes. Enter your code in the discount field on the our online booking portal checkout screen, or bring your digital/physical gift card to redeem at your visit."
       }
     ]
   },
@@ -46,15 +46,15 @@
     "faqs": [
       {
         "q": "Which facial is right for me?",
-        "a": "Start with the Signature Aura Facial if you’re unsure—Amy will evaluate your skin and tailor modalities, products, and enhancements in real time."
+        "a": "Start with the Signature Aura Facial if you\u2019re unsure\u2014Amy will evaluate your skin and tailor modalities, products, and enhancements in real time."
       },
       {
         "q": "How should I prepare before my appointment?",
-        "a": "Pause retinoids, exfoliants, and aggressive treatments for 48–72 hours, arrive with clean skin when possible, and share any medication or health updates during intake."
+        "a": "Pause retinoids, exfoliants, and aggressive treatments for 48\u201372 hours, arrive with clean skin when possible, and share any medication or health updates during intake."
       },
       {
-        "q": "I'm on acne medication—can I be treated?",
-        "a": "Some services aren’t compatible with isotretinoin or certain prescriptions. Let us know what you’re using—Amy will advise safe alternatives or adjust the treatment protocol."
+        "q": "I'm on acne medication\u2014can I be treated?",
+        "a": "Some services aren\u2019t compatible with isotretinoin or certain prescriptions. Let us know what you\u2019re using\u2014Amy will advise safe alternatives or adjust the treatment protocol."
       },
       {
         "q": "Are treatments pregnancy-safe?",
@@ -66,7 +66,7 @@
       },
       {
         "q": "What aftercare support do you provide?",
-        "a": "You’ll leave with personalized home-care and product recommendations, plus follow-up access if you have questions. Expect a post-visit email with tailored tips."
+        "a": "You\u2019ll leave with personalized home-care and product recommendations, plus follow-up access if you have questions. Expect a post-visit email with tailored tips."
       }
     ]
   },
@@ -75,15 +75,15 @@
     "faqs": [
       {
         "q": "Where are you located?",
-        "a": "Aura Aesthetics is based in Fort Lauderdale, FL with easy on-site parking. The studio operates by appointment only—your confirmation email will include directions and entry details."
+        "a": "Aura Aesthetics is based in Fort Lauderdale, FL with easy on-site parking. The studio operates by appointment only\u2014your confirmation email will include directions and entry details."
       },
       {
         "q": "What should I expect during my first visit?",
-        "a": "Plan to arrive 10 minutes early to settle in, review your goals with Amy, and finalize any intake forms. We’ll create a relaxing, fully customized experience from start to finish."
+        "a": "Plan to arrive 10 minutes early to settle in, review your goals with Amy, and finalize any intake forms. We\u2019ll create a relaxing, fully customized experience from start to finish."
       },
       {
         "q": "Do you sell skincare?",
-        "a": "Yes—curated professional products are available in-studio, and you’ll receive recommendations tailored to your routine after each service."
+        "a": "Yes\u2014curated professional products are available in-studio, and you\u2019ll receive recommendations tailored to your routine after each service."
       },
       {
         "q": "Do you accept gratuity?",
@@ -91,9 +91,8 @@
       },
       {
         "q": "Accessibility & sensitivities",
-        "a": "Please share any mobility needs, fragrance sensitivities, or accommodation requests ahead of time. We’ll prepare the studio so you feel comfortable throughout your visit."
+        "a": "Please share any mobility needs, fragrance sensitivities, or accommodation requests ahead of time. We\u2019ll prepare the studio so you feel comfortable throughout your visit."
       }
     ]
   }
 ]
-

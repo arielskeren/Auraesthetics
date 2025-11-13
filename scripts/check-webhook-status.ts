@@ -1,88 +1,57 @@
 import * as dotenv from 'dotenv';
-import axios from 'axios';
-import { calRequest } from '../lib/calClient';
 
 dotenv.config({ path: '.env.local' });
 
-const CAL_COM_API_KEY = process.env.CAL_COM_API_KEY;
-const WEBHOOK_URL = process.env.NEXT_PUBLIC_SITE_URL 
-  ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhooks/cal-com`
-  : 'https://theauraesthetics.com/api/webhooks/cal-com';
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+    ? `https://${(process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '').replace(/^https?:\\/\\//, '')}`
+    : 'http://localhost:5555';
 
-async function checkWebhookStatus() {
-  console.log('🔍 Checking Cal.com Webhook Configuration...\n');
+const hapioWebhookUrl = `${siteUrl.replace(/\\/$/, '')}/api/webhooks/hapio`;
+const stripeWebhookUrl = `${siteUrl.replace(/\\/$/, '')}/api/webhooks/stripe`;
 
-  if (!CAL_COM_API_KEY) {
-    console.error('❌ CAL_COM_API_KEY not set in .env.local');
-    return;
-  }
+const hapioToken = process.env.HAPIO_API_TOKEN;
+const hapioSecret = process.env.HAPIO_SECRET;
+const stripeSecret = process.env.STRIPE_SECRET_KEY;
 
-  console.log('📋 Expected Webhook URL:', WEBHOOK_URL);
-  console.log('\n⚠️  IMPORTANT: You need to configure this webhook in Cal.com dashboard:\n');
-  console.log('1. Go to: https://app.cal.com/settings/developer/webhooks');
-  console.log('2. Click "+ New Webhook"');
-  console.log(`3. Subscriber URL: ${WEBHOOK_URL}`);
-  console.log('4. Select event: "BOOKING_CREATED"');
-  console.log('5. Save the webhook\n');
-
-  // Test if webhook endpoint is accessible
-  try {
-    console.log('🔗 Testing webhook endpoint...');
-    const response = await axios.get(WEBHOOK_URL.replace('/api/webhooks/cal-com', '/api/webhooks/cal-com'), {
-      timeout: 5000,
-    });
-    
-    if (response.data.status === 'ok') {
-      console.log('✅ Webhook endpoint is accessible and responding');
-    } else {
-      console.log('⚠️  Webhook endpoint responded but status is unclear');
-    }
-  } catch (error: any) {
-    if (error.code === 'ECONNREFUSED') {
-      console.log('❌ Webhook endpoint is not accessible (connection refused)');
-      console.log('   Make sure your site is deployed or use ngrok for local testing');
-    } else if (error.response?.status === 404) {
-      console.log('❌ Webhook endpoint not found (404)');
-      console.log('   Make sure the route exists: /api/webhooks/cal-com');
-    } else {
-      console.log('⚠️  Could not test webhook endpoint:', error.message);
-    }
-  }
-
-  // Try to fetch recent bookings from Cal.com
-  try {
-    console.log('\n📅 Fetching recent bookings from Cal.com...');
-    const bookingsResponse = await calRequest<any>('get', 'bookings', {
-      params: { take: 10, skip: 0 },
-    });
-
-    const bookings =
-      bookingsResponse.data?.data ||
-      bookingsResponse.data?.bookings ||
-      bookingsResponse.data ||
-      [];
-    console.log(`✅ Found ${bookings.length} recent bookings in Cal.com\n`);
-
-    if (bookings.length > 0) {
-      console.log('Recent Cal.com bookings:');
-      bookings.forEach((booking: any, index: number) => {
-        console.log(`\n${index + 1}. Booking ID: ${booking.id || booking.uid}`);
-        console.log(`   Event: ${booking.eventType?.title || 'N/A'}`);
-        console.log(`   Attendee: ${booking.attendees?.[0]?.name || 'N/A'} (${booking.attendees?.[0]?.email || 'N/A'})`);
-        console.log(`   Date: ${booking.startTime || 'N/A'}`);
-        console.log(`   Metadata:`, booking.metadata || 'None');
-      });
-    }
-  } catch (error: any) {
-    console.error('❌ Error fetching Cal.com bookings:', error.response?.data || error.message);
-  }
-
-  console.log('\n📝 Next Steps:');
-  console.log('1. Verify webhook is configured in Cal.com dashboard');
-  console.log('2. Check webhook logs (terminal for local, Vercel dashboard for production)');
-  console.log('3. Create a test booking and watch the logs');
-  console.log('4. If webhook still doesn\'t work, use manual linking tool in admin dashboard');
+function printDivider(label: string) {
+  console.log(`\n=== ${label} ===\n`);
 }
 
-checkWebhookStatus().catch(console.error);
+async function main() {
+  printDivider('Webhook Configuration Checklist');
 
+  console.log(`Hapio webhook URL:   ${hapioWebhookUrl}`);
+  console.log(`Stripe webhook URL:  ${stripeWebhookUrl}`);
+
+  printDivider('Environment Variables');
+  console.log(`HAPIO_API_TOKEN set: ${hapioToken ? '✅' : '❌'}`);
+  console.log(`HAPIO_SECRET set:    ${hapioSecret ? '✅' : '❌'} (used to verify X-Hapio-Signature)`);
+  console.log(`STRIPE_SECRET_KEY:   ${stripeSecret ? '✅' : '❌'}`);
+
+  if (!hapioToken || !hapioSecret) {
+    console.log(
+      '\n⚠️  Hapio credentials are missing. Generate a token in the Hapio console and copy the webhook signing secret.'
+    );
+  }
+
+  if (!stripeSecret) {
+    console.log('\n⚠️  Stripe secret key is missing. Set STRIPE_SECRET_KEY to run webhook verification locally.');
+  }
+
+  printDivider('Manual Steps');
+  console.log('1. Hapio → Settings → Webhooks: add the URL above with your signing secret.');
+  console.log('2. Stripe CLI or Dashboard: point the webhook to /api/webhooks/stripe and select payment intents events.');
+  console.log('3. Deploy and trigger a test booking to confirm Hapio + Stripe webhooks succeed.');
+  console.log('4. Monitor logs in Vercel or your terminal for `[Hapio webhook]` and `[Stripe webhook]` entries.');
+
+  printDivider('Testing Tips');
+  console.log('- Use `stripe listen` locally and forward to `/api/webhooks/stripe` when developing.');
+  console.log('- Hapio sends a `ping` event. You can trigger it from their dashboard to confirm signature validation.');
+  console.log('- The admin dashboard now shows Hapio booking IDs and statuses inside `metadata.hapio`.');
+}
+
+main().catch((error) => {
+  console.error('Webhook status script failed:', error);
+  process.exit(1);
+});

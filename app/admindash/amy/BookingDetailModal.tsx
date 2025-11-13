@@ -1,11 +1,12 @@
 'use client';
 
-import { X, Copy, Send, RefreshCw, XCircle, DollarSign, History, User, Calendar, Mail, Phone, MapPin } from 'lucide-react';
+import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
 interface Booking {
   id: string;
   cal_booking_id: string | null;
+  hapio_booking_id: string | null;
   service_name: string;
   client_name: string | null;
   client_email: string | null;
@@ -45,9 +46,6 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [clientHistory, setClientHistory] = useState<ClientHistory[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [bookingUrl, setBookingUrl] = useState<string | null>(null);
-  const [showLinkCalBooking, setShowLinkCalBooking] = useState(false);
-  const [calBookingIdInput, setCalBookingIdInput] = useState('');
 
   const fetchBookingDetails = useCallback(async () => {
     if (!booking) return;
@@ -72,34 +70,6 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       fetchBookingDetails();
     }
   }, [isOpen, booking, fetchBookingDetails]);
-
-  const handleRegenerateToken = async () => {
-    if (!booking) return;
-    
-    try {
-      setActionLoading('regenerate');
-      setActionMessage(null);
-      
-      const response = await fetch(`/api/admin/bookings/${booking.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'regenerate-token' }),
-      });
-      
-      const data = await response.json();
-      
-      if (data.success && data.bookingUrl) {
-        setBookingUrl(data.bookingUrl);
-        setActionMessage({ type: 'success', text: 'Booking link generated! Click "Copy Link" to send to client.' });
-      } else {
-        setActionMessage({ type: 'error', text: data.error || 'Failed to regenerate token' });
-      }
-    } catch (error: any) {
-      setActionMessage({ type: 'error', text: error.message || 'Failed to regenerate token' });
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const handleCancel = async () => {
     if (!booking) return;
@@ -179,12 +149,6 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setActionMessage({ type: 'success', text: 'Copied to clipboard!' });
-    setTimeout(() => setActionMessage(null), 2000);
-  };
-
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -214,8 +178,8 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const depositAmount =
     Number(booking.deposit_amount) || Number(booking.amount) || (booking.payment_type === 'deposit' ? finalAmount / 2 : finalAmount);
   const balanceDue = Math.max(0, finalAmount - depositAmount);
-  const hasCalBooking = !!booking.cal_booking_id;
-  const canRegenerateToken = !hasCalBooking && booking.payment_status === 'paid' && booking.payment_intent_id;
+  const hapioBookingId = booking.hapio_booking_id;
+  const hasLegacyCalBooking = !!booking.cal_booking_id;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/60 backdrop-blur-sm">
@@ -310,10 +274,16 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                 )}
               </div>
               <div>
-                <label className="text-sm text-warm-gray">Cal.com Booking ID</label>
-                <p className="font-medium text-charcoal font-mono text-sm">
-                  {booking.cal_booking_id || 'N/A'}
+                <label className="text-sm text-warm-gray">Hapio Booking ID</label>
+                <p className="font-medium text-charcoal font-mono text-sm break-all">
+                  {hapioBookingId || 'N/A'}
                 </p>
+                {hasLegacyCalBooking && (
+                  <p className="text-xs text-warm-gray mt-1">
+                    Legacy Cal.com ID:{' '}
+                    <span className="font-mono">{booking.cal_booking_id}</span>
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm text-warm-gray">Payment Intent ID</label>
@@ -332,27 +302,6 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           <div className="bg-sand/20 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-charcoal mb-4">Actions</h3>
             <div className="flex flex-wrap gap-3">
-              {canRegenerateToken && (
-                <button
-                  onClick={handleRegenerateToken}
-                  disabled={actionLoading === 'regenerate'}
-                  className="px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${actionLoading === 'regenerate' ? 'animate-spin' : ''}`} />
-                  {bookingUrl ? 'Regenerate Link' : 'Generate Booking Link'}
-                </button>
-              )}
-              
-              {bookingUrl && (
-                <button
-                  onClick={() => copyToClipboard(bookingUrl)}
-                  className="px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-charcoal/90 flex items-center gap-2"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy Link
-                </button>
-              )}
-
               {booking.payment_status !== 'cancelled' && (
                 <>
                   <button
@@ -388,85 +337,6 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
               {booking.payment_status === 'refunded' && (
                 <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg">
                   This booking has been refunded (booking remains active)
-                </div>
-              )}
-
-              {/* Manual Link Cal.com Booking */}
-              {!booking.cal_booking_id && (
-                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800 mb-2">
-                    This booking doesn&apos;t have a Cal.com booking ID. If the client has booked on Cal.com, you can link it manually.
-                  </p>
-                  {!showLinkCalBooking ? (
-                    <button
-                      onClick={() => setShowLinkCalBooking(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                    >
-                      Link Cal.com Booking
-                    </button>
-                  ) : (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Enter Cal.com Booking ID"
-                        value={calBookingIdInput}
-                        onChange={(e) => setCalBookingIdInput(e.target.value)}
-                        className="w-full px-3 py-2 border border-blue-300 rounded-lg"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={async () => {
-                            if (!calBookingIdInput.trim()) {
-                              setActionMessage({ type: 'error', text: 'Please enter a Cal.com booking ID' });
-                              return;
-                            }
-                            
-                            try {
-                              setActionLoading('link');
-                              setActionMessage(null);
-                              
-                              const response = await fetch(`/api/admin/bookings/${booking.id}/link-cal-booking`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ calBookingId: calBookingIdInput.trim() }),
-                              });
-                              
-                              const data = await response.json();
-                              
-                              if (data.success) {
-                                setActionMessage({ type: 'success', text: 'Booking linked successfully!' });
-                                setShowLinkCalBooking(false);
-                                setCalBookingIdInput('');
-                                setTimeout(() => {
-                                  onRefresh();
-                                  onClose();
-                                }, 1500);
-                              } else {
-                                setActionMessage({ type: 'error', text: data.error || 'Failed to link booking' });
-                              }
-                            } catch (error: any) {
-                              setActionMessage({ type: 'error', text: error.message || 'Failed to link booking' });
-                            } finally {
-                              setActionLoading(null);
-                            }
-                          }}
-                          disabled={actionLoading === 'link'}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
-                        >
-                          Link
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowLinkCalBooking(false);
-                            setCalBookingIdInput('');
-                          }}
-                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

@@ -8,8 +8,6 @@ export interface ServiceDefinition {
   description?: string;
   duration?: string;
   price?: string;
-  calEventId?: number | null;
-  calBookingUrl?: string | null;
   [key: string]: unknown;
 }
 

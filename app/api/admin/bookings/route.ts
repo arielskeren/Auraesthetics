@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         id,
         cal_booking_id,
+        hapio_booking_id,
         service_id,
         service_name,
         client_name,

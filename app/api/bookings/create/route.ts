@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     // Handle duplicate booking ID error
     if (error.message && error.message.includes('duplicate')) {
       return NextResponse.json(
-        { error: 'Booking with this Cal.com ID already exists' },
+        { error: 'Booking with this identifier already exists' },
         { status: 409 }
       );
     }

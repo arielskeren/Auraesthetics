@@ -6,20 +6,20 @@ import ConfirmationDialog from './ConfirmationDialog';
 
 /**
  * TODO: Future Integration for 15% Off Automatic Application
- * 
- * When Cal.com + Stripe integration is complete:
+ *
+ * When the Hapio + Stripe discount flow is finalized:
  * 1. Store signup date in Brevo contact attributes (timestamp when user submitted this form)
- * 2. When user books through Cal.com, check their signup date in Brevo via API
+ * 2. When a client books through the Hapio flow, check their signup date in Brevo via API
  * 3. If signup date is within 3 months:
  *    - Check if they've used the discount before (track in Brevo custom attribute)
  *    - Apply 15% discount (capped at $30) via Stripe Coupon API
  *    - Mark discount as "used" in Brevo
  * 4. If over 3 months or already used: Show error message
- * 
+ *
  * Key Integration Points:
  * - Brevo API: Retrieve contact by email, check signup date and discount status
  * - Stripe API: Create/apply discount code or coupon
- * - Cal.com API: Pass discount code to booking session
+ * - Hapio Metadata: Include discount details when creating pending bookings
  */
 
 interface EmailCaptureProps {

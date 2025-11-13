@@ -7,7 +7,7 @@ import Link from 'next/link';
 import Button from './_components/Button';
 import Section from './_components/Section';
 import ServiceCard from './_components/ServiceCard';
-import ServiceModal from './_components/ServiceModal';
+import BookingModal from './_components/BookingModal';
 import EmailCaptureModal from './_components/EmailCaptureModal';
 import services from './_content/services.json';
 
@@ -290,7 +290,7 @@ export default function HomeClient() {
       </Section>
 
       {/* Service Modal */}
-      <ServiceModal 
+      <BookingModal 
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         service={selectedService}

@@ -7,6 +7,7 @@ import BookingDetailModal from './BookingDetailModal';
 interface Booking {
   id: string;
   cal_booking_id: string | null;
+  hapio_booking_id: string | null;
   service_name: string;
   client_name: string | null;
   client_email: string | null;
@@ -96,6 +97,7 @@ export default function AdminDashboardClient() {
         b.client_name?.toLowerCase().includes(query) ||
         b.client_email?.toLowerCase().includes(query) ||
         b.service_name?.toLowerCase().includes(query) ||
+        b.hapio_booking_id?.toLowerCase().includes(query) ||
         b.cal_booking_id?.toLowerCase().includes(query)
       );
     }
@@ -377,7 +379,7 @@ export default function AdminDashboardClient() {
                     Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-charcoal uppercase tracking-wider">
-                    Cal.com ID
+                    Booking IDs
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-charcoal uppercase tracking-wider">
                     Actions
@@ -471,8 +473,15 @@ export default function AdminDashboardClient() {
                           {booking.payment_status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-warm-gray font-mono">
-                        {booking.cal_booking_id || 'N/A'}
+                      <td className="px-6 py-4 text-xs text-warm-gray">
+                        <div className="font-mono break-all">
+                          {booking.hapio_booking_id || 'No Hapio ID'}
+                        </div>
+                        {booking.cal_booking_id && (
+                          <div className="font-mono break-all text-warm-gray/80 mt-1">
+                            Cal: {booking.cal_booking_id}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <button

@@ -70,7 +70,12 @@ export async function PATCH(
       values.push(body.paymentIntentId);
       paramIndex++;
     }
-    if (body.calBookingId) {
+    if (body.hapioBookingId !== undefined) {
+      updates.push(`hapio_booking_id = $${paramIndex}`);
+      values.push(body.hapioBookingId);
+      paramIndex++;
+    }
+    if (body.calBookingId !== undefined) {
       updates.push(`cal_booking_id = $${paramIndex}`);
       values.push(body.calBookingId);
       paramIndex++;
@@ -98,9 +103,10 @@ export async function PATCH(
     const result = await sql`
       UPDATE bookings 
       SET 
-        payment_status = ${body.paymentStatus || null},
-        payment_intent_id = ${body.paymentIntentId || null},
-        cal_booking_id = ${body.calBookingId || null},
+        payment_status = ${body.paymentStatus ?? null},
+        payment_intent_id = ${body.paymentIntentId ?? null},
+        hapio_booking_id = ${body.hapioBookingId ?? null},
+        cal_booking_id = ${body.calBookingId ?? null},
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *

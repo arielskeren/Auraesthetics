@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, Loader2, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
+import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -13,9 +13,7 @@ import {
 
 import Button from './Button';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
-import { useCalEmbed, extractCalLink } from '../_hooks/useCalEmbed';
 import { getServicePhotoPaths } from '../_utils/servicePhotos';
-import { getCalEmbedConfigBySlug } from '@/lib/calEventMapping';
 
 type PaymentType = 'full' | 'deposit';
 
@@ -32,7 +30,6 @@ interface ServiceSummary {
   duration: string;
   category: string;
   slug?: string;
-  calBookingUrl?: string | null;
 }
 
 interface ModernPaymentSectionProps {
@@ -40,6 +37,7 @@ interface ModernPaymentSectionProps {
   onClose: () => void;
   onSuccess: (payload: PaymentSuccessPayload) => void;
   onContactChange: (contact: ContactDetails) => void;
+  pendingBooking: PendingBooking | null;
 }
 
 interface PaymentSuccessPayload {
@@ -97,18 +95,6 @@ function isValidPhoneDisplay(value: string): boolean {
 function deriveServiceSlug(service: ServiceSummary | null): string {
   if (!service) return '';
   if (service.slug) return service.slug;
-  if (service.calBookingUrl) {
-    try {
-      const url = new URL(service.calBookingUrl);
-      const segments = url.pathname.split('/').filter(Boolean);
-      const slugFromUrl = segments.pop();
-      if (slugFromUrl) {
-        return slugFromUrl;
-      }
-    } catch {
-      // fall through
-    }
-  }
   return service.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
 }
 
@@ -117,7 +103,13 @@ function extractNumericPrice(priceString: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-function ModernPaymentSection({ service, onSuccess, onClose, onContactChange }: ModernPaymentSectionProps) {
+function ModernPaymentSection({
+  service,
+  onSuccess,
+  onClose,
+  onContactChange,
+  pendingBooking,
+}: ModernPaymentSectionProps) {
   const stripe = useStripe();
   const elements = useElements();
 
@@ -662,11 +654,8 @@ export default function CustomPaymentModal({
   pendingBooking,
 }: CustomPaymentModalProps) {
   useBodyScrollLock(isOpen);
-  useCalEmbed();
 
-  const [paymentUnlocked, setPaymentUnlocked] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessPayload | null>(null);
-  const [hasMountedCal, setHasMountedCal] = useState(false);
   const [contactPrefill, setContactPrefill] = useState<ContactDetails | null>(null);
 
   const serviceSlug = deriveServiceSlug(service);
@@ -676,164 +665,17 @@ export default function CustomPaymentModal({
     return photos.length > 0 ? photos[0] : null;
   }, [service?.slug]);
 
-  const embedConfig = useMemo(() => (serviceSlug ? getCalEmbedConfigBySlug(serviceSlug) : null), [serviceSlug]);
-
-  const namespace = embedConfig?.namespace ?? serviceSlug ?? 'booking';
-  const inlineElementId = embedConfig?.elementId ?? `cal-inline-${namespace}`;
-  const calLink = embedConfig?.calLink ?? (service?.calBookingUrl ? extractCalLink(service.calBookingUrl) : null);
-  const inlineConfig = useMemo(
-    () =>
-      embedConfig?.inlineConfig ?? {
-        layout: 'column_view',
-        theme: 'light',
-      },
-    [embedConfig]
-  );
-  const uiConfig = useMemo(
-    () =>
-      embedConfig?.uiConfig ?? {
-        theme: 'light',
-        hideEventTypeDetails: false,
-        layout: 'column_view',
-      },
-    [embedConfig]
-  );
-
-  useEffect(() => {
-    if (!isOpen) {
-      setPaymentUnlocked(false);
-      setPaymentSuccess(null);
-      setHasMountedCal(false);
-      setContactPrefill(null);
-      const container = document.getElementById(inlineElementId);
-      if (container) {
-        container.innerHTML = '';
-      }
-    }
-  }, [isOpen, inlineElementId]);
-
-  useEffect(() => {
-    if (!isOpen || !calLink) {
-      return;
-    }
-
-    const container = document.getElementById(inlineElementId);
-    if (container) {
-      container.innerHTML = '';
-    }
-
-    const mount = () => {
-      if (!window.Cal) {
-        return false;
-      }
-
-      try {
-        window.Cal('config', { forwardQueryParams: true });
-      } catch {
-        // ignore
-      }
-
-      try {
-        window.Cal('init', namespace, { origin: 'https://app.cal.com' });
-      } catch {
-        // continue even if namespace init fails
-      }
-
-      const mountInline = () => {
-        try {
-          if (window.Cal?.ns?.[namespace]) {
-            window.Cal.ns[namespace]('inline', {
-              elementOrSelector: `#${inlineElementId}`,
-              calLink,
-              config: inlineConfig,
-            });
-            window.Cal.ns[namespace]('ui', uiConfig);
-          } else {
-            window.Cal('inline', {
-              elementOrSelector: `#${inlineElementId}`,
-              calLink,
-              config: inlineConfig,
-            });
-            window.Cal('ui', uiConfig);
-          }
-          setHasMountedCal(true);
-          return true;
-        } catch (error) {
-          console.error('Failed to initialize Cal inline embed', error);
-          return false;
-        }
-      };
-
-      if (mountInline()) {
-        return true;
-      }
-      return false;
-    };
-
-    if (mount()) {
-      return;
-    }
-
-    let attempts = 0;
-    const interval = window.setInterval(() => {
-      attempts += 1;
-      if (mount() || attempts > 25) {
-        window.clearInterval(interval);
-      }
-    }, 150);
-
-    return () => window.clearInterval(interval);
-  }, [isOpen, calLink, inlineElementId, namespace, inlineConfig, uiConfig]);
-
-  const applyCalPrefill = useCallback(
-    (details: ContactDetails | null) => {
-      if (!details || typeof window === 'undefined') {
-        return;
-      }
-      const formattedPhone = normalizePhoneForSubmit(details.phone);
-      const prefillPayload: Record<string, string> = {};
-      if (details.name.trim()) prefillPayload.name = details.name.trim();
-      if (details.email.trim()) prefillPayload.email = details.email.trim();
-      if (formattedPhone.trim()) prefillPayload.smsReminderNumber = formattedPhone;
       if (details.notes.trim()) prefillPayload.notes = details.notes.trim();
-
-      if (Object.keys(prefillPayload).length === 0) {
-        return;
-      }
-
-      try {
-        window.Cal?.('config', { prefill: prefillPayload });
-      } catch (error) {
-        console.warn('Cal config prefill failed', error);
-      }
-
-      if (namespace && window.Cal?.ns?.[namespace]) {
-        try {
-          window.Cal.ns[namespace]('prefill', prefillPayload);
-        } catch (error) {
-          console.warn('Cal namespace prefill failed', error);
-        }
-      }
-    },
-    [namespace]
-  );
-
-  useEffect(() => {
-    if (!paymentUnlocked) {
-      return;
-    }
-    applyCalPrefill(contactPrefill);
-  }, [paymentUnlocked, contactPrefill, applyCalPrefill]);
-
   const handlePaymentSuccess = useCallback((payload: PaymentSuccessPayload) => {
     setPaymentSuccess(payload);
-    setPaymentUnlocked(true);
     setContactPrefill(payload.contact);
   }, []);
 
-  if (!service) {
-    return null;
-  }
+  const handleClose = useCallback(() => {
+    setPaymentSuccess(null);
+    setContactPrefill(null);
+    onClose();
+  }, [onClose]);
 
   const slotSummary = useMemo(() => {
     if (!selectedSlot) {
@@ -859,6 +701,10 @@ export default function CustomPaymentModal({
     };
   }, [selectedSlot]);
   const hapioBookingReference = pendingBooking?.hapioBookingId ?? null;
+
+  if (!service) {
+    return null;
+  }
 
   return (
     <AnimatePresence>
@@ -943,7 +789,7 @@ export default function CustomPaymentModal({
                         )}
                       </div>
                       <p className="text-xs sm:text-sm text-warm-gray">
-                        Complete your payment to unlock the scheduler instantly.
+                        Complete your payment to finalize your appointment. Your selected time stays reserved while you pay.
                       </p>
                     </div>
                   </div>
@@ -951,71 +797,158 @@ export default function CustomPaymentModal({
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)]">
                   <div className="space-y-6">
-                    <Elements stripe={stripePromise}>
-                      <ModernPaymentSection
-                        service={service}
-                        onSuccess={handlePaymentSuccess}
-                        onClose={onClose}
-                        onContactChange={setContactPrefill}
-                      />
-                    </Elements>
+                    {!paymentSuccess ? (
+                      <Elements stripe={stripePromise}>
+                        <ModernPaymentSection
+                          service={service}
+                          onSuccess={handlePaymentSuccess}
+                          onClose={handleClose}
+                          onContactChange={setContactPrefill}
+                          pendingBooking={pendingBooking}
+                        />
+                      </Elements>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-5 text-sm text-charcoal">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5">
+                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div className="space-y-2">
+                              <div>
+                                <p className="text-base font-semibold text-charcoal">Payment received</p>
+                                <p className="text-sm text-warm-gray">
+                                  A confirmation email is on the way. We’ll share all visit details and reminders.
+                                </p>
+                              </div>
+                              <div className="grid gap-2 text-xs sm:text-sm text-charcoal">
+                                <span className="font-mono break-all">
+                                  Stripe reference: {paymentSuccess.paymentIntentId}
+                                </span>
+                                {paymentSuccess.discountCode && (
+                                  <span>
+                                    Discount applied: <span className="font-medium">{paymentSuccess.discountCode}</span>
+                                  </span>
+                                )}
+                                {contactPrefill?.email && (
+                                  <span>
+                                    Receipt sent to <span className="font-medium">{contactPrefill.email}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-                    {paymentSuccess && (
-                      <div className="rounded-lg border border-dark-sage/30 bg-dark-sage/10 px-4 py-3 text-sm text-charcoal">
-                        <p className="font-medium text-dark-sage">Payment confirmed.</p>
-                        <p>
-                          Reference:{' '}
-                          <span className="font-mono text-xs">{paymentSuccess.paymentIntentId}</span>
-                          {paymentSuccess.discountCode ? ` · Discount: ${paymentSuccess.discountCode}` : null}
-                        </p>
-                        <p className="text-xs text-warm-gray mt-1">
-                          Your details have been passed to the scheduler. Choose a time on the right.
-                        </p>
+                        <div className="rounded-lg border border-sand bg-white px-4 py-4 text-sm text-charcoal">
+                          <h4 className="font-semibold text-charcoal mb-2">Appointment summary</h4>
+                          <ul className="space-y-1">
+                            <li>
+                              <span className="text-warm-gray">Service:</span>{' '}
+                              <span className="font-medium">{service.name}</span>
+                            </li>
+                            {slotSummary && (
+                              <li>
+                                <span className="text-warm-gray">When:</span>{' '}
+                                <span className="font-medium">
+                                  {slotSummary.date} · {slotSummary.start}–{slotSummary.end}
+                                </span>
+                              </li>
+                            )}
+                            {hapioBookingReference && (
+                              <li>
+                                <span className="text-warm-gray">Hapio booking:</span>{' '}
+                                <span className="font-mono text-xs">{hapioBookingReference}</span>
+                              </li>
+                            )}
+                            <li>
+                              <span className="text-warm-gray">Amount paid:</span>{' '}
+                              <span className="font-medium">
+                                $
+                                {paymentSuccess.amountPaid.toFixed(2)}
+                                {paymentSuccess.paymentType === 'deposit' ? ' (deposit)' : ''}
+                              </span>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <Button onClick={handleClose} className="w-full">
+                          Done
+                        </Button>
                       </div>
                     )}
                   </div>
 
-                  <div className="relative border border-sand rounded-lg bg-white overflow-hidden min-h-[640px]">
-                    <div
-                      id={inlineElementId}
-                      className="min-h-[640px] bg-white"
-                    >
-                      {!calLink && (
-                        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-warm-gray">
-                          The Cal.com scheduler for this service is not yet configured. We will reach out after payment
-                          to confirm your appointment time.
+                  <div className="border border-sand rounded-lg bg-white overflow-hidden flex flex-col">
+                    {primaryPhoto ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={primaryPhoto}
+                        alt={service.name}
+                        className="h-48 w-full object-cover object-center"
+                      />
+                    ) : (
+                      <div className="h-48 w-full bg-gradient-to-br from-dark-sage/40 via-sand/30 to-ivory flex items-center justify-center">
+                        <span className="text-4xl opacity-40">✨</span>
+                      </div>
+                    )}
+                    <div className="p-5 space-y-4">
+                      <div>
+                        <h4 className="text-lg font-serif text-charcoal">{service.name}</h4>
+                        <p className="text-sm text-warm-gray leading-relaxed mt-1">{service.summary}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm text-charcoal">
+                        <div className="rounded-lg bg-dark-sage/15 px-3 py-2">
+                          <span className="text-xs uppercase tracking-wide text-warm-gray">Duration</span>
+                          <div className="font-medium">{service.duration}</div>
+                        </div>
+                        <div className="rounded-lg bg-dark-sage/15 px-3 py-2">
+                          <span className="text-xs uppercase tracking-wide text-warm-gray">Price</span>
+                          <div className="font-medium">{service.price}</div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-dark-sage/30 bg-dark-sage/10 px-3 py-3 text-sm text-charcoal">
+                        {slotSummary ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-warm-gray">Scheduled for</span>
+                              <span className="font-medium text-charcoal">{slotSummary.date}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-warm-gray">Time</span>
+                              <span className="font-medium text-charcoal">
+                                {slotSummary.start} – {slotSummary.end}
+                              </span>
+                            </div>
+                            {slotSummary.resource && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-warm-gray">Provider</span>
+                                <span className="font-medium text-charcoal">{slotSummary.resource}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-warm-gray">
+                            Your booking time will appear here once selected.
+                          </div>
+                        )}
+                      </div>
+
+                      {hapioBookingReference && (
+                        <div className="text-xs text-warm-gray/80">
+                          Booking reference:{' '}
+                          <span className="font-mono">{hapioBookingReference}</span>
+                        </div>
+                      )}
+
+                      {service.description && (
+                        <div className="border-t border-sand pt-4 text-sm text-warm-gray leading-relaxed">
+                          {service.description}
                         </div>
                       )}
                     </div>
-
-                    {calLink && !paymentUnlocked && (
-                      <div className="absolute inset-0 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-center px-6">
-                        <div className="w-12 h-12 rounded-full bg-dark-sage/15 flex items-center justify-center">
-                          <Lock className="text-dark-sage" size={24} />
-                        </div>
-                        <div>
-                          <p className="text-base font-semibold text-charcoal">
-                            Complete payment to unlock scheduling
-                          </p>
-                          <p className="text-sm text-warm-gray mt-1">
-                            Once payment succeeds, the scheduler unlocks automatically—no refresh required.
-                          </p>
-                          {!hasMountedCal && (
-                            <p className="text-xs text-warm-gray/80 mt-2">
-                              Loading the live scheduler…
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {calLink && paymentUnlocked && (
-                      <div className="absolute inset-x-0 top-0">
-                        <div className="mx-4 mt-4 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-700 shadow-sm">
-                          Scheduler unlocked — pick your appointment time to finalize booking.
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
