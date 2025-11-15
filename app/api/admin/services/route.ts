@@ -39,6 +39,10 @@ export async function GET(request: NextRequest) {
         image_filename,
         enabled,
         display_order,
+        starred,
+        featured,
+        best_seller,
+        most_popular,
         hapio_service_id,
         created_at,
         updated_at
@@ -98,6 +102,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get max display_order for auto-assignment
+    const maxOrderResult = await sql`
+      SELECT COALESCE(MAX(display_order), 0) as max_order FROM services
+    ` as Array<{ max_order: number }>;
+    const nextDisplayOrder = body.display_order ?? (maxOrderResult[0]?.max_order ?? 0) + 1;
+
     // Insert service
     const result = await sql`
       INSERT INTO services (
@@ -113,7 +123,11 @@ export async function POST(request: NextRequest) {
         buffer_after_minutes,
         test_pricing,
         enabled,
-        display_order
+        display_order,
+        starred,
+        featured,
+        best_seller,
+        most_popular
       ) VALUES (
         ${body.slug},
         ${body.name},
@@ -127,7 +141,11 @@ export async function POST(request: NextRequest) {
         ${body.buffer_after_minutes || 0},
         ${body.test_pricing || false},
         ${body.enabled !== false},
-        ${body.display_order || 0}
+        ${nextDisplayOrder},
+        ${body.starred || false},
+        ${body.featured || false},
+        ${body.best_seller || false},
+        ${body.most_popular || false}
       )
       RETURNING *
     ` as Array<any>;

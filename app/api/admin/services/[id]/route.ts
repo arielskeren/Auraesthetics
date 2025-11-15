@@ -32,6 +32,10 @@ export async function GET(
         image_filename,
         enabled,
         display_order,
+        starred,
+        featured,
+        best_seller,
+        most_popular,
         hapio_service_id,
         created_at,
         updated_at
@@ -123,6 +127,10 @@ export async function PATCH(
       test_pricing: body.test_pricing !== undefined ? body.test_pricing : currentService.test_pricing,
       enabled: body.enabled !== undefined ? body.enabled : currentService.enabled,
       display_order: body.display_order !== undefined ? body.display_order : currentService.display_order,
+      starred: body.starred !== undefined ? body.starred : (currentService.starred || false),
+      featured: body.featured !== undefined ? body.featured : (currentService.featured || false),
+      best_seller: body.best_seller !== undefined ? body.best_seller : (currentService.best_seller || false),
+      most_popular: body.most_popular !== undefined ? body.most_popular : (currentService.most_popular || false),
     };
 
     // Execute update
@@ -142,6 +150,10 @@ export async function PATCH(
         test_pricing = ${updatedService.test_pricing},
         enabled = ${updatedService.enabled},
         display_order = ${updatedService.display_order},
+        starred = ${updatedService.starred},
+        featured = ${updatedService.featured},
+        best_seller = ${updatedService.best_seller},
+        most_popular = ${updatedService.most_popular},
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *

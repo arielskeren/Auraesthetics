@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Filter, ChevronDown, ChevronRight, Star, ListOrdered } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import ServiceEditModal from './ServiceEditModal';
+import ServiceReorderModal from './ServiceReorderModal';
 import IdDisplay from './IdDisplay';
 
 export default function ServicesManager() {
@@ -26,6 +27,8 @@ export default function ServicesManager() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [starringService, setStarringService] = useState<string | null>(null);
   const [viewingHapioServices, setViewingHapioServices] = useState(false);
   const [hapioServices, setHapioServices] = useState<any[]>([]);
   const [loadingHapio, setLoadingHapio] = useState(false);
@@ -119,6 +122,45 @@ export default function ServicesManager() {
       }
       return next;
     });
+  };
+
+  const handleToggleStar = async (serviceId: string, currentlyStarred: boolean) => {
+    const newStarred = !currentlyStarred;
+    
+    // Check if we're trying to star and already have 6 starred
+    if (newStarred) {
+      const starredCount = allServices.filter((s) => s.starred).length;
+      if (starredCount >= 6) {
+        alert('You can only star up to 6 services. Please unstar another service first.');
+        return;
+      }
+    }
+
+    try {
+      setStarringService(serviceId);
+      const response = await fetch(`/api/admin/services/${serviceId}/star`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ starred: newStarred }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update starred status');
+      }
+
+      // Update local state
+      setAllServices((prev) =>
+        prev.map((s) => (s.id === serviceId ? { ...s, starred: newStarred } : s))
+      );
+    } catch (err: any) {
+      setError(err);
+      alert(`Failed to ${newStarred ? 'star' : 'unstar'} service: ${err.message}`);
+    } finally {
+      setStarringService(null);
+    }
   };
 
   const loadServices = async () => {
@@ -417,14 +459,23 @@ export default function ServicesManager() {
         <h2 className="text-xl font-semibold text-charcoal">Services</h2>
         <div className="flex items-center gap-2">
           {!viewingHapioServices && (
-            <button
-              onClick={handleSyncAll}
-              disabled={syncingAll}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncingAll ? 'animate-spin' : ''}`} />
-              {syncingAll ? 'Syncing All...' : 'Sync All to Hapio'}
-            </button>
+            <>
+              <button
+                onClick={() => setShowReorderModal(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors text-sm font-medium"
+              >
+                <ListOrdered className="w-4 h-4" />
+                Reorder Services
+              </button>
+              <button
+                onClick={handleSyncAll}
+                disabled={syncingAll}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncingAll ? 'animate-spin' : ''}`} />
+                {syncingAll ? 'Syncing All...' : 'Sync All to Hapio'}
+              </button>
+            </>
           )}
           <button
             onClick={viewingHapioServices ? () => setViewingHapioServices(false) : loadHapioServices}
@@ -728,7 +779,23 @@ export default function ServicesManager() {
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-3 py-2 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-charcoal">{service.name || '—'}</span>
+                                        <button
+                                          onClick={() => handleToggleStar(service.id, service.starred || false)}
+                                          disabled={starringService === service.id}
+                                          className={`p-1 rounded transition-colors ${
+                                            service.starred
+                                              ? 'text-yellow-500 hover:text-yellow-600'
+                                              : 'text-warm-gray hover:text-charcoal'
+                                          } disabled:opacity-50`}
+                                          title={service.starred ? 'Unstar service' : 'Star service (shows on home page)'}
+                                        >
+                                          <Star className={`w-4 h-4 ${service.starred ? 'fill-current' : ''}`} />
+                                        </button>
+                                      </div>
+                                    </td>
                                     <td className="px-3 py-2 text-center text-sm text-warm-gray">
                                       {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
                                     </td>
@@ -822,7 +889,23 @@ export default function ServicesManager() {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-charcoal">{service.name || '—'}</span>
+                          <button
+                            onClick={() => handleToggleStar(service.id, service.starred || false)}
+                            disabled={starringService === service.id}
+                            className={`p-1 rounded transition-colors ${
+                              service.starred
+                                ? 'text-yellow-500 hover:text-yellow-600'
+                                : 'text-warm-gray hover:text-charcoal'
+                            } disabled:opacity-50`}
+                            title={service.starred ? 'Unstar service' : 'Star service (shows on home page)'}
+                          >
+                            <Star className={`w-4 h-4 ${service.starred ? 'fill-current' : ''}`} />
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-center text-sm text-warm-gray">{service.category || '—'}</td>
                       <td className="px-3 py-2 text-center text-sm text-warm-gray">
                         {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
@@ -881,6 +964,17 @@ export default function ServicesManager() {
             setSelectedService(null);
           }}
           onSave={handleSave}
+        />
+      )}
+
+      {showReorderModal && (
+        <ServiceReorderModal
+          services={allServices}
+          onClose={() => setShowReorderModal(false)}
+          onSave={async () => {
+            await loadServices();
+            setShowReorderModal(false);
+          }}
         />
       )}
     </div>

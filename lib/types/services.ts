@@ -19,6 +19,10 @@ export interface Service {
   image_filename: string | null;
   enabled: boolean;
   display_order: number;
+  starred: boolean;
+  featured: boolean;
+  best_seller: boolean;
+  most_popular: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +41,10 @@ export interface ServiceCreateInput {
   test_pricing?: boolean;
   enabled?: boolean;
   display_order?: number;
+  starred?: boolean;
+  featured?: boolean;
+  best_seller?: boolean;
+  most_popular?: boolean;
 }
 
 export interface ServiceUpdateInput {
@@ -53,5 +61,9 @@ export interface ServiceUpdateInput {
   test_pricing?: boolean;
   enabled?: boolean;
   display_order?: number;
+  starred?: boolean;
+  featured?: boolean;
+  best_seller?: boolean;
+  most_popular?: boolean;
 }
 
