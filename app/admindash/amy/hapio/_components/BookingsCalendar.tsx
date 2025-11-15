@@ -369,7 +369,7 @@ export default function BookingsCalendar() {
 
       <div className={`flex gap-6 transition-all duration-300 ${selectedDate ? 'items-start' : 'items-center justify-center'}`}>
         {/* Calendar */}
-        <div className={`bg-white border border-sand rounded-lg p-4 transition-all duration-300 ${selectedDate ? 'w-[420px] flex-shrink-0' : 'w-[420px]'}`}>
+        <div className={`bg-white border border-sand rounded-lg p-4 transition-all duration-300 ${selectedDate ? 'w-[420px] flex-shrink-0' : 'w-[420px]'} relative`}>
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-3">
             <button
@@ -448,34 +448,48 @@ export default function BookingsCalendar() {
 
                   {/* Tooltip */}
                   {hoveredDate && hoveredDate.toDateString() === date.toDateString() && !isPast && (
-                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-64">
-                      <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden">
-                        <div className="bg-sage-light/30 px-3 py-2 border-b border-sand">
-                          <div className="text-xs font-semibold text-charcoal">
-                            {formatDate(date)}
-                          </div>
-                        </div>
-                        <div className="px-3 py-2.5">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className={`w-2 h-2 rounded-full ${
-                              status === 'closed' ? 'bg-red-500' :
-                              status === 'partial' ? 'bg-yellow-500' :
-                              'bg-green-500'
-                            }`} />
-                            <span className="text-sm font-medium text-charcoal">
-                              {status === 'closed' ? 'Closed' :
-                               status === 'partial' ? 'Partially Booked' :
-                               'Open'}
-                            </span>
-                          </div>
-                          {dateBookings.length > 0 && (
-                            <div className="text-xs text-warm-gray">
-                              {dateBookings.length} appointment{dateBookings.length !== 1 ? 's' : ''}
+                    <div className="fixed z-[9999] pointer-events-none" style={{
+                      left: `${date.getBoundingClientRect ? 0 : '50%'}`,
+                      top: '0',
+                      transform: 'translate(-50%, -100%)',
+                    }}>
+                      <div 
+                        className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-64"
+                        style={{
+                          position: 'fixed',
+                          left: `${typeof window !== 'undefined' ? (date.getBoundingClientRect?.()?.left || 0) + (date.getBoundingClientRect?.()?.width || 0) / 2 : '50%'}px`,
+                          bottom: `${typeof window !== 'undefined' ? window.innerHeight - (date.getBoundingClientRect?.()?.top || 0) + 12 : 'auto'}px`,
+                          transform: 'translate(-50%, 0)',
+                        }}
+                      >
+                        <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden">
+                          <div className="bg-sage-light/30 px-3 py-2 border-b border-sand">
+                            <div className="text-xs font-semibold text-charcoal">
+                              {formatDate(date)}
                             </div>
-                          )}
-                        </div>
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
-                          <div className="w-3 h-3 bg-white border-r border-b border-sand transform rotate-45" />
+                          </div>
+                          <div className="px-3 py-2.5">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className={`w-2 h-2 rounded-full ${
+                                status === 'closed' ? 'bg-red-500' :
+                                status === 'partial' ? 'bg-yellow-500' :
+                                'bg-green-500'
+                              }`} />
+                              <span className="text-sm font-medium text-charcoal">
+                                {status === 'closed' ? 'Closed' :
+                                 status === 'partial' ? 'Partially Booked' :
+                                 'Open'}
+                              </span>
+                            </div>
+                            {dateBookings.length > 0 && (
+                              <div className="text-xs text-warm-gray">
+                                {dateBookings.length} appointment{dateBookings.length !== 1 ? 's' : ''}
+                              </div>
+                            )}
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
+                            <div className="w-3 h-3 bg-white border-r border-b border-sand transform rotate-45" />
+                          </div>
                         </div>
                       </div>
                     </div>

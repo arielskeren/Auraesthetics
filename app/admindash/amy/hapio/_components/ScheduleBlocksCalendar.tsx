@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X, Trash2, Edit2, Plus } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
@@ -30,7 +30,9 @@ export default function ScheduleBlocksCalendar({
   const [error, setError] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; bottom: number } | null>(null);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const dateButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [formData, setFormData] = useState({
@@ -458,10 +460,28 @@ export default function ScheduleBlocksCalendar({
                 <div
                   key={date.toISOString()}
                   className="relative"
-                  onMouseEnter={() => !isPast && setHoveredDate(date)}
-                  onMouseLeave={() => setHoveredDate(null)}
+                  onMouseEnter={() => {
+                    if (!isPast) {
+                      setHoveredDate(date);
+                      const button = dateButtonRefs.current[date.toISOString()];
+                      if (button) {
+                        const rect = button.getBoundingClientRect();
+                        setTooltipPosition({
+                          left: rect.left + rect.width / 2,
+                          bottom: window.innerHeight - rect.top + 12,
+                        });
+                      }
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredDate(null);
+                    setTooltipPosition(null);
+                  }}
                 >
                   <button
+                    ref={(el) => {
+                      dateButtonRefs.current[date.toISOString()] = el;
+                    }}
                     onClick={() => handleDateClick(date)}
                     disabled={isPast}
                     className={`aspect-square border rounded-lg text-xs transition-colors w-full ${
@@ -501,9 +521,16 @@ export default function ScheduleBlocksCalendar({
                   </button>
                   
                   {/* Hover Tooltip */}
-                  {showTooltip && (
-                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-64">
-                      <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden">
+                  {showTooltip && tooltipPosition && (
+                    <div 
+                      className="fixed z-[9999] pointer-events-none"
+                      style={{
+                        left: `${tooltipPosition.left}px`,
+                        bottom: `${tooltipPosition.bottom}px`,
+                        transform: 'translate(-50%, 0)',
+                      }}
+                    >
+                      <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden w-64">
                         {/* Tooltip Header */}
                         <div className="bg-sage-light/30 px-3 py-2 border-b border-sand">
                           <div className="text-xs font-semibold text-charcoal">
