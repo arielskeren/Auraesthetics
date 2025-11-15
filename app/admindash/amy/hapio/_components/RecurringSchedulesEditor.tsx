@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Clock, Calendar } from 'lucide-react';
+import { Save, Clock, Calendar, Plus } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { detectOverlaps, validateSchedule, type DaySchedule as ScheduleDay, type TimeRange } from '@/lib/scheduleUtils';
@@ -29,10 +29,23 @@ const DAYS = [
   { value: 6, label: 'Saturday', short: 'Sat' },
 ];
 
+interface ExistingSchedule {
+  id: string;
+  start_date: string | null;
+  end_date: string | null;
+  interval: number | null;
+  location: { id: string; name: string | null } | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function RecurringSchedulesEditor({
   resourceId,
   locationId,
 }: RecurringSchedulesEditorProps) {
+  const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
+  const [existingSchedules, setExistingSchedules] = useState<ExistingSchedule[]>([]);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DAYS.map((day) => ({
       dayOfWeek: day.value,
@@ -51,46 +64,81 @@ export default function RecurringSchedulesEditor({
   const [applyToDays, setApplyToDays] = useState<number[]>([]);
   const [showServiceModal, setShowServiceModal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState<any>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    loadExistingSchedules();
+    if (viewMode === 'list') {
+      loadSchedulesList();
+    } else if (selectedScheduleId) {
+      loadExistingSchedules();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resourceId]);
+  }, [resourceId, viewMode, selectedScheduleId]);
 
-  const loadExistingSchedules = async () => {
+  const loadSchedulesList = async () => {
     try {
-      // Load existing recurring schedules
+      setLoadingList(true);
       const response = await fetch(
         `/api/admin/hapio/resources/${resourceId}/recurring-schedules?per_page=100`
       );
       if (response.ok) {
         const data = await response.json();
-        const schedulesList = data.data || [];
+        const schedulesList = (data.data || []) as ExistingSchedule[];
         
-        console.log('[RecurringSchedulesEditor] Loaded schedules:', schedulesList);
+        // Sort by start_date (most recent first, then by created_at)
+        schedulesList.sort((a, b) => {
+          if (a.start_date && b.start_date) {
+            return b.start_date.localeCompare(a.start_date);
+          }
+          if (a.start_date) return -1;
+          if (b.start_date) return 1;
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
         
-        if (schedulesList.length > 0) {
-          // Use the first schedule (or most recent) to populate the form
-          const firstSchedule = schedulesList[0];
-          
-          // Set date range if available
-          if (firstSchedule.start_date) {
-            setStartDate(firstSchedule.start_date.split('T')[0]);
-          }
-          if (firstSchedule.end_date) {
-            setEndDate(firstSchedule.end_date.split('T')[0]);
-            setEndDateType('date');
-          } else {
-            setEndDateType('indefinite');
-          }
-          
-          // Load blocks for this schedule
-          if (firstSchedule.id) {
+        setExistingSchedules(schedulesList);
+        console.log('[RecurringSchedulesEditor] Loaded schedules list:', schedulesList);
+      } else if (response.status === 404) {
+        setExistingSchedules([]);
+      }
+    } catch (err) {
+      console.warn('[RecurringSchedulesEditor] Error loading schedules list:', err);
+      setExistingSchedules([]);
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  const loadExistingSchedules = async () => {
+    if (!selectedScheduleId) return;
+    
+    try {
+      // Load the specific schedule
+      const response = await fetch(
+        `/api/admin/hapio/resources/${resourceId}/recurring-schedules/${selectedScheduleId}`
+      );
+      if (response.ok) {
+        const schedule = await response.json();
+        
+        console.log('[RecurringSchedulesEditor] Loaded schedule:', schedule);
+        
+        // Set date range if available
+        if (schedule.start_date) {
+          setStartDate(schedule.start_date.split('T')[0]);
+        }
+        if (schedule.end_date) {
+          setEndDate(schedule.end_date.split('T')[0]);
+          setEndDateType('date');
+        } else {
+          setEndDateType('indefinite');
+        }
+        
+        // Load blocks for this schedule
+        if (schedule.id) {
             try {
               const blocksResponse = await fetch(
-                `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?recurring_schedule_id=${firstSchedule.id}&per_page=100`
+                `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?recurring_schedule_id=${schedule.id}&per_page=100`
               );
               
               if (blocksResponse.ok) {
@@ -359,6 +407,11 @@ export default function RecurringSchedulesEditor({
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+      
+      // Return to list view and refresh
+      setViewMode('list');
+      setSelectedScheduleId(null);
+      loadSchedulesList();
     } catch (err: any) {
       setError(err);
     } finally {
@@ -366,6 +419,126 @@ export default function RecurringSchedulesEditor({
     }
   };
 
+  const handleAddNew = () => {
+    setSelectedScheduleId(null);
+    setViewMode('edit');
+    // Reset form to defaults
+    setSchedules(DAYS.map((day) => ({
+      dayOfWeek: day.value,
+      startTime: '09:00',
+      endTime: '17:00',
+      enabled: false,
+      serviceIds: [],
+    })));
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setEndDate('');
+    setEndDateType('indefinite');
+    setPresetDays(null);
+  };
+
+  const handleViewSchedule = (scheduleId: string) => {
+    setSelectedScheduleId(scheduleId);
+    setViewMode('edit');
+  };
+
+  const handleBackToList = () => {
+    setViewMode('list');
+    setSelectedScheduleId(null);
+    setError(null);
+    setSuccess(false);
+  };
+
+  // List View
+  if (viewMode === 'list') {
+    return (
+      <div className="space-y-6">
+        {/* ID Display */}
+        <div className="bg-sage-light/30 border border-sand rounded-lg p-4">
+          <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-warm-gray font-medium">Resource ID:</span>
+              <span className="font-mono text-xs text-charcoal">{resourceId}</span>
+            </div>
+            {locationId && (
+              <div className="flex items-center gap-2">
+                <span className="text-warm-gray font-medium">Location ID:</span>
+                <span className="font-mono text-xs text-charcoal">{locationId}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-charcoal">Recurring Schedules</h3>
+          <button
+            onClick={handleAddNew}
+            className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Schedule
+          </button>
+        </div>
+
+        {loadingList ? (
+          <div className="text-center py-8 text-warm-gray">Loading schedules...</div>
+        ) : existingSchedules.length === 0 ? (
+          <div className="bg-white border border-sand rounded-lg p-8 text-center">
+            <p className="text-warm-gray mb-4">No recurring schedules found.</p>
+            <button
+              onClick={handleAddNew}
+              className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+            >
+              Create Your First Schedule
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white border border-sand rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-sage-light/30 border-b border-sand">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Start Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">End Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Location</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Created</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand">
+                  {existingSchedules.map((schedule) => (
+                    <tr key={schedule.id} className="hover:bg-sand/20">
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {schedule.start_date || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">
+                        {schedule.end_date || 'Indefinite'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">
+                        {schedule.location?.name || schedule.location?.id || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">
+                        {schedule.created_at ? new Date(schedule.created_at).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleViewSchedule(schedule.id)}
+                          className="px-3 py-1.5 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Edit/Create View
   return (
     <div className="space-y-6">
       {/* ID Display */}
@@ -382,6 +555,20 @@ export default function RecurringSchedulesEditor({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Back Button */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleBackToList}
+          className="flex items-center gap-2 text-sm text-dark-sage hover:text-dark-sage/80"
+        >
+          ← Back to Schedules
+        </button>
+        <h3 className="text-lg font-semibold text-charcoal">
+          {selectedScheduleId ? 'Edit Schedule' : 'Create New Schedule'}
+        </h3>
+        <div></div>
       </div>
 
       {error && <ErrorDisplay error={error} />}

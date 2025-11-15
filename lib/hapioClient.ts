@@ -1799,6 +1799,15 @@ export async function deleteScheduleBlock(
 
 export interface HapioRecurringSchedule {
   id: string;
+  start_date?: string | null; // YYYY-MM-DD format
+  end_date?: string | null; // YYYY-MM-DD format
+  interval?: number | null; // Recurrence interval (e.g., 1 for weekly)
+  location?: {
+    id: string;
+    name?: string | null;
+    time_zone?: string | null;
+    enabled?: boolean;
+  } | null;
   name?: string | null;
   metadata?: Record<string, unknown> | null;
   created_at?: string;
@@ -1836,6 +1845,15 @@ export async function listRecurringSchedules(
     ...response,
     data: response.data.map((schedule: any) => ({
       id: schedule.id,
+      start_date: schedule.start_date ?? null,
+      end_date: schedule.end_date ?? null,
+      interval: schedule.interval ?? null,
+      location: schedule.location ? {
+        id: schedule.location.id,
+        name: schedule.location.name ?? null,
+        time_zone: schedule.location.time_zone ?? null,
+        enabled: schedule.location.enabled ?? true,
+      } : null,
       name: schedule.name ?? null,
       metadata: schedule.metadata ?? null,
       created_at: schedule.created_at,
@@ -1853,6 +1871,15 @@ export async function getRecurringSchedule(
   const response = await requestJson<any>('get', `${parentPath}/recurring-schedules/${id}`);
   return {
     id: response.id,
+    start_date: response.start_date ?? null,
+    end_date: response.end_date ?? null,
+    interval: response.interval ?? null,
+    location: response.location ? {
+      id: response.location.id,
+      name: response.location.name ?? null,
+      time_zone: response.location.time_zone ?? null,
+      enabled: response.location.enabled ?? true,
+    } : null,
     name: response.name ?? null,
     metadata: response.metadata ?? null,
     created_at: response.created_at,
