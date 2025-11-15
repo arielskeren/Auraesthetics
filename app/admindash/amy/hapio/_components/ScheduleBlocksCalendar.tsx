@@ -373,6 +373,9 @@ export default function ScheduleBlocksCalendar({
               } else if (dateBlocks.length > 0) {
                 // Fall back to one-off blocks
                 blockType = getBlockType(dateBlocks[0]);
+              } else if (!hasAvailability) {
+                // If no availability and no blocks, the day is unavailable (not on any recurring schedule)
+                blockType = 'closed';
               }
 
               // Format available times for display (e.g., "9:00 AM - 5:00 PM")
@@ -389,6 +392,11 @@ export default function ScheduleBlocksCalendar({
                 // Check if there are recurring blocks
                 const hasRecurringBlocks = recurringBlocksForDate.length > 0;
                 const allDayRecurring = recurringBlocksForDate.some((b) => b.isAllDay);
+                
+                // If no availability and no blocks, show as unavailable
+                if (!hasAvailability && !hasRecurringBlocks && dateBlocks.length === 0) {
+                  return 'Unavailable (Not on schedule)';
+                }
                 
                 // If fully blocked (all day) by recurring block, just show "Closed"
                 if (allDayRecurring) {
@@ -458,7 +466,8 @@ export default function ScheduleBlocksCalendar({
               };
 
               const tooltipContent = buildTooltipContent();
-              const showTooltip = hoveredDate && hoveredDate.toDateString() === date.toDateString() && !isPast && (tooltipContent || dateBlocks.length > 0);
+              // Show tooltip if there's content, blocks, or if the day is unavailable
+              const showTooltip = hoveredDate && hoveredDate.toDateString() === date.toDateString() && !isPast && (tooltipContent || dateBlocks.length > 0 || !hasAvailability);
 
               return (
                 <div
@@ -483,7 +492,7 @@ export default function ScheduleBlocksCalendar({
                         ? 'bg-yellow-100 border-yellow-300 text-yellow-900'
                         : hasAvailability
                         ? 'bg-green-50 border-green-300 text-green-900'
-                        : 'bg-white border-sand text-charcoal'
+                        : 'bg-red-100 border-red-300 text-red-900' // No availability = unavailable (red)
                     }`}
                   >
                     <div className="text-center font-medium">{date.getDate()}</div>
