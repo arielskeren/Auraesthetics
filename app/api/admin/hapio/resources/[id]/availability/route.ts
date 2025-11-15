@@ -125,13 +125,89 @@ export async function GET(
       availabilityByDate[date].sort((a, b) => a.start.localeCompare(b.start));
     });
 
+    // Now fetch recurring schedule blocks (exceptions that block availability)
+    const recurringBlocksByDate: Record<string, Array<{ start: string; end: string; isAllDay: boolean }>> = {};
+    
+    // Fetch all recurring schedule blocks across all schedules
+    if (recurringSchedulesResponse.data && Array.isArray(recurringSchedulesResponse.data)) {
+      for (const schedule of recurringSchedulesResponse.data) {
+        // Check if schedule is active for the date range
+        const scheduleStart = schedule.start_date ? new Date(schedule.start_date) : null;
+        if (scheduleStart) scheduleStart.setHours(0, 0, 0, 0);
+        
+        const scheduleEnd = schedule.end_date ? new Date(schedule.end_date) : null;
+        if (scheduleEnd) scheduleEnd.setHours(23, 59, 59, 999);
+
+        // Skip if schedule doesn't overlap with our date range
+        if (scheduleEnd && scheduleEnd < fromDate) continue;
+        if (scheduleStart && scheduleStart > toDate) continue;
+
+        try {
+          const blocksResponse = await listRecurringScheduleBlocks('resource', params.id, {
+            recurring_schedule_id: schedule.id,
+            per_page: 100,
+          }).catch(() => ({ data: [], meta: { total: 0 } }));
+
+          if (blocksResponse.data && Array.isArray(blocksResponse.data)) {
+            blocksResponse.data.forEach((block: any) => {
+              const hapioWeekday = block.weekday ?? block.day_of_week;
+              if (hapioWeekday === null || hapioWeekday === undefined) return;
+
+              const weekday = getWeekdayFromHapioString(hapioWeekday);
+              const startTime = block.start_time || '00:00';
+              const endTime = block.end_time || '23:59';
+              const isAllDay = startTime === '00:00:00' && endTime === '23:59:59';
+
+              // Calculate which dates in the range fall on this weekday
+              const currentDate = new Date(fromDate);
+              while (currentDate <= toDate) {
+                const dayOfWeek = currentDate.getDay();
+
+                if (dayOfWeek === weekday) {
+                  const currentDateNormalized = new Date(currentDate);
+                  currentDateNormalized.setHours(0, 0, 0, 0);
+                  
+                  const dateInRange = (!scheduleStart || currentDateNormalized >= scheduleStart) &&
+                                     (!scheduleEnd || currentDateNormalized <= scheduleEnd);
+
+                  if (dateInRange) {
+                    const dateStr = currentDate.toISOString().split('T')[0];
+                    if (!recurringBlocksByDate[dateStr]) {
+                      recurringBlocksByDate[dateStr] = [];
+                    }
+
+                    // Add block time range
+                    const timeRange = { start: startTime, end: endTime, isAllDay };
+                    const exists = recurringBlocksByDate[dateStr].some(
+                      (tr) => tr.start === startTime && tr.end === endTime
+                    );
+                    if (!exists) {
+                      recurringBlocksByDate[dateStr].push(timeRange);
+                    }
+                  }
+                }
+
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('[Availability API] Failed to fetch recurring blocks for schedule', schedule.id, err);
+        }
+      }
+    }
+
     console.log('[Availability API] Final availability from recurring schedules:', {
       schedulesProcessed: recurringSchedulesResponse.data?.length || 0,
       availabilityDates: Object.keys(availabilityByDate).length,
+      recurringBlocksDates: Object.keys(recurringBlocksByDate).length,
       sampleDates: Object.keys(availabilityByDate).slice(0, 5),
     });
 
-    return NextResponse.json({ availabilityByDate });
+    return NextResponse.json({ 
+      availabilityByDate,
+      recurringBlocksByDate,
+    });
   } catch (error: any) {
     console.error('[Hapio] Failed to fetch availability', error);
     const message = typeof error?.message === 'string' ? error.message : 'Failed to retrieve availability';

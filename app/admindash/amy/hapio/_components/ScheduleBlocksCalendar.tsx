@@ -25,6 +25,7 @@ export default function ScheduleBlocksCalendar({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [availability, setAvailability] = useState<Record<string, Array<{ start: string; end: string }>>>({});
+  const [recurringBlocks, setRecurringBlocks] = useState<Record<string, Array<{ start: string; end: string; isAllDay: boolean }>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -110,9 +111,11 @@ export default function ScheduleBlocksCalendar({
         const data = await response.json();
         console.log('[ScheduleBlocksCalendar] Availability data:', {
           dates: Object.keys(data.availabilityByDate || {}).length,
+          recurringBlocksDates: Object.keys(data.recurringBlocksByDate || {}).length,
           sample: Object.entries(data.availabilityByDate || {}).slice(0, 3),
         });
         setAvailability(data.availabilityByDate || {});
+        setRecurringBlocks(data.recurringBlocksByDate || {});
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.warn('[ScheduleBlocksCalendar] Availability API error:', response.status, errorData);
@@ -358,9 +361,17 @@ export default function ScheduleBlocksCalendar({
               const dateStr = date.toISOString().split('T')[0];
               const availableTimeRanges = availability[dateStr] || [];
               const hasAvailability = availableTimeRanges.length > 0;
+              const recurringBlocksForDate = recurringBlocks[dateStr] || [];
 
+              // Determine block type: recurring blocks take precedence, then one-off blocks
               let blockType: 'closed' | 'open' | null = null;
-              if (dateBlocks.length > 0) {
+              
+              // Check recurring blocks first (they override availability)
+              if (recurringBlocksForDate.length > 0) {
+                const allDayRecurring = recurringBlocksForDate.some((b) => b.isAllDay);
+                blockType = allDayRecurring ? 'closed' : 'open';
+              } else if (dateBlocks.length > 0) {
+                // Fall back to one-off blocks
                 blockType = getBlockType(dateBlocks[0]);
               }
 
@@ -373,12 +384,81 @@ export default function ScheduleBlocksCalendar({
                 return `${displayHour}:${minutes} ${ampm}`;
               };
 
-              // Build availability text from time ranges
-              const availabilityText = hasAvailability
-                ? availableTimeRanges
+              // Build tooltip content
+              const buildTooltipContent = () => {
+                // Check if there are recurring blocks
+                const hasRecurringBlocks = recurringBlocksForDate.length > 0;
+                const allDayRecurring = recurringBlocksForDate.some((b) => b.isAllDay);
+                
+                // If fully blocked (all day) by recurring block, just show "Closed"
+                if (allDayRecurring) {
+                  return 'Closed (Recurring)';
+                }
+
+                // If partially blocked by recurring blocks, show availability + recurring blocks
+                if (hasRecurringBlocks && !allDayRecurring) {
+                  const parts: string[] = [];
+                  
+                  // Add full availability if available (from recurring schedules)
+                  if (hasAvailability) {
+                    const availabilityText = availableTimeRanges
+                      .map((range) => `${formatTime(range.start)} - ${formatTime(range.end)}`)
+                      .join(', ');
+                    parts.push(availabilityText);
+                  }
+                  
+                  // Then show recurring blocks section
+                  parts.push('Recurring Blocks:');
+                  recurringBlocksForDate.forEach((block) => {
+                    parts.push(`${formatTime(block.start)} - ${formatTime(block.end)}`);
+                  });
+
+                  return parts.length > 0 ? parts : null;
+                }
+
+                // If partially blocked by one-off blocks, show availability + blocks
+                if (blockType === 'open' && dateBlocks.length > 0) {
+                  const partialBlocks = dateBlocks.map((block) => {
+                    const start = new Date(block.starts_at);
+                    const end = new Date(block.ends_at);
+                    const startTime = start.toTimeString().slice(0, 5);
+                    const endTime = end.toTimeString().slice(0, 5);
+                    return { startTime, endTime };
+                  });
+
+                  const parts: string[] = [];
+                  
+                  // Always show full availability first (from recurring schedules)
+                  if (hasAvailability) {
+                    const availabilityText = availableTimeRanges
+                      .map((range) => `${formatTime(range.start)} - ${formatTime(range.end)}`)
+                      .join(', ');
+                    parts.push(availabilityText);
+                  }
+                  
+                  // Then show blocks section
+                  if (partialBlocks.length > 0) {
+                    parts.push('Blocks:');
+                    partialBlocks.forEach((block) => {
+                      parts.push(`${formatTime(block.startTime)} - ${formatTime(block.endTime)}`);
+                    });
+                  }
+
+                  return parts.length > 0 ? parts : null;
+                }
+
+                // If no blocks, just show availability
+                if (hasAvailability) {
+                  return availableTimeRanges
                     .map((range) => `${formatTime(range.start)} - ${formatTime(range.end)}`)
-                    .join(', ')
-                : '';
+                    .join(', ');
+                }
+
+                return null;
+              };
+
+              const tooltipContent = buildTooltipContent();
+              const showTooltip = hoveredDate && hoveredDate.toDateString() === date.toDateString() && !isPast && (tooltipContent || dateBlocks.length > 0);
 
               return (
                 <div
@@ -407,6 +487,16 @@ export default function ScheduleBlocksCalendar({
                     }`}
                   >
                     <div className="text-center font-medium">{date.getDate()}</div>
+                    {/* Show indicator for recurring blocks */}
+                    {recurringBlocksForDate.length > 0 && (
+                      <div className="absolute top-0.5 right-0.5">
+                        <div className={`w-2 h-2 rounded-full ${
+                          recurringBlocksForDate.some((b) => b.isAllDay)
+                            ? 'bg-red-600'
+                            : 'bg-yellow-600'
+                        }`} />
+                      </div>
+                    )}
                     {hasAvailability && !blockType && (
                       <div className="absolute bottom-0.5 left-0 right-0 flex justify-center">
                         <div className="w-1 h-1 bg-green-600 rounded-full" />
@@ -415,9 +505,40 @@ export default function ScheduleBlocksCalendar({
                   </button>
                   
                   {/* Hover Tooltip */}
-                  {hoveredDate && hoveredDate.toDateString() === date.toDateString() && hasAvailability && !isPast && (
-                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-charcoal text-white text-xs rounded shadow-lg whitespace-nowrap">
-                      {availabilityText}
+                  {showTooltip && (
+                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-charcoal text-white text-xs rounded shadow-lg max-w-[200px]">
+                      {tooltipContent ? (
+                        typeof tooltipContent === 'string' ? (
+                          <div>{tooltipContent}</div>
+                        ) : Array.isArray(tooltipContent) ? (
+                          <div className="space-y-1">
+                            {tooltipContent.map((line, idx) => (
+                              <div
+                                key={idx}
+                                className={line === 'Blocks:' ? 'font-semibold mt-1.5 pt-1 border-t border-white/20' : ''}
+                              >
+                                {line}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null
+                      ) : dateBlocks.length > 0 && blockType === 'open' ? (
+                        // Fallback: show blocks even if no availability
+                        <div className="space-y-1">
+                          <div className="font-semibold">Blocks:</div>
+                          {dateBlocks.map((block) => {
+                            const start = new Date(block.starts_at);
+                            const end = new Date(block.ends_at);
+                            const startTime = start.toTimeString().slice(0, 5);
+                            const endTime = end.toTimeString().slice(0, 5);
+                            return (
+                              <div key={block.id}>
+                                {formatTime(startTime)} - {formatTime(endTime)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
                         <div className="w-2 h-2 bg-charcoal rotate-45" />
                       </div>
