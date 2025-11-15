@@ -252,10 +252,20 @@ export default function AdminDashboardClient() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-serif text-charcoal mb-2">
-            Admin Dashboard
-          </h1>
-          <p className="text-warm-gray">Manage bookings and operations</p>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-serif text-charcoal mb-2">
+                Admin Dashboard
+              </h1>
+              <p className="text-warm-gray">Manage bookings and operations</p>
+            </div>
+            <a
+              href="/admindash/amy/hapio"
+              className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+            >
+              Hapio Management
+            </a>
+          </div>
         </div>
 
         {/* Stats */}

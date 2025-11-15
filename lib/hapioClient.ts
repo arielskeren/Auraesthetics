@@ -679,4 +679,1301 @@ export function getRawHapioClient(): AxiosInstance {
   return getClient();
 }
 
+// ============================================================================
+// Phase 1: Complete Hapio Management API Functions
+// Following official Hapio API documentation at https://docs.hapio.io
+// ============================================================================
+
+// ============================================================================
+// Project Management
+// ============================================================================
+
+export interface HapioProject {
+  id: string;
+  name: string;
+  timezone?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getCurrentProject(): Promise<HapioProject> {
+  const response = await requestJson<any>('get', 'project');
+  return {
+    id: response.id,
+    name: response.name,
+    timezone: response.timezone ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+// ============================================================================
+// Locations Management
+// ============================================================================
+
+export interface HapioLocationPayload {
+  name: string;
+  address?: string | null;
+  timezone?: string | null;
+  enabled?: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+export async function listLocations(params?: {
+  page?: number;
+  per_page?: number;
+}): Promise<HapioPaginatedResponse<HapioLocation>> {
+  const query: Record<string, string | number> = {};
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'locations',
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((l: any) => ({
+      id: l.id,
+      name: l.name,
+      address: l.address ?? null,
+      timezone: l.timezone ?? null,
+      enabled: Boolean(l.enabled),
+      metadata: l.metadata ?? null,
+    })),
+  };
+}
+
+export async function getLocation(id: string): Promise<HapioLocation> {
+  const response = await requestJson<any>('get', `locations/${id}`);
+  return {
+    id: response.id,
+    name: response.name,
+    address: response.address ?? null,
+    timezone: response.timezone ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function createLocation(location: HapioLocationPayload): Promise<HapioLocation> {
+  const body: Record<string, unknown> = {
+    name: location.name,
+  };
+  if (location.address !== undefined) body.address = location.address;
+  if (location.timezone !== undefined) body.timezone = location.timezone;
+  if (location.enabled !== undefined) body.enabled = location.enabled;
+  if (location.metadata !== undefined) body.metadata = location.metadata;
+
+  const response = await requestJson<any>('post', 'locations', body);
+  return {
+    id: response.id,
+    name: response.name,
+    address: response.address ?? null,
+    timezone: response.timezone ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function updateLocation(
+  id: string,
+  location: Partial<HapioLocationPayload>
+): Promise<HapioLocation> {
+  const body: Record<string, unknown> = {};
+  if (location.name !== undefined) body.name = location.name;
+  if (location.address !== undefined) body.address = location.address;
+  if (location.timezone !== undefined) body.timezone = location.timezone;
+  if (location.enabled !== undefined) body.enabled = location.enabled;
+  if (location.metadata !== undefined) body.metadata = location.metadata;
+
+  const response = await requestJson<any>('patch', `locations/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name,
+    address: response.address ?? null,
+    timezone: response.timezone ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function replaceLocation(
+  id: string,
+  location: HapioLocationPayload
+): Promise<HapioLocation> {
+  const body: Record<string, unknown> = {
+    name: location.name,
+  };
+  if (location.address !== undefined) body.address = location.address;
+  if (location.timezone !== undefined) body.timezone = location.timezone;
+  if (location.enabled !== undefined) body.enabled = location.enabled;
+  if (location.metadata !== undefined) body.metadata = location.metadata;
+
+  const response = await requestJson<any>('put', `locations/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name,
+    address: response.address ?? null,
+    timezone: response.timezone ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function deleteLocation(id: string): Promise<void> {
+  await requestJson('delete', `locations/${id}`);
+}
+
+// ============================================================================
+// Resources Management
+// ============================================================================
+
+export interface HapioResourcePayload {
+  name: string;
+  location_id: string;
+  max_simultaneous_bookings?: number;
+  enabled?: boolean;
+  metadata?: Record<string, unknown> | null;
+  protected_metadata?: Record<string, unknown> | null;
+}
+
+export async function listResources(params?: {
+  location_id?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<HapioPaginatedResponse<HapioResource>> {
+  const query: Record<string, string | number> = {};
+  if (params?.location_id) query.location_id = params.location_id;
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'resources',
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      location_id: r.location_id,
+      max_simultaneous_bookings: r.max_simultaneous_bookings,
+      enabled: Boolean(r.enabled),
+      metadata: r.metadata ?? null,
+      protected_metadata: r.protected_metadata ?? null,
+    })),
+  };
+}
+
+export async function getResource(id: string): Promise<HapioResource> {
+  const response = await requestJson<any>('get', `resources/${id}`);
+  return {
+    id: response.id,
+    name: response.name,
+    location_id: response.location_id,
+    max_simultaneous_bookings: response.max_simultaneous_bookings,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+  };
+}
+
+export async function createResource(resource: HapioResourcePayload): Promise<HapioResource> {
+  const body: Record<string, unknown> = {
+    name: resource.name,
+    location_id: resource.location_id,
+  };
+  if (resource.max_simultaneous_bookings !== undefined)
+    body.max_simultaneous_bookings = resource.max_simultaneous_bookings;
+  if (resource.enabled !== undefined) body.enabled = resource.enabled;
+  if (resource.metadata !== undefined) body.metadata = resource.metadata;
+  if (resource.protected_metadata !== undefined) body.protected_metadata = resource.protected_metadata;
+
+  const response = await requestJson<any>('post', 'resources', body);
+  return {
+    id: response.id,
+    name: response.name,
+    location_id: response.location_id,
+    max_simultaneous_bookings: response.max_simultaneous_bookings,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+  };
+}
+
+export async function updateResource(
+  id: string,
+  resource: Partial<HapioResourcePayload>
+): Promise<HapioResource> {
+  const body: Record<string, unknown> = {};
+  if (resource.name !== undefined) body.name = resource.name;
+  if (resource.location_id !== undefined) body.location_id = resource.location_id;
+  if (resource.max_simultaneous_bookings !== undefined)
+    body.max_simultaneous_bookings = resource.max_simultaneous_bookings;
+  if (resource.enabled !== undefined) body.enabled = resource.enabled;
+  if (resource.metadata !== undefined) body.metadata = resource.metadata;
+  if (resource.protected_metadata !== undefined) body.protected_metadata = resource.protected_metadata;
+
+  const response = await requestJson<any>('patch', `resources/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name,
+    location_id: response.location_id,
+    max_simultaneous_bookings: response.max_simultaneous_bookings,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+  };
+}
+
+export async function replaceResource(
+  id: string,
+  resource: HapioResourcePayload
+): Promise<HapioResource> {
+  const body: Record<string, unknown> = {
+    name: resource.name,
+    location_id: resource.location_id,
+  };
+  if (resource.max_simultaneous_bookings !== undefined)
+    body.max_simultaneous_bookings = resource.max_simultaneous_bookings;
+  if (resource.enabled !== undefined) body.enabled = resource.enabled;
+  if (resource.metadata !== undefined) body.metadata = resource.metadata;
+  if (resource.protected_metadata !== undefined) body.protected_metadata = resource.protected_metadata;
+
+  const response = await requestJson<any>('put', `resources/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name,
+    location_id: response.location_id,
+    max_simultaneous_bookings: response.max_simultaneous_bookings,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+  };
+}
+
+export async function deleteResource(id: string): Promise<void> {
+  await requestJson('delete', `resources/${id}`);
+}
+
+export async function listResourceSchedule(
+  resourceId: string,
+  params?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    per_page?: number;
+  }
+): Promise<HapioPaginatedResponse<any>> {
+  const query: Record<string, string | number> = {};
+  if (params?.from) query.from = params.from;
+  if (params?.to) query.to = params.to;
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  return await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `resources/${resourceId}/schedule`,
+    { params: query }
+  );
+}
+
+export async function listResourceFullyBooked(
+  resourceId: string,
+  params?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    per_page?: number;
+  }
+): Promise<HapioPaginatedResponse<any>> {
+  const query: Record<string, string | number> = {};
+  if (params?.from) query.from = params.from;
+  if (params?.to) query.to = params.to;
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  return await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `resources/${resourceId}/fully-booked`,
+    { params: query }
+  );
+}
+
+export interface HapioResourceServiceAssociation {
+  resource_id: string;
+  service_id: string;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function listResourceAssociatedServices(
+  resourceId: string
+): Promise<HapioResourceServiceAssociation[]> {
+  const response = await requestJson<any[]>('get', `resources/${resourceId}/services`);
+  return response.map((assoc: any) => ({
+    resource_id: assoc.resource_id,
+    service_id: assoc.service_id,
+    metadata: assoc.metadata ?? null,
+    created_at: assoc.created_at,
+    updated_at: assoc.updated_at,
+  }));
+}
+
+export async function getResourceServiceAssociation(
+  resourceId: string,
+  serviceId: string
+): Promise<HapioResourceServiceAssociation> {
+  const response = await requestJson<any>('get', `resources/${resourceId}/services/${serviceId}`);
+  return {
+    resource_id: response.resource_id,
+    service_id: response.service_id,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function associateResourceService(
+  resourceId: string,
+  serviceId: string
+): Promise<HapioResourceServiceAssociation> {
+  const response = await requestJson<any>(
+    'post',
+    `resources/${resourceId}/services/${serviceId}`
+  );
+  return {
+    resource_id: response.resource_id,
+    service_id: response.service_id,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function dissociateResourceService(
+  resourceId: string,
+  serviceId: string
+): Promise<void> {
+  await requestJson('delete', `resources/${resourceId}/services/${serviceId}`);
+}
+
+// ============================================================================
+// Services Management
+// ============================================================================
+
+export interface HapioServicePayload {
+  name: string;
+  duration_minutes: number;
+  buffer_before_minutes?: number | null;
+  buffer_after_minutes?: number | null;
+  enabled?: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+export async function listServices(params?: {
+  page?: number;
+  per_page?: number;
+}): Promise<HapioPaginatedResponse<HapioService>> {
+  const query: Record<string, string | number> = {};
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'services',
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      duration_minutes: s.duration_minutes,
+      buffer_before_minutes: s.buffer_before_minutes ?? null,
+      buffer_after_minutes: s.buffer_after_minutes ?? null,
+      enabled: Boolean(s.enabled),
+      metadata: s.metadata ?? null,
+    })),
+  };
+}
+
+export async function getService(id: string): Promise<HapioService> {
+  const response = await requestJson<any>('get', `services/${id}`);
+  return {
+    id: response.id,
+    name: response.name,
+    duration_minutes: response.duration_minutes,
+    buffer_before_minutes: response.buffer_before_minutes ?? null,
+    buffer_after_minutes: response.buffer_after_minutes ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function createService(service: HapioServicePayload): Promise<HapioService> {
+  const body: Record<string, unknown> = {
+    name: service.name,
+    duration_minutes: service.duration_minutes,
+  };
+  if (service.buffer_before_minutes !== undefined)
+    body.buffer_before_minutes = service.buffer_before_minutes;
+  if (service.buffer_after_minutes !== undefined)
+    body.buffer_after_minutes = service.buffer_after_minutes;
+  if (service.enabled !== undefined) body.enabled = service.enabled;
+  if (service.metadata !== undefined) body.metadata = service.metadata;
+
+  const response = await requestJson<any>('post', 'services', body);
+  return {
+    id: response.id,
+    name: response.name,
+    duration_minutes: response.duration_minutes,
+    buffer_before_minutes: response.buffer_before_minutes ?? null,
+    buffer_after_minutes: response.buffer_after_minutes ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function updateService(
+  id: string,
+  service: Partial<HapioServicePayload>
+): Promise<HapioService> {
+  const body: Record<string, unknown> = {};
+  if (service.name !== undefined) body.name = service.name;
+  if (service.duration_minutes !== undefined) body.duration_minutes = service.duration_minutes;
+  if (service.buffer_before_minutes !== undefined)
+    body.buffer_before_minutes = service.buffer_before_minutes;
+  if (service.buffer_after_minutes !== undefined)
+    body.buffer_after_minutes = service.buffer_after_minutes;
+  if (service.enabled !== undefined) body.enabled = service.enabled;
+  if (service.metadata !== undefined) body.metadata = service.metadata;
+
+  const response = await requestJson<any>('patch', `services/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name,
+    duration_minutes: response.duration_minutes,
+    buffer_before_minutes: response.buffer_before_minutes ?? null,
+    buffer_after_minutes: response.buffer_after_minutes ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function replaceService(
+  id: string,
+  service: HapioServicePayload
+): Promise<HapioService> {
+  const body: Record<string, unknown> = {
+    name: service.name,
+    duration_minutes: service.duration_minutes,
+  };
+  if (service.buffer_before_minutes !== undefined)
+    body.buffer_before_minutes = service.buffer_before_minutes;
+  if (service.buffer_after_minutes !== undefined)
+    body.buffer_after_minutes = service.buffer_after_minutes;
+  if (service.enabled !== undefined) body.enabled = service.enabled;
+  if (service.metadata !== undefined) body.metadata = service.metadata;
+
+  const response = await requestJson<any>('put', `services/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name,
+    duration_minutes: response.duration_minutes,
+    buffer_before_minutes: response.buffer_before_minutes ?? null,
+    buffer_after_minutes: response.buffer_after_minutes ?? null,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+export async function deleteService(id: string): Promise<void> {
+  await requestJson('delete', `services/${id}`);
+}
+
+export async function listServiceBookableSlots(
+  serviceId: string,
+  params: {
+    from: string;
+    to: string;
+    location_id?: string;
+    resource_id?: string;
+    per_page?: number;
+    page?: number;
+  }
+): Promise<HapioPaginatedResponse<HapioBookableSlot>> {
+  const query: Record<string, string | number> = {
+    from: params.from,
+    to: params.to,
+  };
+  if (params.location_id) query.location = params.location_id;
+  if (params.resource_id) query.resource = params.resource_id;
+  if (params.per_page) query.per_page = params.per_page;
+  if (params.page) query.page = params.page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `services/${serviceId}/bookable-slots`,
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((slot: any) => ({
+      startsAt: slot.starts_at,
+      endsAt: slot.ends_at,
+      bufferStartsAt: slot.buffer_starts_at ?? null,
+      bufferEndsAt: slot.buffer_ends_at ?? null,
+      minEndsAt: slot.min_ends_at ?? null,
+      minBufferEndsAt: slot.min_buffer_ends_at ?? null,
+      resources: Array.isArray(slot.resources)
+        ? slot.resources.map((resource: any) => ({
+            id: resource.id,
+            name: resource.name,
+            max_simultaneous_bookings: resource.max_simultaneous_bookings,
+            metadata: resource.metadata ?? null,
+            protected_metadata: resource.protected_metadata ?? null,
+            enabled: Boolean(resource.enabled),
+          }))
+        : [],
+    })),
+  };
+}
+
+export async function listServiceAssociatedResources(
+  serviceId: string
+): Promise<HapioResourceServiceAssociation[]> {
+  const response = await requestJson<any[]>('get', `services/${serviceId}/resources`);
+  return response.map((assoc: any) => ({
+    resource_id: assoc.resource_id,
+    service_id: assoc.service_id,
+    metadata: assoc.metadata ?? null,
+    created_at: assoc.created_at,
+    updated_at: assoc.updated_at,
+  }));
+}
+
+export async function getServiceResourceAssociation(
+  serviceId: string,
+  resourceId: string
+): Promise<HapioResourceServiceAssociation> {
+  const response = await requestJson<any>('get', `services/${serviceId}/resources/${resourceId}`);
+  return {
+    resource_id: response.resource_id,
+    service_id: response.service_id,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function associateServiceResource(
+  serviceId: string,
+  resourceId: string
+): Promise<HapioResourceServiceAssociation> {
+  const response = await requestJson<any>(
+    'post',
+    `services/${serviceId}/resources/${resourceId}`
+  );
+  return {
+    resource_id: response.resource_id,
+    service_id: response.service_id,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function dissociateServiceResource(
+  serviceId: string,
+  resourceId: string
+): Promise<void> {
+  await requestJson('delete', `services/${serviceId}/resources/${resourceId}`);
+}
+
+// ============================================================================
+// Schedule Blocks Management
+// ============================================================================
+
+export interface HapioScheduleBlock {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HapioScheduleBlockPayload {
+  starts_at: string;
+  ends_at: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Build parent path for schedule blocks
+ * Examples: "project", "locations/{locationId}", "resources/{resourceId}"
+ */
+function buildScheduleParentPath(parentType: 'project' | 'location' | 'resource', parentId?: string): string {
+  if (parentType === 'project') {
+    return 'project';
+  }
+  if (parentType === 'location' && parentId) {
+    return `locations/${parentId}`;
+  }
+  if (parentType === 'resource' && parentId) {
+    return `resources/${parentId}`;
+  }
+  throw new Error(`Invalid parent type/id combination: ${parentType}/${parentId}`);
+}
+
+export async function listScheduleBlocks(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  params?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    per_page?: number;
+  }
+): Promise<HapioPaginatedResponse<HapioScheduleBlock>> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const query: Record<string, string | number> = {};
+  if (params?.from) query.from = params.from;
+  if (params?.to) query.to = params.to;
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `${parentPath}/schedule-blocks`,
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((block: any) => ({
+      id: block.id,
+      starts_at: block.starts_at,
+      ends_at: block.ends_at,
+      metadata: block.metadata ?? null,
+      created_at: block.created_at,
+      updated_at: block.updated_at,
+    })),
+  };
+}
+
+export async function getScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string
+): Promise<HapioScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const response = await requestJson<any>('get', `${parentPath}/schedule-blocks/${id}`);
+  return {
+    id: response.id,
+    starts_at: response.starts_at,
+    ends_at: response.ends_at,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function createScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  block: HapioScheduleBlockPayload
+): Promise<HapioScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {
+    starts_at: block.starts_at,
+    ends_at: block.ends_at,
+  };
+  if (block.metadata !== undefined) body.metadata = block.metadata;
+
+  const response = await requestJson<any>('post', `${parentPath}/schedule-blocks`, body);
+  return {
+    id: response.id,
+    starts_at: response.starts_at,
+    ends_at: response.ends_at,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function updateScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string,
+  block: Partial<HapioScheduleBlockPayload>
+): Promise<HapioScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {};
+  if (block.starts_at !== undefined) body.starts_at = block.starts_at;
+  if (block.ends_at !== undefined) body.ends_at = block.ends_at;
+  if (block.metadata !== undefined) body.metadata = block.metadata;
+
+  const response = await requestJson<any>('patch', `${parentPath}/schedule-blocks/${id}`, body);
+  return {
+    id: response.id,
+    starts_at: response.starts_at,
+    ends_at: response.ends_at,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function replaceScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string,
+  block: HapioScheduleBlockPayload
+): Promise<HapioScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {
+    starts_at: block.starts_at,
+    ends_at: block.ends_at,
+  };
+  if (block.metadata !== undefined) body.metadata = block.metadata;
+
+  const response = await requestJson<any>('put', `${parentPath}/schedule-blocks/${id}`, body);
+  return {
+    id: response.id,
+    starts_at: response.starts_at,
+    ends_at: response.ends_at,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function deleteScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string
+): Promise<void> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  await requestJson('delete', `${parentPath}/schedule-blocks/${id}`);
+}
+
+// ============================================================================
+// Recurring Schedules Management
+// ============================================================================
+
+export interface HapioRecurringSchedule {
+  id: string;
+  name?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HapioRecurringSchedulePayload {
+  name?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export async function listRecurringSchedules(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  params?: {
+    page?: number;
+    per_page?: number;
+  }
+): Promise<HapioPaginatedResponse<HapioRecurringSchedule>> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const query: Record<string, string | number> = {};
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `${parentPath}/recurring-schedules`,
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((schedule: any) => ({
+      id: schedule.id,
+      name: schedule.name ?? null,
+      metadata: schedule.metadata ?? null,
+      created_at: schedule.created_at,
+      updated_at: schedule.updated_at,
+    })),
+  };
+}
+
+export async function getRecurringSchedule(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string
+): Promise<HapioRecurringSchedule> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const response = await requestJson<any>('get', `${parentPath}/recurring-schedules/${id}`);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function createRecurringSchedule(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  schedule: HapioRecurringSchedulePayload
+): Promise<HapioRecurringSchedule> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {};
+  if (schedule.name !== undefined) body.name = schedule.name;
+  if (schedule.metadata !== undefined) body.metadata = schedule.metadata;
+
+  const response = await requestJson<any>('post', `${parentPath}/recurring-schedules`, body);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function updateRecurringSchedule(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string,
+  schedule: Partial<HapioRecurringSchedulePayload>
+): Promise<HapioRecurringSchedule> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {};
+  if (schedule.name !== undefined) body.name = schedule.name;
+  if (schedule.metadata !== undefined) body.metadata = schedule.metadata;
+
+  const response = await requestJson<any>('patch', `${parentPath}/recurring-schedules/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function replaceRecurringSchedule(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string,
+  schedule: HapioRecurringSchedulePayload
+): Promise<HapioRecurringSchedule> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {};
+  if (schedule.name !== undefined) body.name = schedule.name;
+  if (schedule.metadata !== undefined) body.metadata = schedule.metadata;
+
+  const response = await requestJson<any>('put', `${parentPath}/recurring-schedules/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function deleteRecurringSchedule(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string
+): Promise<void> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  await requestJson('delete', `${parentPath}/recurring-schedules/${id}`);
+}
+
+// ============================================================================
+// Recurring Schedule Blocks Management
+// ============================================================================
+
+export interface HapioRecurringScheduleBlock {
+  id: string;
+  recurring_schedule_id: string;
+  day_of_week?: number | null; // 0 = Sunday, 6 = Saturday
+  start_time?: string | null; // HH:mm format
+  end_time?: string | null; // HH:mm format
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HapioRecurringScheduleBlockPayload {
+  recurring_schedule_id: string;
+  day_of_week?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export async function listRecurringScheduleBlocks(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  params?: {
+    recurring_schedule_id?: string;
+    page?: number;
+    per_page?: number;
+  }
+): Promise<HapioPaginatedResponse<HapioRecurringScheduleBlock>> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const query: Record<string, string | number> = {};
+  if (params?.recurring_schedule_id) query.recurring_schedule_id = params.recurring_schedule_id;
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `${parentPath}/recurring-schedule-blocks`,
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((block: any) => ({
+      id: block.id,
+      recurring_schedule_id: block.recurring_schedule_id,
+      day_of_week: block.day_of_week ?? null,
+      start_time: block.start_time ?? null,
+      end_time: block.end_time ?? null,
+      metadata: block.metadata ?? null,
+      created_at: block.created_at,
+      updated_at: block.updated_at,
+    })),
+  };
+}
+
+export async function getRecurringScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string
+): Promise<HapioRecurringScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const response = await requestJson<any>('get', `${parentPath}/recurring-schedule-blocks/${id}`);
+  return {
+    id: response.id,
+    recurring_schedule_id: response.recurring_schedule_id,
+    day_of_week: response.day_of_week ?? null,
+    start_time: response.start_time ?? null,
+    end_time: response.end_time ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function createRecurringScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  block: HapioRecurringScheduleBlockPayload
+): Promise<HapioRecurringScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {
+    recurring_schedule_id: block.recurring_schedule_id,
+  };
+  if (block.day_of_week !== undefined) body.day_of_week = block.day_of_week;
+  if (block.start_time !== undefined) body.start_time = block.start_time;
+  if (block.end_time !== undefined) body.end_time = block.end_time;
+  if (block.metadata !== undefined) body.metadata = block.metadata;
+
+  const response = await requestJson<any>('post', `${parentPath}/recurring-schedule-blocks`, body);
+  return {
+    id: response.id,
+    recurring_schedule_id: response.recurring_schedule_id,
+    day_of_week: response.day_of_week ?? null,
+    start_time: response.start_time ?? null,
+    end_time: response.end_time ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function updateRecurringScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string,
+  block: Partial<HapioRecurringScheduleBlockPayload>
+): Promise<HapioRecurringScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {};
+  if (block.recurring_schedule_id !== undefined)
+    body.recurring_schedule_id = block.recurring_schedule_id;
+  if (block.day_of_week !== undefined) body.day_of_week = block.day_of_week;
+  if (block.start_time !== undefined) body.start_time = block.start_time;
+  if (block.end_time !== undefined) body.end_time = block.end_time;
+  if (block.metadata !== undefined) body.metadata = block.metadata;
+
+  const response = await requestJson<any>(
+    'patch',
+    `${parentPath}/recurring-schedule-blocks/${id}`,
+    body
+  );
+  return {
+    id: response.id,
+    recurring_schedule_id: response.recurring_schedule_id,
+    day_of_week: response.day_of_week ?? null,
+    start_time: response.start_time ?? null,
+    end_time: response.end_time ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function replaceRecurringScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string,
+  block: HapioRecurringScheduleBlockPayload
+): Promise<HapioRecurringScheduleBlock> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  const body: Record<string, unknown> = {
+    recurring_schedule_id: block.recurring_schedule_id,
+  };
+  if (block.day_of_week !== undefined) body.day_of_week = block.day_of_week;
+  if (block.start_time !== undefined) body.start_time = block.start_time;
+  if (block.end_time !== undefined) body.end_time = block.end_time;
+  if (block.metadata !== undefined) body.metadata = block.metadata;
+
+  const response = await requestJson<any>('put', `${parentPath}/recurring-schedule-blocks/${id}`, body);
+  return {
+    id: response.id,
+    recurring_schedule_id: response.recurring_schedule_id,
+    day_of_week: response.day_of_week ?? null,
+    start_time: response.start_time ?? null,
+    end_time: response.end_time ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function deleteRecurringScheduleBlock(
+  parentType: 'project' | 'location' | 'resource',
+  parentId: string | undefined,
+  id: string
+): Promise<void> {
+  const parentPath = buildScheduleParentPath(parentType, parentId);
+  await requestJson('delete', `${parentPath}/recurring-schedule-blocks/${id}`);
+}
+
+// ============================================================================
+// Bookings Management (extending existing functions)
+// ============================================================================
+
+export async function listBookings(params?: {
+  from?: string;
+  to?: string;
+  location_id?: string;
+  service_id?: string;
+  resource_id?: string;
+  status?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<HapioPaginatedResponse<HapioBookingResponse>> {
+  const query: Record<string, string | number> = {};
+  if (params?.from) query.from = params.from;
+  if (params?.to) query.to = params.to;
+  if (params?.location_id) query.location_id = params.location_id;
+  if (params?.service_id) query.service_id = params.service_id;
+  if (params?.resource_id) query.resource_id = params.resource_id;
+  if (params?.status) query.status = params.status;
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'bookings',
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((booking: any) => normalizeBooking(booking)),
+  };
+}
+
+export async function getBooking(id: string): Promise<HapioBookingResponse> {
+  return normalizeBooking(await requestJson<any>('get', `bookings/${id}`));
+}
+
+export async function createBooking(booking: HapioBookingPayload): Promise<HapioBookingResponse> {
+  return createPendingBooking(booking);
+}
+
+export async function updateBooking(
+  id: string,
+  booking: HapioBookingUpdatePayload
+): Promise<HapioBookingResponse> {
+  const body: Record<string, unknown> = {};
+  if (booking.startsAt) body.starts_at = booking.startsAt;
+  if (booking.endsAt) body.ends_at = booking.endsAt;
+  if (booking.resourceId !== undefined) body.resource_id = booking.resourceId;
+  if (booking.metadata) body.metadata = booking.metadata;
+  if (booking.protectedMetadata) body.protected_metadata = booking.protectedMetadata;
+  if (typeof booking.isTemporary === 'boolean') body.is_temporary = booking.isTemporary;
+  if (typeof booking.ignoreSchedule === 'boolean') body.ignore_schedule = booking.ignoreSchedule;
+  if (typeof booking.ignoreFullyBooked === 'boolean')
+    body.ignore_fully_booked = booking.ignoreFullyBooked;
+  if (typeof booking.ignoreBookableSlots === 'boolean')
+    body.ignore_bookable_slots = booking.ignoreBookableSlots;
+
+  return normalizeBooking(await requestJson<any>('patch', `bookings/${id}`, body));
+}
+
+export async function replaceBooking(
+  id: string,
+  booking: HapioBookingPayload
+): Promise<HapioBookingResponse> {
+  const body: Record<string, unknown> = {
+    location_id: booking.locationId,
+    service_id: booking.serviceId,
+    starts_at: booking.startsAt,
+    ends_at: booking.endsAt,
+  };
+  if (booking.resourceId) body.resource_id = booking.resourceId;
+  if (booking.metadata) body.metadata = booking.metadata;
+  if (booking.protectedMetadata) body.protected_metadata = booking.protectedMetadata;
+  if (typeof booking.isTemporary === 'boolean') body.is_temporary = booking.isTemporary;
+  if (typeof booking.ignoreSchedule === 'boolean') body.ignore_schedule = booking.ignoreSchedule;
+  if (typeof booking.ignoreFullyBooked === 'boolean')
+    body.ignore_fully_booked = booking.ignoreFullyBooked;
+  if (typeof booking.ignoreBookableSlots === 'boolean')
+    body.ignore_bookable_slots = booking.ignoreBookableSlots;
+
+  return normalizeBooking(await requestJson<any>('put', `bookings/${id}`, body));
+}
+
+// ============================================================================
+// Booking Groups Management
+// ============================================================================
+
+export interface HapioBookingGroup {
+  id: string;
+  name?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HapioBookingGroupPayload {
+  name?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export async function listBookingGroups(params?: {
+  page?: number;
+  per_page?: number;
+}): Promise<HapioPaginatedResponse<HapioBookingGroup>> {
+  const query: Record<string, string | number> = {};
+  if (params?.page) query.page = params.page;
+  if (params?.per_page) query.per_page = params.per_page;
+
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'booking-groups',
+    { params: query }
+  );
+
+  return {
+    ...response,
+    data: response.data.map((group: any) => ({
+      id: group.id,
+      name: group.name ?? null,
+      metadata: group.metadata ?? null,
+      created_at: group.created_at,
+      updated_at: group.updated_at,
+    })),
+  };
+}
+
+export async function getBookingGroup(id: string): Promise<HapioBookingGroup> {
+  const response = await requestJson<any>('get', `booking-groups/${id}`);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function createBookingGroup(
+  group: HapioBookingGroupPayload
+): Promise<HapioBookingGroup> {
+  const body: Record<string, unknown> = {};
+  if (group.name !== undefined) body.name = group.name;
+  if (group.metadata !== undefined) body.metadata = group.metadata;
+
+  const response = await requestJson<any>('post', 'booking-groups', body);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function updateBookingGroup(
+  id: string,
+  group: Partial<HapioBookingGroupPayload>
+): Promise<HapioBookingGroup> {
+  const body: Record<string, unknown> = {};
+  if (group.name !== undefined) body.name = group.name;
+  if (group.metadata !== undefined) body.metadata = group.metadata;
+
+  const response = await requestJson<any>('patch', `booking-groups/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function replaceBookingGroup(
+  id: string,
+  group: HapioBookingGroupPayload
+): Promise<HapioBookingGroup> {
+  const body: Record<string, unknown> = {};
+  if (group.name !== undefined) body.name = group.name;
+  if (group.metadata !== undefined) body.metadata = group.metadata;
+
+  const response = await requestJson<any>('put', `booking-groups/${id}`, body);
+  return {
+    id: response.id,
+    name: response.name ?? null,
+    metadata: response.metadata ?? null,
+    created_at: response.created_at,
+    updated_at: response.updated_at,
+  };
+}
+
+export async function deleteBookingGroup(id: string): Promise<void> {
+  await requestJson('delete', `booking-groups/${id}`);
+}
+
 
