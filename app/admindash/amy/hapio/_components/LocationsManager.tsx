@@ -6,7 +6,6 @@ import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import LocationEditModal from './LocationEditModal';
-import IdDisplay from './IdDisplay';
 
 export default function LocationsManager() {
   const [locations, setLocations] = useState<any[]>([]);
@@ -129,7 +128,6 @@ export default function LocationsManager() {
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Location ID</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Timezone</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
@@ -140,9 +138,6 @@ export default function LocationsManager() {
               {locations.map((location) => {
                 return (
                   <tr key={location.id} className="hover:bg-sand/20">
-                    <td className="px-4 py-3">
-                      <IdDisplay id={location.id} label="Location ID" />
-                    </td>
                     <td className="px-4 py-3 text-sm font-medium text-charcoal">{location.name}</td>
                     <td className="px-4 py-3 text-sm text-warm-gray">{location.timezone || '—'}</td>
                   <td className="px-4 py-3">

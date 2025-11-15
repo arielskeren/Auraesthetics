@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, AlertCircle, Code, X } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import RecurringSchedulesEditor from './RecurringSchedulesEditor';
@@ -16,6 +16,7 @@ export default function SchedulesManager() {
   const [locationId, setLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
+  const [showDeveloperInfo, setShowDeveloperInfo] = useState(false);
 
   useEffect(() => {
     loadFirstResourceAndLocation();
@@ -79,19 +80,75 @@ export default function SchedulesManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-charcoal">Schedules</h2>
-        <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-warm-gray">Resource ID:</span>
-            <span className="font-mono text-xs text-charcoal">{resourceId || 'Loading...'}</span>
-          </div>
-          {locationId && (
-            <div className="flex items-center gap-2">
-              <span className="text-warm-gray">Location ID:</span>
-              <span className="font-mono text-xs text-charcoal">{locationId}</span>
-            </div>
-          )}
-        </div>
+        <button
+          onClick={() => setShowDeveloperInfo(true)}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm border border-sand text-warm-gray rounded-lg hover:bg-sand/20 transition-colors"
+        >
+          <Code className="w-4 h-4" />
+          Developer Info
+        </button>
       </div>
+
+      {/* Developer Info Modal */}
+      {showDeveloperInfo && (
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="px-6 py-4 border-b border-sand flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-charcoal">Developer Information</h3>
+              <button
+                onClick={() => setShowDeveloperInfo(false)}
+                className="p-1 hover:bg-sand/30 rounded transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-warm-gray mb-1">Resource ID</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={resourceId || ''}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs"
+                  />
+                  <button
+                    onClick={() => {
+                      if (resourceId) {
+                        navigator.clipboard.writeText(resourceId);
+                      }
+                    }}
+                    className="px-3 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              {locationId && (
+                <div>
+                  <label className="block text-sm font-medium text-warm-gray mb-1">Location ID</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={locationId}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(locationId);
+                      }}
+                      className="px-3 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-sand">

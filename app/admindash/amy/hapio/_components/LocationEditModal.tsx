@@ -156,12 +156,28 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
           {location?.id && (
             <div>
               <label className="block text-sm font-medium text-charcoal mb-1">Location ID</label>
-              <input
-                type="text"
-                value={location.id}
-                readOnly
-                className="w-full px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs cursor-not-allowed"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={location.id}
+                  readOnly
+                  onClick={() => {
+                    navigator.clipboard.writeText(location.id);
+                  }}
+                  className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs cursor-pointer hover:bg-sand/30 transition-colors"
+                  title="Click to copy"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(location.id);
+                  }}
+                  className="px-3 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
+                  title="Copy Location ID"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
           )}
 

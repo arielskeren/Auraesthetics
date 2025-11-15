@@ -177,21 +177,6 @@ export default function RecurringScheduleBlocksEditor({
 
   return (
     <div className="space-y-6">
-      {/* ID Display */}
-      <div className="bg-sage-light/30 border border-sand rounded-lg p-4">
-        <div className="flex items-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-warm-gray font-medium">Resource ID:</span>
-            <span className="font-mono text-xs text-charcoal">{resourceId}</span>
-          </div>
-          {locationId && (
-            <div className="flex items-center gap-2">
-              <span className="text-warm-gray font-medium">Location ID:</span>
-              <span className="font-mono text-xs text-charcoal">{locationId}</span>
-            </div>
-          )}
-        </div>
-      </div>
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-charcoal">Recurring Schedule Blocks</h3>
