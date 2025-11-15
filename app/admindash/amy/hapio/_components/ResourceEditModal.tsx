@@ -49,16 +49,24 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
         location_id: formData.location_id || undefined, // Send undefined instead of empty string
       };
 
+      console.log('[Employee Edit] Sending request:', { url, method, payload });
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
+      console.log('[Employee Edit] Response status:', response.status, response.statusText);
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save employee');
+        console.error('[Employee Edit] API error:', errorData);
+        throw new Error(errorData.error || `Failed to save employee (${response.status})`);
       }
+
+      const responseData = await response.json();
+      console.log('[Employee Edit] Save successful:', responseData);
 
       // Wait for save callback to complete before closing
       await onSave();

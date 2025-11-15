@@ -211,6 +211,17 @@ export async function POST(request: NextRequest) {
 
     const signature = request.headers.get(HAPIO_SIGNATURE_HEADER);
     const rawBody = await request.text();
+    
+    // Log webhook details for debugging
+    console.log('[Hapio webhook] Received webhook:', {
+      hasSignature: !!signature,
+      signatureLength: signature?.length || 0,
+      signaturePrefix: signature ? `${signature.substring(0, 20)}...` : 'none',
+      bodyLength: rawBody.length,
+      bodyPreview: rawBody.substring(0, 200),
+      secretLength: secret.length,
+      secretPrefix: `${secret.substring(0, 8)}...`,
+    });
 
     if (!verifySignature(rawBody, signature, secret)) {
       console.warn('[Hapio webhook] Signature verification failed.');

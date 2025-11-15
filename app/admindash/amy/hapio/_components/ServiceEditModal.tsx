@@ -46,16 +46,24 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
         : '/api/admin/hapio/services';
       const method = service ? 'PATCH' : 'POST';
 
+      console.log('[Service Edit] Sending request:', { url, method, formData });
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
+      console.log('[Service Edit] Response status:', response.status, response.statusText);
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save service');
+        console.error('[Service Edit] API error:', errorData);
+        throw new Error(errorData.error || `Failed to save service (${response.status})`);
       }
+
+      const responseData = await response.json();
+      console.log('[Service Edit] Save successful:', responseData);
 
       setSuccess(true);
       await new Promise(resolve => setTimeout(resolve, 500));

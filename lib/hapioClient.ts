@@ -146,28 +146,47 @@ async function sendRequest<T = any>(
   maybeConfig?: AxiosRequestConfig
 ): Promise<AxiosResponse<T>> {
   const axiosClient = getClient();
+  const token = getHapioApiToken();
+
+  // Log request details for debugging
+  console.log(`[Hapio API] ${method.toUpperCase()} ${path}`, {
+    hasToken: !!token,
+    tokenLength: token?.length || 0,
+    tokenPrefix: token ? `${token.substring(0, 8)}...` : 'none',
+    hasData: !!dataOrConfig,
+  });
 
   try {
+    let response: AxiosResponse<T>;
+    
     if (method === 'get' || method === 'delete') {
-      return method === 'get'
+      response = method === 'get'
         ? await axiosClient.get<T>(path, dataOrConfig)
         : await axiosClient.delete<T>(path, dataOrConfig);
+    } else if (method === 'post') {
+      response = await axiosClient.post<T>(path, dataOrConfig, maybeConfig);
+    } else if (method === 'put') {
+      response = await axiosClient.put<T>(path, dataOrConfig, maybeConfig);
+    } else {
+      response = await axiosClient.patch<T>(path, dataOrConfig, maybeConfig);
     }
 
-    if (method === 'post') {
-      return await axiosClient.post<T>(path, dataOrConfig, maybeConfig);
-    }
-
-    if (method === 'put') {
-      return await axiosClient.put<T>(path, dataOrConfig, maybeConfig);
-    }
-
-    return await axiosClient.patch<T>(path, dataOrConfig, maybeConfig);
+    console.log(`[Hapio API] ${method.toUpperCase()} ${path} - Success (${response.status})`);
+    return response;
   } catch (error: any) {
     // Enhance axios errors with more context
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data;
+      
+      console.error(`[Hapio API] ${method.toUpperCase()} ${path} - Error ${status}`, {
+        status,
+        statusText: error.response.statusText,
+        data,
+        headers: error.response.headers,
+        hasToken: !!token,
+      });
+      
       let message = typeof data === 'object' && data?.message
         ? data.message
         : `Hapio API error (${status})`;
@@ -181,12 +200,24 @@ async function sendRequest<T = any>(
         message += ` - Validation errors: ${errorDetails}`;
       }
       
+      // Special handling for 401 Unauthorized
+      if (status === 401) {
+        console.error('[Hapio API] 401 Unauthorized - Check HAPIO_API_TOKEN:', {
+          tokenExists: !!token,
+          tokenLength: token?.length || 0,
+          baseURL: HAPIO_BASE_URL,
+        });
+        message = `Authentication failed (401). Please check your HAPIO_API_TOKEN is valid and has the correct permissions.`;
+      }
+      
       const enhancedError = new Error(message);
       (enhancedError as any).status = status;
       (enhancedError as any).response = error.response;
       throw enhancedError;
     }
-    // Re-throw network errors or other non-axios errors
+    
+    // Network or other errors
+    console.error(`[Hapio API] ${method.toUpperCase()} ${path} - Network/Other error:`, error.message);
     throw error;
   }
 }
