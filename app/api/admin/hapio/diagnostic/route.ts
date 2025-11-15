@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
 
     // 2. Try to list recurring schedule blocks
     try {
-      const scheduleIdForBlocks = scheduleId || (results.recurring_schedules?.sample as any)?.id;
+      const recurringSchedules = results.recurring_schedules as any;
+      const scheduleIdForBlocks = scheduleId || recurringSchedules?.sample?.id;
       
       if (scheduleIdForBlocks) {
         const blocks = await listRecurringScheduleBlocks(
