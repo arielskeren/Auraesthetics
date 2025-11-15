@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -17,6 +17,9 @@ export default function ServicesManager() {
   const [perPage] = useState(20);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
+  const [viewingHapioServices, setViewingHapioServices] = useState(false);
+  const [hapioServices, setHapioServices] = useState<any[]>([]);
+  const [loadingHapio, setLoadingHapio] = useState(false);
 
   useEffect(() => {
     loadServices();
@@ -117,26 +120,108 @@ export default function ServicesManager() {
     }
   };
 
-  if (loading && services.length === 0) {
-    return <LoadingState message="Loading services..." />;
-  }
+  const loadHapioServices = async () => {
+    try {
+      setLoadingHapio(true);
+      const response = await fetch('/api/admin/hapio/services');
+      if (!response.ok) {
+        throw new Error('Failed to load Hapio services');
+      }
+      const data = await response.json();
+      setHapioServices(data.data || []);
+      setViewingHapioServices(true);
+    } catch (err: any) {
+      setError(err);
+    } finally {
+      setLoadingHapio(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-charcoal">Services</h2>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" />
-          Add Service
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={viewingHapioServices ? () => setViewingHapioServices(false) : loadHapioServices}
+            className="flex items-center gap-2 px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors text-sm font-medium"
+            disabled={loadingHapio}
+          >
+            <ExternalLink className="w-4 h-4" />
+            {viewingHapioServices ? 'View Neon DB Services' : 'View Hapio Services'}
+          </button>
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Add Service
+          </button>
+        </div>
       </div>
 
       {error && <ErrorDisplay error={error} />}
 
-      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+      {viewingHapioServices ? (
+        <div className="bg-white border border-sand rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-blue-50 border-b border-sand">
+            <p className="text-sm text-blue-700">
+              <strong>Viewing Hapio Services:</strong> These are services synced to Hapio. Compare with Neon DB services above.
+            </p>
+          </div>
+          {loadingHapio ? (
+            <div className="p-8 text-center">
+              <LoadingState message="Loading Hapio services..." />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-sage-light/30 border-b border-sand">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Hapio Service ID</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand">
+                  {hapioServices.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-warm-gray">
+                        No services found in Hapio. Sync services from Neon DB to create them.
+                      </td>
+                    </tr>
+                  ) : (
+                    hapioServices.map((service: any) => (
+                      <tr key={service.id} className="hover:bg-sand/20">
+                        <td className="px-4 py-3">
+                          <IdDisplay id={service.id} label="Hapio Service ID" />
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray">{service.type || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray">{service.duration || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray">{service.price || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {service.enabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white border border-sand rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">

@@ -145,12 +145,12 @@ All prices should be numeric (e.g., 150.00, 165.00) not strings.
 - [X] **Verify**: Price, buffers saved correctly
 
 ### Test 6: Sync to Hapio - New Service (First Sync)
-- [ ] Find a service with `hapio_service_id` = NULL
-- [ ] Click the "Sync to Hapio" button (refresh icon)
-- [ ] **Verify**: Success message appears
-- [ ] **Verify**: Service is created in Hapio
-- [ ] **Verify**: `hapio_service_id` is saved in Neon DB (check database)
-- [ ] **Verify**: Service data in Hapio matches Neon DB:
+- [X] Find a service with `hapio_service_id` = NULL
+- [X] Click the "Sync to Hapio" button (refresh icon)
+- [X] **Verify**: Success message appears
+- [X] **Verify**: Service is created in Hapio
+- [X] **Verify**: `hapio_service_id` is saved in Neon DB (check database)
+- [X] **Verify**: Service data in Hapio matches Neon DB:
   - Name matches
   - Duration matches
   - Buffer values match
@@ -158,19 +158,23 @@ All prices should be numeric (e.g., 150.00, 165.00) not strings.
   - Metadata contains: slug, category, summary, description, duration_display, price, test_pricing
 
 ### Test 7: Sync to Hapio - Existing Service (Update)
-- [ ] Edit a service that already has a `hapio_service_id`
+- [X] Edit a service that already has a `hapio_service_id`
   - Change name, price, or buffer values
   - Save to Neon DB
-- [ ] Click "Sync to Hapio" button
-- [ ] **Verify**: Success message appears
-- [ ] **Verify**: Service is UPDATED in Hapio (not created)
+- [X] Click "Sync to Hapio" button
+- [X] **Verify**: Success message appears
+- [X] **Verify**: Service is UPDATED in Hapio (not created)
 - [ ] **Verify**: Changes are reflected in Hapio
-- [ ] **Verify**: `hapio_service_id` remains the same (not changed)
+  - Click "View Hapio Services" button in the Services tab
+  - Find the service by name in the Hapio services list
+  - Verify the name, duration, price, and other fields match your changes
+  - Alternatively, check the browser console for the sync response which includes the Hapio service data
+- [X] **Verify**: `hapio_service_id` remains the same (not changed)
 
 ### Test 8: Public-Facing Services Page
-- [ ] Navigate to `/services` (public page)
-- [ ] **Verify**: Services load correctly
-- [ ] **Verify**: Prices display as "from $150" format (formatted for display)
+- [X] Navigate to `/services` (public page)
+- [X] **Verify**: Services load correctly
+- [X] **Verify**: Prices display as "from $150" format (formatted for display)
 - [ ] **Verify**: No errors in browser console
 - [ ] **Verify**: Service cards display correctly
 
