@@ -171,8 +171,8 @@ export async function DELETE(
 
     // Check if service exists
     const existing = await sql`
-      SELECT id, image_url FROM services WHERE id = ${id}
-    ` as Array<{ id: string; image_url: string | null }>;
+      SELECT id, image_url, hapio_service_id FROM services WHERE id = ${id}
+    ` as Array<{ id: string; image_url: string | null; hapio_service_id: string | null }>;
     if (existing.length === 0) {
       return NextResponse.json(
         { error: 'Service not found' },
@@ -180,18 +180,32 @@ export async function DELETE(
       );
     }
 
+    const service = existing[0];
+
+    // Delete from Hapio if hapio_service_id exists
+    if (service.hapio_service_id) {
+      try {
+        const { deleteService } = await import('@/lib/hapioClient');
+        await deleteService(service.hapio_service_id);
+        console.log(`[Delete Service] Deleted Hapio service ${service.hapio_service_id}`);
+      } catch (hapioError: any) {
+        console.warn('[Admin Services API] Failed to delete service from Hapio:', hapioError);
+        // Continue with Neon DB deletion even if Hapio deletion fails
+      }
+    }
+
     // Delete image from blob if exists
-    if (existing[0].image_url) {
+    if (service.image_url) {
       try {
         const { deleteImage } = await import('@/lib/blobClient');
-        await deleteImage(existing[0].image_url);
+        await deleteImage(service.image_url);
       } catch (blobError) {
         console.warn('[Admin Services API] Failed to delete image from blob:', blobError);
         // Continue with service deletion even if image deletion fails
       }
     }
 
-    // Delete service
+    // Delete service from Neon DB
     await sql`
       DELETE FROM services WHERE id = ${id}
     `;

@@ -1384,10 +1384,11 @@ export async function dissociateResourceService(
 
 export interface HapioServicePayload {
   name: string;
-  duration_minutes: number;
-  type: string;
-  buffer_before_minutes?: number | null;
-  buffer_after_minutes?: number | null;
+  type: 'fixed' | 'flexible' | 'day';
+  duration: string; // ISO 8601 format (e.g., "PT60M")
+  buffer_time_before?: string; // ISO 8601 format (e.g., "PT15M")
+  buffer_time_after?: string; // ISO 8601 format (e.g., "PT15M")
+  price?: string | null; // String with 3 decimal places (e.g., "150.000")
   enabled?: boolean;
   metadata?: Record<string, unknown> | null;
 }
@@ -1448,13 +1449,14 @@ export async function getService(id: string): Promise<HapioService> {
 export async function createService(service: HapioServicePayload): Promise<HapioService> {
   const body: Record<string, unknown> = {
     name: service.name,
-    duration_minutes: service.duration_minutes,
     type: service.type,
+    duration: service.duration,
   };
-  if (service.buffer_before_minutes !== undefined)
-    body.buffer_before_minutes = service.buffer_before_minutes;
-  if (service.buffer_after_minutes !== undefined)
-    body.buffer_after_minutes = service.buffer_after_minutes;
+  if (service.buffer_time_before !== undefined)
+    body.buffer_time_before = service.buffer_time_before;
+  if (service.buffer_time_after !== undefined)
+    body.buffer_time_after = service.buffer_time_after;
+  if (service.price !== undefined) body.price = service.price;
   if (service.enabled !== undefined) body.enabled = service.enabled;
   if (service.metadata !== undefined) body.metadata = service.metadata;
 
@@ -1476,11 +1478,13 @@ export async function updateService(
 ): Promise<HapioService> {
   const body: Record<string, unknown> = {};
   if (service.name !== undefined) body.name = service.name;
-  if (service.duration_minutes !== undefined) body.duration_minutes = service.duration_minutes;
-  if (service.buffer_before_minutes !== undefined)
-    body.buffer_before_minutes = service.buffer_before_minutes;
-  if (service.buffer_after_minutes !== undefined)
-    body.buffer_after_minutes = service.buffer_after_minutes;
+  if (service.type !== undefined) body.type = service.type;
+  if (service.duration !== undefined) body.duration = service.duration;
+  if (service.buffer_time_before !== undefined)
+    body.buffer_time_before = service.buffer_time_before;
+  if (service.buffer_time_after !== undefined)
+    body.buffer_time_after = service.buffer_time_after;
+  if (service.price !== undefined) body.price = service.price;
   if (service.enabled !== undefined) body.enabled = service.enabled;
   if (service.metadata !== undefined) body.metadata = service.metadata;
 
@@ -1502,12 +1506,14 @@ export async function replaceService(
 ): Promise<HapioService> {
   const body: Record<string, unknown> = {
     name: service.name,
-    duration_minutes: service.duration_minutes,
+    type: service.type,
+    duration: service.duration,
   };
-  if (service.buffer_before_minutes !== undefined)
-    body.buffer_before_minutes = service.buffer_before_minutes;
-  if (service.buffer_after_minutes !== undefined)
-    body.buffer_after_minutes = service.buffer_after_minutes;
+  if (service.buffer_time_before !== undefined)
+    body.buffer_time_before = service.buffer_time_before;
+  if (service.buffer_time_after !== undefined)
+    body.buffer_time_after = service.buffer_time_after;
+  if (service.price !== undefined) body.price = service.price;
   if (service.enabled !== undefined) body.enabled = service.enabled;
   if (service.metadata !== undefined) body.metadata = service.metadata;
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import { createService, updateService } from '@/lib/hapioClient';
+import { minutesToIso8601 } from '@/lib/hapioDurationUtils';
 
 /**
  * POST /api/admin/services/[id]/sync
@@ -46,22 +47,26 @@ export async function POST(
     const service = services[0];
 
     // Map Neon DB service to Hapio payload
+    // Hapio API requires:
+    // - type: "fixed" | "flexible" | "day" (we use "fixed" for fixed-duration services)
+    // - duration: ISO 8601 format (e.g., "PT60M" for 60 minutes)
+    // - buffer_time_before/buffer_time_after: ISO 8601 format
+    // - price: string with 3 decimal places (e.g., "150.000")
     // Store extra fields in metadata
-    // Note: Hapio requires a 'type' field - using 'service' as the default type
     const hapioPayload = {
       name: service.name,
-      duration_minutes: service.duration_minutes,
-      type: 'service', // Required by Hapio API
-      buffer_before_minutes: service.buffer_before_minutes || null,
-      buffer_after_minutes: service.buffer_after_minutes || null,
+      type: 'fixed' as const, // All our services have fixed durations
+      duration: minutesToIso8601(service.duration_minutes),
+      buffer_time_before: minutesToIso8601(service.buffer_before_minutes || 0),
+      buffer_time_after: minutesToIso8601(service.buffer_after_minutes || 0),
       enabled: service.enabled !== false,
+      price: service.price != null ? Number(service.price).toFixed(3) : null,
       metadata: {
         slug: service.slug,
         category: service.category || null,
         summary: service.summary || null,
         description: service.description || null,
         duration_display: service.duration_display || null,
-        price: service.price != null ? Number(service.price) : null,
         test_pricing: service.test_pricing || false,
         image_url: null, // Don't sync image URL to Hapio metadata
       },
