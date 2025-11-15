@@ -116,6 +116,7 @@ export async function GET(request: NextRequest) {
     const serviceId = explicitServiceId ?? config?.serviceId ?? null;
     const locationId =
       explicitLocationId ?? config?.locationId ?? process.env.HAPIO_DEFAULT_LOCATION_ID ?? null;
+    const resourceId = config?.resourceId ?? null;
 
     if (!serviceId) {
       return NextResponse.json(
@@ -166,6 +167,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = buildCacheKey({
       serviceId,
       locationId,
+      resourceId: resourceId ?? '',
       fromIso,
       toIso,
       page: page ?? '',
@@ -187,6 +189,7 @@ export async function GET(request: NextRequest) {
         from: fromIso,
         to: toIso,
         locationId,
+        resourceId: resourceId ?? undefined,
         perPage,
         page,
       });

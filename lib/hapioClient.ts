@@ -53,6 +53,7 @@ export interface HapioAvailabilityParams {
   from: string;
   to: string;
   locationId?: string;
+  resourceId?: string;
   perPage?: number;
   page?: number;
 }
@@ -167,9 +168,19 @@ async function sendRequest<T = any>(
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data;
-      const message = typeof data === 'object' && data?.message
+      let message = typeof data === 'object' && data?.message
         ? data.message
         : `Hapio API error (${status})`;
+      
+      // Include validation errors if present
+      if (typeof data === 'object' && data?.errors) {
+        const errorDetails = typeof data.errors === 'object'
+          ? JSON.stringify(data.errors, null, 2)
+          : String(data.errors);
+        console.error('[Hapio] Validation errors:', errorDetails);
+        message += ` - Validation errors: ${errorDetails}`;
+      }
+      
       const enhancedError = new Error(message);
       (enhancedError as any).status = status;
       (enhancedError as any).response = error.response;
@@ -193,7 +204,7 @@ async function requestJson<T>(
 export async function getAvailability(
   params: HapioAvailabilityParams
 ): Promise<HapioAvailabilityResponse> {
-  const { serviceId, from, to, locationId, perPage, page } = params;
+  const { serviceId, from, to, locationId, resourceId, perPage, page } = params;
 
   const query: Record<string, string | number> = {
     from,
@@ -202,6 +213,9 @@ export async function getAvailability(
 
   if (locationId) {
     query.location = locationId;
+  }
+  if (resourceId) {
+    query.resource = resourceId;
   }
   if (perPage) {
     query.per_page = perPage;
