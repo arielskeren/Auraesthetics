@@ -19,7 +19,6 @@ export async function GET(
       );
     }
 
-    // Fetch the schedule (bookable slots) - this includes recurring schedules
     // Parse date range and normalize to start/end of day
     const fromDate = new Date(from);
     fromDate.setHours(0, 0, 0, 0);
