@@ -15,12 +15,17 @@ interface RecurringScheduleEditModalProps {
   onSave: () => void;
 }
 
-interface DaySchedule {
-  dayOfWeek: number;
+interface TimeRange {
+  id: string; // Unique ID for this time range
   startTime: string;
   endTime: string;
-  enabled: boolean;
   serviceIds: string[];
+}
+
+interface DaySchedule {
+  dayOfWeek: number;
+  enabled: boolean;
+  timeRanges: TimeRange[]; // Multiple time ranges per day
 }
 
 const DAYS = [
@@ -43,10 +48,8 @@ export default function RecurringScheduleEditModal({
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DAYS.map((day) => ({
       dayOfWeek: day.value,
-      startTime: '09:00',
-      endTime: '17:00',
       enabled: false,
-      serviceIds: [],
+      timeRanges: [{ id: `default-${day.value}`, startTime: '09:00', endTime: '17:00', serviceIds: [] }],
     }))
   );
   const [startDate, setStartDate] = useState<string>(
@@ -55,7 +58,6 @@ export default function RecurringScheduleEditModal({
   const [endDate, setEndDate] = useState<string>('');
   const [endDateType, setEndDateType] = useState<'indefinite' | 'date' | 'preset'>('indefinite');
   const [presetDays, setPresetDays] = useState<number | null>(null);
-  const [applyToDays, setApplyToDays] = useState<number[]>([]);
   const [showServiceModal, setShowServiceModal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
@@ -68,10 +70,8 @@ export default function RecurringScheduleEditModal({
       // Reset to defaults for new schedule
       setSchedules(DAYS.map((day) => ({
         dayOfWeek: day.value,
-        startTime: '09:00',
-        endTime: '17:00',
         enabled: false,
-        serviceIds: [],
+        timeRanges: [{ id: `default-${day.value}`, startTime: '09:00', endTime: '17:00', serviceIds: [] }],
       })));
       setStartDate(new Date().toISOString().split('T')[0]);
       setEndDate('');
@@ -112,7 +112,12 @@ export default function RecurringScheduleEditModal({
             const blocksData = await blocksResponse.json();
             const blocks = blocksData.data || [];
             
-            const newSchedules = [...schedules];
+            // Initialize all days with empty time ranges
+            const initializedSchedules: DaySchedule[] = DAYS.map((day) => ({
+              dayOfWeek: day.value,
+              enabled: false,
+              timeRanges: [],
+            }));
             
             blocks.forEach((block: any) => {
               // Hapio returns weekday as a string ("monday", "tuesday", etc.) or legacy number
@@ -129,17 +134,18 @@ export default function RecurringScheduleEditModal({
                 
                 const serviceIds = (block.metadata?.service_ids as string[]) || [];
                 
-                newSchedules[dayIndex] = {
-                  dayOfWeek,
+                // Add time range to the day
+                initializedSchedules[dayIndex].timeRanges.push({
+                  id: `block-${block.id}`,
                   startTime: parseTime(block.start_time),
                   endTime: parseTime(block.end_time),
-                  enabled: true,
                   serviceIds,
-                };
+                });
+                initializedSchedules[dayIndex].enabled = true;
               }
             });
             
-            setSchedules(newSchedules);
+            setSchedules(initializedSchedules);
           }
         } catch (blockErr) {
           console.warn('[RecurringScheduleEditModal] Error loading blocks:', blockErr);
@@ -150,13 +156,47 @@ export default function RecurringScheduleEditModal({
     }
   };
 
-  const handleTimeChange = (dayIndex: number, field: 'startTime' | 'endTime', value: string) => {
+  const handleTimeChange = (dayIndex: number, rangeIndex: number, field: 'startTime' | 'endTime', value: string) => {
     const newSchedules = [...schedules];
-    newSchedules[dayIndex] = {
-      ...newSchedules[dayIndex],
+    const newTimeRanges = [...newSchedules[dayIndex].timeRanges];
+    newTimeRanges[rangeIndex] = {
+      ...newTimeRanges[rangeIndex],
       [field]: value,
     };
+    newSchedules[dayIndex] = {
+      ...newSchedules[dayIndex],
+      timeRanges: newTimeRanges,
+    };
     setSchedules(newSchedules);
+  };
+
+  const handleAddTimeRange = (dayIndex: number) => {
+    const newSchedules = [...schedules];
+    const newTimeRanges = [...newSchedules[dayIndex].timeRanges];
+    newTimeRanges.push({
+      id: `range-${Date.now()}-${dayIndex}`,
+      startTime: '09:00',
+      endTime: '17:00',
+      serviceIds: [],
+    });
+    newSchedules[dayIndex] = {
+      ...newSchedules[dayIndex],
+      timeRanges: newTimeRanges,
+    };
+    setSchedules(newSchedules);
+  };
+
+  const handleRemoveTimeRange = (dayIndex: number, rangeIndex: number) => {
+    const newSchedules = [...schedules];
+    const newTimeRanges = [...newSchedules[dayIndex].timeRanges];
+    if (newTimeRanges.length > 1) {
+      newTimeRanges.splice(rangeIndex, 1);
+      newSchedules[dayIndex] = {
+        ...newSchedules[dayIndex],
+        timeRanges: newTimeRanges,
+      };
+      setSchedules(newSchedules);
+    }
   };
 
   const handleToggleEnabled = (dayIndex: number) => {
@@ -168,35 +208,18 @@ export default function RecurringScheduleEditModal({
     setSchedules(newSchedules);
   };
 
-  const handleServiceSelection = (dayIndex: number, serviceIds: string[]) => {
+  const handleServiceSelection = (dayIndex: number, rangeIndex: number, serviceIds: string[]) => {
     const newSchedules = [...schedules];
-    newSchedules[dayIndex] = {
-      ...newSchedules[dayIndex],
+    const newTimeRanges = [...newSchedules[dayIndex].timeRanges];
+    newTimeRanges[rangeIndex] = {
+      ...newTimeRanges[rangeIndex],
       serviceIds,
     };
+    newSchedules[dayIndex] = {
+      ...newSchedules[dayIndex],
+      timeRanges: newTimeRanges,
+    };
     setSchedules(newSchedules);
-  };
-
-  const handleApplyToDays = (sourceDayIndex: number) => {
-    if (applyToDays.length === 0) return;
-
-    const sourceSchedule = schedules[sourceDayIndex];
-    const newSchedules = [...schedules];
-
-    applyToDays.forEach((targetDayIndex) => {
-      if (targetDayIndex !== sourceDayIndex) {
-        newSchedules[targetDayIndex] = {
-          ...newSchedules[targetDayIndex],
-          startTime: sourceSchedule.startTime,
-          endTime: sourceSchedule.endTime,
-          enabled: sourceSchedule.enabled,
-          serviceIds: [...sourceSchedule.serviceIds],
-        };
-      }
-    });
-
-    setSchedules(newSchedules);
-    setApplyToDays([]);
   };
 
   const calculateEndDate = (): string | null => {
@@ -216,47 +239,53 @@ export default function RecurringScheduleEditModal({
     setSuccess(false);
 
     try {
-      const enabledSchedules = schedules.filter((s) => s.enabled);
+      const enabledSchedules = schedules.filter((s) => s.enabled && s.timeRanges.length > 0);
       
+      // Validate all time ranges
       for (const daySchedule of enabledSchedules) {
-        const validation = validateSchedule({
-          dayOfWeek: daySchedule.dayOfWeek,
-          timeRange: {
-            start: daySchedule.startTime,
-            end: daySchedule.endTime,
-          },
-        });
+        for (const timeRange of daySchedule.timeRanges) {
+          const validation = validateSchedule({
+            dayOfWeek: daySchedule.dayOfWeek,
+            timeRange: {
+              start: timeRange.startTime,
+              end: timeRange.endTime,
+            },
+          });
 
-        if (!validation.valid) {
-          throw new Error(`${DAYS[daySchedule.dayOfWeek].label}: ${validation.error}`);
+          if (!validation.valid) {
+            throw new Error(`${DAYS[daySchedule.dayOfWeek].label}: ${validation.error}`);
+          }
         }
 
-        const otherSchedules = enabledSchedules.filter(
-          (s) => s.dayOfWeek === daySchedule.dayOfWeek && s !== daySchedule
-        );
-        
-        if (otherSchedules.length > 0) {
-          const overlaps = detectOverlaps(
-            {
-              dayOfWeek: daySchedule.dayOfWeek,
-              timeRange: {
-                start: daySchedule.startTime,
-                end: daySchedule.endTime,
+        // Check for overlaps within the same day
+        const allRangesForDay = daySchedule.timeRanges;
+        for (let i = 0; i < allRangesForDay.length; i++) {
+          for (let j = i + 1; j < allRangesForDay.length; j++) {
+            const range1 = allRangesForDay[i];
+            const range2 = allRangesForDay[j];
+            
+            const overlaps = detectOverlaps(
+              {
+                dayOfWeek: daySchedule.dayOfWeek,
+                timeRange: {
+                  start: range1.startTime,
+                  end: range1.endTime,
+                },
               },
-            },
-            otherSchedules.map((s) => ({
-              dayOfWeek: s.dayOfWeek,
-              timeRange: {
-                start: s.startTime,
-                end: s.endTime,
-              },
-            }))
-          );
-
-          if (overlaps.length > 0) {
-            throw new Error(
-              `${DAYS[daySchedule.dayOfWeek].label}: Schedule overlaps with another schedule on the same day`
+              [{
+                dayOfWeek: daySchedule.dayOfWeek,
+                timeRange: {
+                  start: range2.startTime,
+                  end: range2.endTime,
+                },
+              }]
             );
+
+            if (overlaps.length > 0) {
+              throw new Error(
+                `${DAYS[daySchedule.dayOfWeek].label}: Time ranges overlap on the same day`
+              );
+            }
           }
         }
       }
@@ -317,8 +346,9 @@ export default function RecurringScheduleEditModal({
         }
       }
 
-      // Create recurring schedule blocks for each enabled day
+      // Create recurring schedule blocks for each enabled day and time range
       for (const daySchedule of enabledSchedules) {
+        // Convert time from HH:mm to HH:mm:ss format (Hapio requires H:i:s)
         const formatTime = (time: string): string => {
           if (time.includes(':')) {
             const parts = time.split(':');
@@ -330,35 +360,38 @@ export default function RecurringScheduleEditModal({
         // Hapio expects weekday as a string enum: "monday", "tuesday", etc.
         const hapioWeekday = getHapioWeekdayString(daySchedule.dayOfWeek);
         
-        const blockPayload = {
-          recurring_schedule_id: recurringScheduleId,
-          weekday: hapioWeekday, // String format: "monday", "tuesday", etc.
-          start_time: formatTime(daySchedule.startTime),
-          end_time: formatTime(daySchedule.endTime),
-          metadata: {
-            service_ids: daySchedule.serviceIds,
-          },
-        };
-        
-        console.log('[RecurringScheduleEditModal] Creating block:', {
-          day: DAYS[daySchedule.dayOfWeek].label,
-          dayOfWeek: daySchedule.dayOfWeek,
-          hapioWeekdayString: hapioWeekday,
-          payload: blockPayload,
-        });
+        // Create a block for each time range
+        for (const timeRange of daySchedule.timeRanges) {
+          const blockPayload = {
+            recurring_schedule_id: recurringScheduleId,
+            weekday: hapioWeekday, // String format: "monday", "tuesday", etc.
+            start_time: formatTime(timeRange.startTime), // Convert HH:mm to HH:mm:ss
+            end_time: formatTime(timeRange.endTime), // Convert HH:mm to HH:mm:ss
+            metadata: {
+              service_ids: timeRange.serviceIds,
+            },
+          };
+          
+          console.log('[RecurringScheduleEditModal] Creating block:', {
+            day: DAYS[daySchedule.dayOfWeek].label,
+            dayOfWeek: daySchedule.dayOfWeek,
+            hapioWeekdayString: hapioWeekday,
+            payload: blockPayload,
+          });
 
-        const blockResponse = await fetch(
-          `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(blockPayload),
+          const blockResponse = await fetch(
+            `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(blockPayload),
+            }
+          );
+
+          if (!blockResponse.ok) {
+            const errorData = await blockResponse.json();
+            throw new Error(errorData.error || `Failed to create schedule for ${DAYS[daySchedule.dayOfWeek].label}`);
           }
-        );
-
-        if (!blockResponse.ok) {
-          const errorData = await blockResponse.json();
-          throw new Error(errorData.error || `Failed to create schedule for ${DAYS[daySchedule.dayOfWeek].label}`);
         }
       }
 
@@ -506,102 +539,89 @@ export default function RecurringScheduleEditModal({
             </div>
           </div>
 
-          {/* 7-Day Grid */}
+          {/* 7-Day Grid - Compact Layout */}
           <div className="bg-white border border-sand rounded-lg p-4">
             <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
               <Clock className="w-4 h-4" />
               Weekly Schedule
             </h3>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {schedules.map((schedule, index) => {
                 const day = DAYS[index];
                 return (
                   <div
                     key={day.value}
-                    className="border border-sand rounded-lg p-2.5 hover:bg-sand/5 transition-colors"
+                    className={`border rounded-lg p-3 transition-colors ${
+                      schedule.enabled ? 'border-dark-sage bg-sage-light/10' : 'border-sand'
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 min-w-[100px]">
-                        <input
-                          type="checkbox"
-                          id={`day-${day.value}`}
-                          checked={schedule.enabled}
-                          onChange={() => handleToggleEnabled(index)}
-                          className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
-                        />
-                        <label
-                          htmlFor={`day-${day.value}`}
-                          className="text-sm font-medium text-charcoal cursor-pointer"
-                        >
-                          {day.label}
-                        </label>
-                      </div>
-
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id={`day-${day.value}`}
+                        checked={schedule.enabled}
+                        onChange={() => handleToggleEnabled(index)}
+                        className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                      />
+                      <label
+                        htmlFor={`day-${day.value}`}
+                        className="text-sm font-semibold text-charcoal cursor-pointer flex-1"
+                      >
+                        {day.label}
+                      </label>
                       {schedule.enabled && (
-                        <>
-                          <div className="flex items-center gap-2 flex-1">
-                            <input
-                              type="time"
-                              value={schedule.startTime}
-                              onChange={(e) => handleTimeChange(index, 'startTime', e.target.value)}
-                              className="px-2.5 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                            />
-                            <span className="text-xs text-warm-gray">to</span>
-                            <input
-                              type="time"
-                              value={schedule.endTime}
-                              onChange={(e) => handleTimeChange(index, 'endTime', e.target.value)}
-                              className="px-2.5 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                            />
-                          </div>
-
-                          <button
-                            onClick={() => setShowServiceModal(index)}
-                            className="px-2.5 py-1.5 text-xs border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors whitespace-nowrap"
-                          >
-                            {schedule.serviceIds.length > 0
-                              ? `${schedule.serviceIds.length} service${schedule.serviceIds.length !== 1 ? 's' : ''}`
-                              : 'Select services'}
-                          </button>
-                        </>
+                        <button
+                          onClick={() => handleAddTimeRange(index)}
+                          className="text-xs px-2 py-1 bg-dark-sage text-charcoal rounded hover:bg-dark-sage/80 transition-colors"
+                        >
+                          + Add Time
+                        </button>
                       )}
                     </div>
 
                     {schedule.enabled && (
-                      <div className="mt-2 pt-2 border-t border-sand">
-                        <label className="text-xs text-warm-gray mb-1 block">
-                          Apply this schedule to other days:
-                        </label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {DAYS.filter((d) => d.value !== day.value).map((otherDay) => (
-                            <label
-                              key={otherDay.value}
-                              className="flex items-center gap-1 text-xs cursor-pointer"
-                            >
+                      <div className="space-y-2">
+                        {schedule.timeRanges.map((timeRange, rangeIndex) => (
+                          <div key={timeRange.id} className="bg-white border border-sand rounded p-2 space-y-2">
+                            <div className="flex items-center gap-2">
                               <input
-                                type="checkbox"
-                                checked={applyToDays.includes(otherDay.value)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setApplyToDays([...applyToDays, otherDay.value]);
-                                  } else {
-                                    setApplyToDays(applyToDays.filter((d) => d !== otherDay.value));
-                                  }
-                                }}
-                                className="w-3 h-3 text-dark-sage border-sand rounded"
+                                type="time"
+                                value={timeRange.startTime}
+                                onChange={(e) => handleTimeChange(index, rangeIndex, 'startTime', e.target.value)}
+                                className="flex-1 px-2 py-1.5 border border-sand rounded text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
                               />
-                              <span className="text-warm-gray">{otherDay.short}</span>
-                            </label>
-                          ))}
-                          {applyToDays.length > 0 && (
+                              <span className="text-xs text-warm-gray">to</span>
+                              <input
+                                type="time"
+                                value={timeRange.endTime}
+                                onChange={(e) => handleTimeChange(index, rangeIndex, 'endTime', e.target.value)}
+                                className="flex-1 px-2 py-1.5 border border-sand rounded text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                              />
+                              {schedule.timeRanges.length > 1 && (
+                                <button
+                                  onClick={() => handleRemoveTimeRange(index, rangeIndex)}
+                                  className="px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Remove time range"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
                             <button
-                              onClick={() => handleApplyToDays(index)}
-                              className="ml-1.5 px-2 py-0.5 text-xs bg-dark-sage text-charcoal rounded hover:bg-dark-sage/80 transition-colors"
+                              onClick={() => {
+                                setShowServiceModal(index * 1000 + rangeIndex); // Use composite index
+                                // Store day and range index for service selection
+                                (window as any).__serviceModalDayIndex = index;
+                                (window as any).__serviceModalRangeIndex = rangeIndex;
+                              }}
+                              className="w-full px-2 py-1 text-xs border border-sand text-charcoal rounded hover:bg-sand/20 transition-colors text-left"
                             >
-                              Apply
+                              {timeRange.serviceIds.length > 0
+                                ? `${timeRange.serviceIds.length} service${timeRange.serviceIds.length !== 1 ? 's' : ''} selected`
+                                : 'Select services (optional)'}
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -614,11 +634,25 @@ export default function RecurringScheduleEditModal({
           {/* Service Selection Modal */}
           {showServiceModal !== null && (
             <ServiceSelectionModal
-              selectedServiceIds={schedules[showServiceModal].serviceIds}
-              onClose={() => setShowServiceModal(null)}
-              onSave={(serviceIds) => {
-                handleServiceSelection(showServiceModal, serviceIds);
+              selectedServiceIds={
+                (window as any).__serviceModalDayIndex !== undefined && (window as any).__serviceModalRangeIndex !== undefined
+                  ? schedules[(window as any).__serviceModalDayIndex]?.timeRanges[(window as any).__serviceModalRangeIndex]?.serviceIds || []
+                  : []
+              }
+              onClose={() => {
                 setShowServiceModal(null);
+                (window as any).__serviceModalDayIndex = undefined;
+                (window as any).__serviceModalRangeIndex = undefined;
+              }}
+              onSave={(serviceIds) => {
+                const dayIndex = (window as any).__serviceModalDayIndex;
+                const rangeIndex = (window as any).__serviceModalRangeIndex;
+                if (dayIndex !== undefined && rangeIndex !== undefined) {
+                  handleServiceSelection(dayIndex, rangeIndex, serviceIds);
+                }
+                setShowServiceModal(null);
+                (window as any).__serviceModalDayIndex = undefined;
+                (window as any).__serviceModalRangeIndex = undefined;
               }}
             />
           )}

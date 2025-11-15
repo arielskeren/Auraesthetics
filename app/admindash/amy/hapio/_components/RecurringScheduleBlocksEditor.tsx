@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Edit2 } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import RecurringScheduleBlockEditModal from './RecurringScheduleBlockEditModal';
 
@@ -60,16 +60,31 @@ export default function RecurringScheduleBlocksEditor({
         const data = await response.json();
         const blocksList = (data.data || []) as ExistingBlock[];
         
-        // Sort by parent schedule start_date, then by weekday
+        // Sort by weekday (Sunday=0, Monday=1, etc.), then by start time
         blocksList.sort((a, b) => {
-          const aStart = a.parent_schedule?.start_date || '';
-          const bStart = b.parent_schedule?.start_date || '';
-          if (aStart !== bStart) {
-            return bStart.localeCompare(aStart);
+          // Convert weekday to number for sorting
+          const getWeekdayNumber = (weekday: string | number | null | undefined): number => {
+            if (weekday === null || weekday === undefined) return 7; // Put nulls at end
+            if (typeof weekday === 'number') return weekday;
+            // Convert string to number
+            const dayMap: Record<string, number> = {
+              'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+              'thursday': 4, 'friday': 5, 'saturday': 6
+            };
+            return dayMap[weekday.toLowerCase()] ?? 7;
+          };
+          
+          const aWeekdayNum = getWeekdayNumber(a.weekday);
+          const bWeekdayNum = getWeekdayNumber(b.weekday);
+          
+          if (aWeekdayNum !== bWeekdayNum) {
+            return aWeekdayNum - bWeekdayNum;
           }
-          const aWeekday = typeof a.weekday === 'string' ? a.weekday : String(a.weekday || '');
-          const bWeekday = typeof b.weekday === 'string' ? b.weekday : String(b.weekday || '');
-          return aWeekday.localeCompare(bWeekday);
+          
+          // If same weekday, sort by start time
+          const aStart = a.start_time || '00:00';
+          const bStart = b.start_time || '00:00';
+          return aStart.localeCompare(bStart);
         });
         
         setExistingBlocks(blocksList);
@@ -247,9 +262,10 @@ export default function RecurringScheduleBlocksEditor({
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleViewBlock(block.id)}
-                          className="px-3 py-1.5 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+                          className="p-1.5 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors"
+                          title="Edit"
                         >
-                          View
+                          <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteBlock(block)}

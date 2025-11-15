@@ -486,7 +486,9 @@ export default function ScheduleBlocksCalendar({
                         ? 'ring-2 ring-dark-sage ring-offset-1'
                         : 'hover:bg-sand/20 cursor-pointer'
                     } ${
-                      blockType === 'closed'
+                      isPast
+                        ? '' // Don't apply any block/availability colors to past dates - keep them gray
+                        : blockType === 'closed'
                         ? 'bg-red-100 border-red-300 text-red-900'
                         : blockType === 'open'
                         ? 'bg-yellow-100 border-yellow-300 text-yellow-900'
