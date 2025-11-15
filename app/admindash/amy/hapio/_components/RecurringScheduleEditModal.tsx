@@ -383,18 +383,18 @@ export default function RecurringScheduleEditModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 space-y-4">
           {error && <ErrorDisplay error={error} />}
           {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 text-sm text-green-700">
               Schedule saved successfully!
             </div>
           )}
 
           {/* Date Range Selector */}
-          <div className="bg-white border border-sand rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
+          <div className="bg-white border border-sand rounded-lg p-4">
+            <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
               Date Range
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -411,8 +411,8 @@ export default function RecurringScheduleEditModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-charcoal mb-1">End Date</label>
-                <div className="space-y-2">
+                <label className="block text-sm font-medium text-charcoal mb-1.5">End Date</label>
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <input
                       type="radio"
@@ -481,21 +481,21 @@ export default function RecurringScheduleEditModal({
           </div>
 
           {/* 7-Day Grid */}
-          <div className="bg-white border border-sand rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
-              <Clock className="w-5 h-5" />
+          <div className="bg-white border border-sand rounded-lg p-4">
+            <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
               Weekly Schedule
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {schedules.map((schedule, index) => {
                 const day = DAYS[index];
                 return (
                   <div
                     key={day.value}
-                    className="border border-sand rounded-lg p-4 hover:bg-sand/5 transition-colors"
+                    className="border border-sand rounded-lg p-2.5 hover:bg-sand/5 transition-colors"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className="flex items-center gap-2 min-w-[120px]">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 min-w-[100px]">
                         <input
                           type="checkbox"
                           id={`day-${day.value}`}
@@ -505,7 +505,7 @@ export default function RecurringScheduleEditModal({
                         />
                         <label
                           htmlFor={`day-${day.value}`}
-                          className="font-medium text-charcoal cursor-pointer"
+                          className="text-sm font-medium text-charcoal cursor-pointer"
                         >
                           {day.label}
                         </label>
@@ -518,20 +518,20 @@ export default function RecurringScheduleEditModal({
                               type="time"
                               value={schedule.startTime}
                               onChange={(e) => handleTimeChange(index, 'startTime', e.target.value)}
-                              className="px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                              className="px-2.5 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
                             />
-                            <span className="text-warm-gray">to</span>
+                            <span className="text-xs text-warm-gray">to</span>
                             <input
                               type="time"
                               value={schedule.endTime}
                               onChange={(e) => handleTimeChange(index, 'endTime', e.target.value)}
-                              className="px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                              className="px-2.5 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
                             />
                           </div>
 
                           <button
                             onClick={() => setShowServiceModal(index)}
-                            className="px-3 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
+                            className="px-2.5 py-1.5 text-xs border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors whitespace-nowrap"
                           >
                             {schedule.serviceIds.length > 0
                               ? `${schedule.serviceIds.length} service${schedule.serviceIds.length !== 1 ? 's' : ''}`
@@ -542,11 +542,11 @@ export default function RecurringScheduleEditModal({
                     </div>
 
                     {schedule.enabled && (
-                      <div className="mt-3 pt-3 border-t border-sand">
-                        <label className="text-xs text-warm-gray mb-2 block">
+                      <div className="mt-2 pt-2 border-t border-sand">
+                        <label className="text-xs text-warm-gray mb-1 block">
                           Apply this schedule to other days:
                         </label>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1.5">
                           {DAYS.filter((d) => d.value !== day.value).map((otherDay) => (
                             <label
                               key={otherDay.value}
@@ -570,7 +570,7 @@ export default function RecurringScheduleEditModal({
                           {applyToDays.length > 0 && (
                             <button
                               onClick={() => handleApplyToDays(index)}
-                              className="ml-2 px-2 py-1 text-xs bg-dark-sage text-charcoal rounded hover:bg-dark-sage/80 transition-colors"
+                              className="ml-1.5 px-2 py-0.5 text-xs bg-dark-sage text-charcoal rounded hover:bg-dark-sage/80 transition-colors"
                             >
                               Apply
                             </button>
