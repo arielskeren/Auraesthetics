@@ -326,6 +326,7 @@ export default function BookingsCalendar() {
       ),
       status: calculateDayStatus(new Date(dateStr)),
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookings, availability]);
 
   const handlePreviousMonth = () => {
@@ -691,11 +692,14 @@ export default function BookingsCalendar() {
                               <div className="text-xs font-semibold mt-0.5">
                                 {booking.service?.name || (booking.serviceId && services[booking.serviceId]?.name) || 'Service'}
                               </div>
-                              {(booking.metadata?.customer_name || booking.metadata?.customerName) && (
-                                <div className="text-xs opacity-90 mt-0.5">
-                                  {String(booking.metadata?.customer_name || booking.metadata?.customerName || '')}
-                                </div>
-                              )}
+                              {(() => {
+                                const customerName = booking.metadata?.customer_name || booking.metadata?.customerName;
+                                return customerName ? (
+                                  <div className="text-xs opacity-90 mt-0.5">
+                                    {String(customerName)}
+                                  </div>
+                                ) : null;
+                              })()}
                             </div>
                           );
                         })}
@@ -747,9 +751,10 @@ export default function BookingsCalendar() {
                               </div>
                               <div className="text-xs text-warm-gray">
                                 {booking.service?.name || (booking.serviceId && services[booking.serviceId]?.name) || 'Service'}
-                                {(booking.metadata?.customer_name || booking.metadata?.customerName) && 
-                                  ` • ${String(booking.metadata?.customer_name || booking.metadata?.customerName || '')}`
-                                }
+                                {(() => {
+                                  const customerName = booking.metadata?.customer_name || booking.metadata?.customerName;
+                                  return customerName ? ` • ${String(customerName)}` : '';
+                                })()}
                               </div>
                             </div>
                             <button className="p-1 hover:bg-sage-light rounded">
