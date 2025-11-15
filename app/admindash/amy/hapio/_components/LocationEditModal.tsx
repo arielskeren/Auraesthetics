@@ -53,7 +53,8 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         throw new Error(errorData.error || 'Failed to save location');
       }
 
-      onSave();
+      // Wait for save callback to complete before closing
+      await onSave();
       onClose();
     } catch (err: any) {
       setError(err);

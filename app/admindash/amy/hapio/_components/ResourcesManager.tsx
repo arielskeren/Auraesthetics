@@ -6,6 +6,7 @@ import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import ResourceEditModal from './ResourceEditModal';
+import ResourceScheduleModal from './ResourceScheduleModal';
 
 export default function ResourcesManager() {
   const [resources, setResources] = useState<any[]>([]);
@@ -17,10 +18,13 @@ export default function ResourcesManager() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedResource, setSelectedResource] = useState<any>(null);
   const [locations, setLocations] = useState<any[]>([]);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedResourceForSchedule, setSelectedResourceForSchedule] = useState<any>(null);
 
   useEffect(() => {
     loadResources();
     loadLocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const loadLocations = async () => {
@@ -95,8 +99,17 @@ export default function ResourcesManager() {
     }
   };
 
-  const handleSave = () => {
-    loadResources();
+  const handleSave = async () => {
+    // Force refresh by resetting to page 1 if we're not already there
+    if (page !== 1) {
+      setPage(1);
+    }
+    await loadResources();
+  };
+
+  const handleViewSchedule = (resource: any) => {
+    setSelectedResourceForSchedule(resource);
+    setShowScheduleModal(true);
   };
 
   if (loading && resources.length === 0) {
@@ -148,6 +161,13 @@ export default function ResourcesManager() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => handleViewSchedule(resource)}
+                        className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
+                        title="View schedule"
+                      >
+                        <Calendar className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => handleEdit(resource)}
                         className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
                         title="Edit"
@@ -185,6 +205,17 @@ export default function ResourcesManager() {
             setSelectedResource(null);
           }}
           onSave={handleSave}
+        />
+      )}
+
+      {showScheduleModal && selectedResourceForSchedule && (
+        <ResourceScheduleModal
+          resourceId={selectedResourceForSchedule.id}
+          resourceName={selectedResourceForSchedule.name}
+          onClose={() => {
+            setShowScheduleModal(false);
+            setSelectedResourceForSchedule(null);
+          }}
         />
       )}
     </div>

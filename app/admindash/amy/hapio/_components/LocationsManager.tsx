@@ -19,6 +19,7 @@ export default function LocationsManager() {
 
   useEffect(() => {
     loadLocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const loadLocations = async () => {
@@ -81,8 +82,12 @@ export default function LocationsManager() {
     }
   };
 
-  const handleSave = () => {
-    loadLocations();
+  const handleSave = async () => {
+    // Force refresh by resetting to page 1 if we're not already there
+    if (page !== 1) {
+      setPage(1);
+    }
+    await loadLocations();
   };
 
   if (loading && locations.length === 0) {

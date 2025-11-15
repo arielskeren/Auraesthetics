@@ -58,6 +58,7 @@ export default function BookingsManager() {
 
   useEffect(() => {
     loadBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.page, filters.per_page]);
 
   const handlePageChange = (page: number) => {

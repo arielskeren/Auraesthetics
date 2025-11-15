@@ -16,6 +16,7 @@ export default function ServicesManager() {
 
   useEffect(() => {
     loadServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const loadServices = async () => {
