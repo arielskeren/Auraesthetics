@@ -7,13 +7,13 @@ import ServiceCard from '../_components/ServiceCard';
 import BookingModal from '../_components/BookingModal';
 
 interface Service {
-  category: string | null;
+  category: string;
   name: string;
   slug: string;
-  summary: string | null;
+  summary: string;
   description?: string | null;
   duration: string;
-  price: string | null;
+  price: string;
   testPricing?: boolean;
   image_url?: string | null;
 }
@@ -36,14 +36,14 @@ export default function ServicesClient() {
         }
         const data = await response.json();
         // Map API response to match ServiceCard interface
-        const mappedServices = data.map((s: any) => ({
-          category: s.category || '',
+        const mappedServices: Service[] = data.map((s: any) => ({
+          category: (s.category || '') as string,
           name: s.name,
           slug: s.slug,
-          summary: s.summary || '',
+          summary: (s.summary || '') as string,
           description: s.description,
           duration: s.duration_display || `${s.duration_minutes} min`,
-          price: s.price || '',
+          price: (s.price || '') as string,
           testPricing: s.test_pricing || false,
           image_url: s.image_url,
         }));
