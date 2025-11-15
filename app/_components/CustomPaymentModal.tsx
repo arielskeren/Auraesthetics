@@ -13,7 +13,7 @@ import {
 
 import Button from './Button';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
-import { getServicePhotoPaths } from '../_utils/servicePhotos';
+// Removed getServicePhotoPaths import - now using only blob storage image_url
 
 type PaymentType = 'full' | 'deposit';
 
@@ -30,6 +30,7 @@ interface ServiceSummary {
   duration: string;
   category: string;
   slug?: string;
+  image_url?: string | null;
 }
 
 interface ModernPaymentSectionProps {
@@ -659,11 +660,10 @@ export default function CustomPaymentModal({
   const [contactPrefill, setContactPrefill] = useState<ContactDetails | null>(null);
 
   const serviceSlug = deriveServiceSlug(service);
+  // ONLY use image_url from blob storage - no fallback to public folder
   const primaryPhoto = useMemo(() => {
-    if (!service?.slug) return null;
-    const photos = getServicePhotoPaths(service.slug);
-    return photos.length > 0 ? photos[0] : null;
-  }, [service?.slug]);
+    return service?.image_url || null;
+  }, [service?.image_url]);
 
   const handlePaymentSuccess = useCallback((payload: PaymentSuccessPayload) => {
     setPaymentSuccess(payload);

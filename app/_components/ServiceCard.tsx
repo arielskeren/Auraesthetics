@@ -1,7 +1,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { getServicePhotoPaths } from '../_utils/servicePhotos';
 
 interface ServiceCardProps {
   name: string;
@@ -24,8 +23,7 @@ export default function ServiceCard({ name, summary, duration, price, category, 
   };
 
   const gradient = gradients[category as keyof typeof gradients] || gradients['Facials'];
-  // Use image_url from API if available, otherwise fall back to local photo paths
-  const photoPaths = image_url ? [image_url] : (slug ? getServicePhotoPaths(slug) : []);
+  // ONLY use image_url from blob storage - no fallback to public folder
 
   return (
     <motion.div
@@ -45,29 +43,20 @@ export default function ServiceCard({ name, summary, duration, price, category, 
     >
       <div className="bg-white rounded-xl overflow-hidden shadow-sm sm:shadow-sm group-active:shadow-md sm:group-hover:shadow-lg transition-shadow duration-200 h-full flex flex-col">
         {/* Service image or gradient placeholder */}
-        {slug && photoPaths.length > 0 ? (
+        {image_url ? (
           <>
             <div className="hidden sm:block h-48 flex-shrink-0 bg-gray-200 relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
-                src={photoPaths[0]} 
+                src={image_url} 
                 alt={name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
+                  // If blob image fails to load, show gradient
                   const target = e.target as HTMLImageElement;
-                  // Try fallback paths if available
-                  const currentSrc = target.src;
-                  const currentIndex = photoPaths.findIndex(path => currentSrc.includes(path.split('/').pop() || ''));
-                  
-                  if (currentIndex < photoPaths.length - 1) {
-                    // Try next fallback path
-                    target.src = photoPaths[currentIndex + 1];
-                  } else {
-                    // No more fallbacks, show gradient
-                    target.style.display = 'none';
-                    if (target.parentElement) {
-                      target.parentElement.className = `h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`;
-                    }
+                  target.style.display = 'none';
+                  if (target.parentElement) {
+                    target.parentElement.className = `h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`;
                   }
                 }}
               />

@@ -32,3 +32,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local service photos (migrated to blob storage)
+/public/services/
+
