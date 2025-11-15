@@ -330,17 +330,27 @@ export default function RecurringScheduleEditModal({
           return time;
         };
         
+        // Hapio expects weekday as 1-7 where 1=Monday, 7=Sunday
+        // Convert from our format (0-6, Sunday-Saturday) to Hapio format (1-7, Monday-Sunday)
+        // Sunday (0) -> 7, Monday (1) -> 1, Tuesday (2) -> 2, ..., Saturday (6) -> 6
         const hapioWeekday = daySchedule.dayOfWeek === 0 ? 7 : daySchedule.dayOfWeek;
         
         const blockPayload = {
           recurring_schedule_id: recurringScheduleId,
-          weekday: hapioWeekday,
+          weekday: Number(hapioWeekday), // Ensure it's a number
           start_time: formatTime(daySchedule.startTime),
           end_time: formatTime(daySchedule.endTime),
           metadata: {
             service_ids: daySchedule.serviceIds,
           },
         };
+        
+        console.log('[RecurringScheduleEditModal] Creating block:', {
+          day: DAYS[daySchedule.dayOfWeek].label,
+          dayOfWeek: daySchedule.dayOfWeek,
+          hapioWeekday,
+          payload: blockPayload,
+        });
 
         const blockResponse = await fetch(
           `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
@@ -393,89 +403,110 @@ export default function RecurringScheduleEditModal({
 
           {/* Date Range Selector */}
           <div className="bg-white border border-sand rounded-lg p-4">
-            <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Date Range
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-charcoal mb-1">
-                  Start Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-charcoal mb-1.5">End Date</label>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      id="indefinite"
-                      name="endDateType"
-                      checked={endDateType === 'indefinite'}
-                      onChange={() => setEndDateType('indefinite')}
-                      className="w-4 h-4 text-dark-sage"
-                    />
-                    <label htmlFor="indefinite" className="text-sm text-charcoal cursor-pointer">
-                      Indefinite (default)
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Date Range
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-1">
+                      Start Date <span className="text-red-500">*</span>
                     </label>
+                    <input
+                      type="date"
+                      required
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      id="specificDate"
-                      name="endDateType"
-                      checked={endDateType === 'date'}
-                      onChange={() => setEndDateType('date')}
-                      className="w-4 h-4 text-dark-sage"
-                    />
-                    <label htmlFor="specificDate" className="text-sm text-charcoal cursor-pointer">
-                      Specific date:
-                    </label>
-                    {endDateType === 'date' && (
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        min={startDate}
-                        className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                      />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      id="preset"
-                      name="endDateType"
-                      checked={endDateType === 'preset'}
-                      onChange={() => setEndDateType('preset')}
-                      className="w-4 h-4 text-dark-sage"
-                    />
-                    <label htmlFor="preset" className="text-sm text-charcoal cursor-pointer">
-                      Preset:
-                    </label>
-                    {endDateType === 'preset' && (
-                      <select
-                        value={presetDays || ''}
-                        onChange={(e) => setPresetDays(e.target.value ? Number(e.target.value) : null)}
-                        className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                      >
-                        <option value="">Select preset...</option>
-                        <option value="7">1 week</option>
-                        <option value="30">1 month</option>
-                        <option value="60">60 days</option>
-                        <option value="90">90 days</option>
-                        <option value="180">180 days</option>
-                      </select>
-                    )}
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-1.5">End Date</label>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          id="indefinite"
+                          name="endDateType"
+                          checked={endDateType === 'indefinite'}
+                          onChange={() => setEndDateType('indefinite')}
+                          className="w-4 h-4 text-dark-sage"
+                        />
+                        <label htmlFor="indefinite" className="text-sm text-charcoal cursor-pointer">
+                          Indefinite (default)
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          id="specificDate"
+                          name="endDateType"
+                          checked={endDateType === 'date'}
+                          onChange={() => setEndDateType('date')}
+                          className="w-4 h-4 text-dark-sage"
+                        />
+                        <label htmlFor="specificDate" className="text-sm text-charcoal cursor-pointer">
+                          Specific date:
+                        </label>
+                        {endDateType === 'date' && (
+                          <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            min={startDate}
+                            className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          id="preset"
+                          name="endDateType"
+                          checked={endDateType === 'preset'}
+                          onChange={() => setEndDateType('preset')}
+                          className="w-4 h-4 text-dark-sage"
+                        />
+                        <label htmlFor="preset" className="text-sm text-charcoal cursor-pointer">
+                          Preset:
+                        </label>
+                        {endDateType === 'preset' && (
+                          <select
+                            value={presetDays || ''}
+                            onChange={(e) => setPresetDays(e.target.value ? Number(e.target.value) : null)}
+                            className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                          >
+                            <option value="">Select preset...</option>
+                            <option value="7">1 week</option>
+                            <option value="30">1 month</option>
+                            <option value="60">60 days</option>
+                            <option value="90">90 days</option>
+                            <option value="180">180 days</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </div>
+              {/* Save/Cancel Buttons */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleSave}
+                  disabled={loading || !startDate}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
+                >
+                  <Save className="w-4 h-4" />
+                  {loading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors whitespace-nowrap"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
@@ -584,23 +615,6 @@ export default function RecurringScheduleEditModal({
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={loading || !startDate}
-              className="flex items-center gap-2 px-6 py-3 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              <Save className="w-4 h-4" />
-              {loading ? 'Saving...' : 'Save Schedule'}
-            </button>
-          </div>
 
           {/* Service Selection Modal */}
           {showServiceModal !== null && (
