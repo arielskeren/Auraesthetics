@@ -69,9 +69,10 @@ function parseDate(value: string | null): Date | null {
 /**
  * Format date for Hapio API: Y-m-d\TH:i:sP format
  * Example: 2025-11-15T03:17:09+00:00 (no milliseconds, timezone offset instead of Z)
+ * Hapio expects format: Y-m-d\TH:i:sP where P is timezone offset like +00:00 or -05:00
  */
 function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
-  // Get date components in the specified timezone
+  // Format date components in the specified timezone
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -84,22 +85,27 @@ function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
   });
 
   const parts = formatter.formatToParts(date);
-  const year = parts.find(p => p.type === 'year')?.value;
-  const month = parts.find(p => p.type === 'month')?.value;
-  const day = parts.find(p => p.type === 'day')?.value;
-  const hour = parts.find(p => p.type === 'hour')?.value;
-  const minute = parts.find(p => p.type === 'minute')?.value;
-  const second = parts.find(p => p.type === 'second')?.value;
+  const year = parts.find(p => p.type === 'year')?.value ?? '0000';
+  const month = parts.find(p => p.type === 'month')?.value ?? '01';
+  const day = parts.find(p => p.type === 'day')?.value ?? '01';
+  const hour = parts.find(p => p.type === 'hour')?.value ?? '00';
+  const minute = parts.find(p => p.type === 'minute')?.value ?? '00';
+  const second = parts.find(p => p.type === 'second')?.value ?? '00';
 
-  // Get timezone offset
-  const dateInTz = new Date(date.toLocaleString('en-US', { timeZone }));
-  const utcDate = new Date(date.toUTCString());
-  const offsetMs = dateInTz.getTime() - utcDate.getTime();
-  const offsetHours = Math.floor(Math.abs(offsetMs) / (1000 * 60 * 60));
-  const offsetMinutes = Math.floor((Math.abs(offsetMs) % (1000 * 60 * 60)) / (1000 * 60));
-  const offsetSign = offsetMs >= 0 ? '+' : '-';
-  const offset = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+  // Get timezone offset for the specified timezone at this date
+  // Create a date formatter that shows the offset
+  const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const tzDate = new Date(date.toLocaleString('en-US', { timeZone }));
+  
+  // Calculate offset in minutes
+  const offsetMs = tzDate.getTime() - utcDate.getTime();
+  const offsetMinutes = Math.round(offsetMs / (1000 * 60));
+  const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+  const offsetMins = Math.abs(offsetMinutes) % 60;
+  const offsetSign = offsetMinutes >= 0 ? '+' : '-';
+  const offset = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMins).padStart(2, '0')}`;
 
+  // Format: YYYY-MM-DDTHH:mm:ss+HH:mm (no milliseconds)
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
 }
 
@@ -196,10 +202,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const fromIso = toIsoString(baseFrom);
-    const toIso = toIsoString(baseTo);
+    // Format dates for Hapio API (Y-m-d\TH:i:sP format, no milliseconds, timezone offset)
+    const fromIso = formatDateForHapio(baseFrom, timezone);
+    const toIso = formatDateForHapio(baseTo, timezone);
     const page = pageParam ? Number(pageParam) : undefined;
-    const perPage = perPageParam ? Number(perPageParam) : 250;
+    // Hapio requires per_page to be max 100
+    const perPage = Math.min(perPageParam ? Number(perPageParam) : 100, 100);
 
     const cacheKey = buildCacheKey({
       serviceId,
