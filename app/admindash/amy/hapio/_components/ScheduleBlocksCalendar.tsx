@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Trash2, Edit2 } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
-import ScheduleBlockEditModal from './ScheduleBlockEditModal';
+import ServiceSelectionModal from './ServiceSelectionModal';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
 
 interface ScheduleBlocksCalendarProps {
@@ -27,13 +27,51 @@ export default function ScheduleBlocksCalendar({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
+  const [formData, setFormData] = useState({
+    startTime: '00:00',
+    endTime: '23:59',
+    blockType: 'closed' as 'closed' | 'open',
+    serviceIds: [] as string[],
+  });
 
   useEffect(() => {
     loadBlocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, currentDate]);
+
+  useEffect(() => {
+    if (selectedDate && !editingBlock) {
+      const dateBlocks = getBlocksForDate(selectedDate);
+      if (dateBlocks.length > 0) {
+        const block = dateBlocks[0];
+        const start = new Date(block.starts_at);
+        const end = new Date(block.ends_at);
+        const startTime = start.toTimeString().slice(0, 5);
+        const endTime = end.toTimeString().slice(0, 5);
+        const isAllDay = startTime === '00:00' && endTime === '23:59';
+        const serviceIds = (block.metadata?.service_ids as string[]) || [];
+        
+        setFormData({
+          startTime,
+          endTime,
+          blockType: isAllDay ? 'closed' : 'open',
+          serviceIds,
+        });
+        setEditingBlock(block);
+      } else {
+        // New block - default to closed
+        setFormData({
+          startTime: '00:00',
+          endTime: '23:59',
+          blockType: 'closed',
+          serviceIds: [],
+        });
+        setEditingBlock(null);
+      }
+    }
+  }, [selectedDate, editingBlock]);
 
   const loadBlocks = async () => {
     try {
@@ -47,7 +85,6 @@ export default function ScheduleBlocksCalendar({
       const toDate = new Date(year, month + 1, 0);
       toDate.setHours(23, 59, 59, 999);
       
-      // Format dates in Hapio format: Y-m-d\TH:i:sP
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
@@ -79,12 +116,10 @@ export default function ScheduleBlocksCalendar({
 
     const days = [];
     
-    // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
 
-    // Add all days of the month
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(new Date(year, month, i));
     }
@@ -101,8 +136,6 @@ export default function ScheduleBlocksCalendar({
   };
 
   const getBlockType = (block: ScheduleBlock): 'closed' | 'open' => {
-    // Determine if block is closed or open based on metadata or time range
-    // For now, assume all-day blocks (00:00-23:59) are closed
     const start = new Date(block.starts_at);
     const end = new Date(block.ends_at);
     const isAllDay = start.getHours() === 0 && start.getMinutes() === 0 &&
@@ -110,15 +143,106 @@ export default function ScheduleBlocksCalendar({
     return isAllDay ? 'closed' : 'open';
   };
 
+  const isPastDate = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+
   const handleDateClick = (date: Date) => {
-    const dateBlocks = getBlocksForDate(date);
-    if (dateBlocks.length > 0) {
-      setSelectedBlock(dateBlocks[0]);
-    } else {
-      setSelectedBlock(null);
-    }
+    if (isPastDate(date)) return;
     setSelectedDate(date);
-    setShowEditModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!selectedDate || !locationId) {
+      setError(new Error('Date and location are required'));
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      const startDateTime = new Date(`${dateStr}T${formData.startTime}:00`);
+      const endDateTime = new Date(`${dateStr}T${formData.endTime}:00`);
+
+      if (endDateTime <= startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1);
+      }
+
+      const startsAtFormatted = formatDateForHapioUTC(startDateTime);
+      const endsAtFormatted = formatDateForHapioUTC(endDateTime);
+
+      const payload: any = {
+        location_id: locationId,
+        starts_at: startsAtFormatted,
+        ends_at: endsAtFormatted,
+        metadata: {},
+      };
+
+      if (formData.blockType === 'open' && formData.serviceIds.length > 0) {
+        payload.metadata.service_ids = formData.serviceIds;
+      }
+
+      const url = editingBlock
+        ? `/api/admin/hapio/resources/${resourceId}/schedule-blocks/${editingBlock.id}`
+        : `/api/admin/hapio/resources/${resourceId}/schedule-blocks`;
+      const method = editingBlock ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${editingBlock ? 'update' : 'create'} schedule block`);
+      }
+
+      await loadBlocks();
+      setEditingBlock(null);
+    } catch (err: any) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (blockId: string) => {
+    if (!confirm('Are you sure you want to delete this schedule block?')) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `/api/admin/hapio/resources/${resourceId}/schedule-blocks/${blockId}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete schedule block');
+      }
+
+      await loadBlocks();
+      if (editingBlock?.id === blockId) {
+        setEditingBlock(null);
+        setFormData({
+          startTime: '00:00',
+          endTime: '23:59',
+          blockType: 'closed',
+          serviceIds: [],
+        });
+      }
+    } catch (err: any) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePreviousMonth = () => {
@@ -136,9 +260,11 @@ export default function ScheduleBlocksCalendar({
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  if (loading) {
+  if (loading && blocks.length === 0) {
     return <div className="text-center py-8 text-warm-gray">Loading calendar...</div>;
   }
+
+  const selectedDateBlocks = selectedDate ? getBlocksForDate(selectedDate) : [];
 
   return (
     <div className="space-y-6">
@@ -160,122 +286,371 @@ export default function ScheduleBlocksCalendar({
 
       {error && <ErrorDisplay error={error} />}
 
-      <div className="bg-white border border-sand rounded-lg p-6">
-        {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={handlePreviousMonth}
-            className="p-2 hover:bg-sand/20 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <h3 className="text-xl font-semibold text-charcoal">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h3>
-          <button
-            onClick={handleNextMonth}
-            className="p-2 hover:bg-sand/20 rounded-lg transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+      <div className={`flex gap-6 transition-all duration-300 ${selectedDate ? 'items-start' : 'items-center justify-center'}`}>
+        {/* Calendar - Smaller and Centered */}
+        <div className={`bg-white border border-sand rounded-lg p-4 transition-all duration-300 ${selectedDate ? 'w-[420px] flex-shrink-0' : 'w-[420px]'}`}>
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={handlePreviousMonth}
+              className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h3 className="text-base font-semibold text-charcoal">
+              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            </h3>
+            <button
+              onClick={handleNextMonth}
+              className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Calendar Grid - Smaller tiles */}
+          <div className="grid grid-cols-7 gap-1">
+            {/* Day Headers */}
+            {dayNames.map((day) => (
+              <div
+                key={day}
+                className="text-center text-xs font-semibold text-charcoal py-1"
+              >
+                {day}
+              </div>
+            ))}
+
+            {/* Calendar Days */}
+            {getDaysInMonth().map((date, index) => {
+              if (!date) {
+                return <div key={`empty-${index}`} className="aspect-square" />;
+              }
+
+              const dateBlocks = getBlocksForDate(date);
+              const isPast = isPastDate(date);
+              const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+
+              let blockType: 'closed' | 'open' | null = null;
+              if (dateBlocks.length > 0) {
+                blockType = getBlockType(dateBlocks[0]);
+              }
+
+              return (
+                <button
+                  key={date.toISOString()}
+                  onClick={() => handleDateClick(date)}
+                  disabled={isPast}
+                  className={`aspect-square border rounded-lg text-xs transition-colors ${
+                    isPast
+                      ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                      : isSelected
+                      ? 'ring-2 ring-dark-sage ring-offset-1'
+                      : 'hover:bg-sand/20 cursor-pointer'
+                  } ${
+                    blockType === 'closed'
+                      ? 'bg-red-100 border-red-300 text-red-900'
+                      : blockType === 'open'
+                      ? 'bg-yellow-100 border-yellow-300 text-yellow-900'
+                      : 'bg-white border-sand text-charcoal'
+                  }`}
+                >
+                  <div className="text-center font-medium">{date.getDate()}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="mt-3 flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-red-100 border border-red-300 rounded" />
+              <span className="text-warm-gray">Closed</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded" />
+              <span className="text-warm-gray">Special hours</span>
+            </div>
+          </div>
         </div>
 
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {/* Day Headers */}
-          {dayNames.map((day) => (
-            <div
-              key={day}
-              className="text-center text-sm font-semibold text-charcoal py-2"
-            >
-              {day}
-            </div>
-          ))}
-
-          {/* Calendar Days */}
-          {getDaysInMonth().map((date, index) => {
-            if (!date) {
-              return <div key={`empty-${index}`} className="aspect-square" />;
-            }
-
-            const dateBlocks = getBlocksForDate(date);
-            const isToday = date.toDateString() === new Date().toDateString();
-            const isPast = date < new Date() && !isToday;
-
-            let blockType: 'closed' | 'open' | null = null;
-            if (dateBlocks.length > 0) {
-              blockType = getBlockType(dateBlocks[0]);
-            }
-
-            return (
+        {/* Right Side Panel - Shows blocks for selected day */}
+        {selectedDate && (
+          <div className="flex-1 bg-white border border-sand rounded-lg p-6 min-w-[400px]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-charcoal">
+                {selectedDate.toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </h3>
               <button
-                key={date.toISOString()}
-                onClick={() => handleDateClick(date)}
-                className={`aspect-square border border-sand rounded-lg p-2 text-sm transition-colors hover:bg-sand/20 ${
-                  isToday
-                    ? 'bg-dark-sage/20 border-dark-sage font-semibold'
-                    : isPast
-                    ? 'bg-sand/10 text-warm-gray'
-                    : 'bg-white text-charcoal'
-                } ${
-                  blockType === 'closed'
-                    ? 'bg-red-50 border-red-200'
-                    : blockType === 'open'
-                    ? 'bg-yellow-50 border-yellow-200'
-                    : ''
-                }`}
+                onClick={() => {
+                  setSelectedDate(null);
+                  setEditingBlock(null);
+                }}
+                className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
               >
-                <div className="text-left">
-                  <div>{date.getDate()}</div>
-                  {dateBlocks.length > 0 && (
-                    <div className="text-xs mt-1">
-                      {blockType === 'closed' ? 'Closed' : 'Special hours'}
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {selectedDateBlocks.length > 0 ? (
+              <div className="space-y-4">
+                {selectedDateBlocks.map((block) => {
+                  const start = new Date(block.starts_at);
+                  const end = new Date(block.ends_at);
+                  const startTime = start.toTimeString().slice(0, 5);
+                  const endTime = end.toTimeString().slice(0, 5);
+                  const isAllDay = startTime === '00:00' && endTime === '23:59';
+                  const serviceIds = (block.metadata?.service_ids as string[]) || [];
+                  const isEditing = editingBlock?.id === block.id;
+
+                  return (
+                    <div
+                      key={block.id}
+                      className={`border rounded-lg p-4 ${
+                        isAllDay
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-yellow-50 border-yellow-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="font-semibold text-charcoal mb-1">
+                            {isAllDay ? 'Closed (entire day)' : 'Special hours'}
+                          </div>
+                          {!isAllDay && (
+                            <div className="text-sm text-warm-gray">
+                              {startTime} - {endTime}
+                            </div>
+                          )}
+                          {serviceIds.length > 0 && (
+                            <div className="text-xs text-warm-gray mt-1">
+                              {serviceIds.length} service{serviceIds.length !== 1 ? 's' : ''} selected
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingBlock(block);
+                              setFormData({
+                                startTime,
+                                endTime,
+                                blockType: isAllDay ? 'closed' : 'open',
+                                serviceIds,
+                              });
+                            }}
+                            className="p-1.5 hover:bg-white/50 rounded transition-colors"
+                            disabled={loading}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(block.id)}
+                            className="p-1.5 hover:bg-white/50 rounded transition-colors text-red-600"
+                            disabled={loading}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isEditing && (
+                        <div className="mt-4 pt-4 border-t border-white/50 space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-charcoal mb-1">
+                              Block Type <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={formData.blockType}
+                              onChange={(e) =>
+                                setFormData({ ...formData, blockType: e.target.value as 'closed' | 'open' })
+                              }
+                              className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                            >
+                              <option value="closed">Block entire day (unavailable all day)</option>
+                              <option value="open">Block specific hours (unavailable during selected time)</option>
+                            </select>
+                          </div>
+
+                          {formData.blockType === 'open' && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-charcoal mb-1">
+                                  Start Time <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  type="time"
+                                  value={formData.startTime}
+                                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-charcoal mb-1">
+                                  End Time <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  type="time"
+                                  value={formData.endTime}
+                                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {formData.blockType === 'open' && (
+                            <div>
+                              <label className="block text-sm font-medium text-charcoal mb-1">
+                                Available Services
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setShowServiceModal(true)}
+                                className="w-full px-3 py-2 border border-sand rounded-lg text-sm text-left hover:bg-sand/20 transition-colors"
+                              >
+                                {formData.serviceIds.length > 0
+                                  ? `${formData.serviceIds.length} service${formData.serviceIds.length !== 1 ? 's' : ''} selected`
+                                  : 'All services (click to select specific services)'}
+                              </button>
+                              <p className="text-xs text-warm-gray mt-1">
+                                Select which services are blocked during these hours. Leave unselected for all services.
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-2">
+                            <button
+                              onClick={handleSave}
+                              disabled={loading}
+                              className="flex-1 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                            >
+                              {loading ? 'Saving...' : 'Save Changes'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingBlock(null);
+                                const block = selectedDateBlocks[0];
+                                if (block) {
+                                  const start = new Date(block.starts_at);
+                                  const end = new Date(block.ends_at);
+                                  setFormData({
+                                    startTime: start.toTimeString().slice(0, 5),
+                                    endTime: end.toTimeString().slice(0, 5),
+                                    blockType: getBlockType(block),
+                                    serviceIds: (block.metadata?.service_ids as string[]) || [],
+                                  });
+                                }
+                              }}
+                              className="px-4 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-warm-gray">
+                  No schedule blocks for this day. Click below to add one.
+                </p>
+                <div className="border border-sand rounded-lg p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-1">
+                      Block Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.blockType}
+                      onChange={(e) =>
+                        setFormData({ ...formData, blockType: e.target.value as 'closed' | 'open' })
+                      }
+                      className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    >
+                      <option value="closed">Block entire day (unavailable all day)</option>
+                      <option value="open">Block specific hours (unavailable during selected time)</option>
+                    </select>
+                  </div>
+
+                  {formData.blockType === 'open' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-charcoal mb-1">
+                          Start Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="time"
+                          value={formData.startTime}
+                          onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                          className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-charcoal mb-1">
+                          End Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="time"
+                          value={formData.endTime}
+                          onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                          className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                        />
+                      </div>
                     </div>
                   )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
 
-        {/* Legend */}
-        <div className="mt-6 flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-50 border border-red-200 rounded" />
-            <span className="text-warm-gray">Closed</span>
+                  {formData.blockType === 'open' && (
+                    <div>
+                      <label className="block text-sm font-medium text-charcoal mb-1">
+                        Available Services
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowServiceModal(true)}
+                        className="w-full px-3 py-2 border border-sand rounded-lg text-sm text-left hover:bg-sand/20 transition-colors"
+                      >
+                        {formData.serviceIds.length > 0
+                          ? `${formData.serviceIds.length} service${formData.serviceIds.length !== 1 ? 's' : ''} selected`
+                          : 'All services (click to select specific services)'}
+                      </button>
+                      <p className="text-xs text-warm-gray mt-1">
+                        Select which services are blocked during these hours. Leave unselected for all services.
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSave}
+                    disabled={loading || !locationId}
+                    className="w-full px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    {loading ? 'Creating...' : 'Create Block'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-50 border border-yellow-200 rounded" />
-            <span className="text-warm-gray">Special hours</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-white border border-sand rounded" />
-            <span className="text-warm-gray">Normal</span>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <ScheduleBlockEditModal
-          resourceId={resourceId}
-          locationId={locationId}
-          selectedDate={selectedDate}
-          selectedBlock={selectedBlock}
-          onClose={() => {
-            setShowEditModal(false);
-            setSelectedDate(null);
-            setSelectedBlock(null);
-          }}
-          onSave={async () => {
-            await loadBlocks();
-            setShowEditModal(false);
-            setSelectedDate(null);
-            setSelectedBlock(null);
+      {/* Service Selection Modal */}
+      {showServiceModal && (
+        <ServiceSelectionModal
+          selectedServiceIds={formData.serviceIds}
+          onClose={() => setShowServiceModal(false)}
+          onSave={(serviceIds) => {
+            setFormData({ ...formData, serviceIds });
+            setShowServiceModal(false);
           }}
         />
       )}
     </div>
   );
 }
-
