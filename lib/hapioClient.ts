@@ -1385,6 +1385,7 @@ export async function dissociateResourceService(
 export interface HapioServicePayload {
   name: string;
   duration_minutes: number;
+  type: string;
   buffer_before_minutes?: number | null;
   buffer_after_minutes?: number | null;
   enabled?: boolean;
@@ -1448,6 +1449,7 @@ export async function createService(service: HapioServicePayload): Promise<Hapio
   const body: Record<string, unknown> = {
     name: service.name,
     duration_minutes: service.duration_minutes,
+    type: service.type,
   };
   if (service.buffer_before_minutes !== undefined)
     body.buffer_before_minutes = service.buffer_before_minutes;

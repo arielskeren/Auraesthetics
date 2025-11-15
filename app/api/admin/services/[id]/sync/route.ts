@@ -47,9 +47,11 @@ export async function POST(
 
     // Map Neon DB service to Hapio payload
     // Store extra fields in metadata
+    // Note: Hapio requires a 'type' field - using 'service' as the default type
     const hapioPayload = {
       name: service.name,
       duration_minutes: service.duration_minutes,
+      type: 'service', // Required by Hapio API
       buffer_before_minutes: service.buffer_before_minutes || null,
       buffer_after_minutes: service.buffer_after_minutes || null,
       enabled: service.enabled !== false,
