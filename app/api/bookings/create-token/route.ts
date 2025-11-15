@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
-import { buildPublicCalUrl } from '@/lib/calPublicUrl';
 import crypto from 'crypto';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -346,33 +345,9 @@ export async function POST(request: NextRequest) {
       depositPercent: paymentIntent.metadata?.depositPercent || '50',
     };
 
-    const rawEventTypeId = slotDetails.eventTypeId;
-    const numericEventTypeId =
-      typeof rawEventTypeId === 'string'
-        ? Number.parseInt(rawEventTypeId, 10)
-        : typeof rawEventTypeId === 'number'
-        ? rawEventTypeId
-        : Number.NaN;
-
-    const publicCalUrl = Number.isFinite(numericEventTypeId)
-      ? buildPublicCalUrl(numericEventTypeId, {
-          params: {
-            name: attendeeDetails.name,
-            email: attendeeDetails.email,
-          smsReminderNumber: normalizePhoneForPrefill(attendeeDetails.phone),
-            notes: attendeeDetails.notes || undefined,
-            "prefill[metadata]": JSON.stringify({
-              slot: {
-                startTime: slotDetails.startTime,
-                timezone: slotDetails.timezone,
-                duration: slotDetails.duration,
-                label: slotDetails.label,
-              },
-              reservation: reservationDetails,
-            }),
-          },
-        })
-      : null;
+    // Note: Cal.com public URL generation removed as part of Hapio migration
+    // Booking verification now uses Hapio booking IDs instead
+    const publicCalUrl = null;
 
     const existingRows = Array.isArray(existingResult)
       ? existingResult
@@ -402,10 +377,7 @@ export async function POST(request: NextRequest) {
           ...stripeMetadata,
           lastSucceededIntentAt: new Date().toISOString(),
         },
-        publicCalBooking: {
-          url: publicCalUrl?.url ?? existingMetadata?.publicCalBooking?.url ?? null,
-          parts: publicCalUrl?.parts ?? existingMetadata?.publicCalBooking?.parts ?? null,
-        },
+        // Legacy Cal.com booking URL removed (Hapio migration)
       };
 
       // Update existing booking with token and payment type
@@ -455,10 +427,7 @@ export async function POST(request: NextRequest) {
         stripe: {
           lastSucceededIntentAt: new Date().toISOString(),
         },
-        publicCalBooking: {
-          url: publicCalUrl?.url ?? null,
-          parts: publicCalUrl?.parts ?? null,
-        },
+        // Legacy Cal.com booking URL removed (Hapio migration)
       };
 
       await sql`
@@ -509,7 +478,7 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
       paymentIntentId,
       paymentStatus: paymentIntent.status,
-      publicBookingUrl: publicCalUrl?.url ?? null,
+      publicBookingUrl: null, // Legacy Cal.com URL removed (Hapio migration)
     });
   } catch (error: any) {
     console.error('Token creation error:', error);
