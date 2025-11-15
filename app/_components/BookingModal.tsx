@@ -50,6 +50,9 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       return;
     }
 
+    // Extract slug after guard check to narrow type from string | undefined to string
+    const serviceSlug = service.slug;
+
     const abortController = new AbortController();
 
     async function loadAvailability() {
@@ -63,7 +66,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
       try {
         const params = new URLSearchParams({
-          slug: service.slug,
+          slug: serviceSlug,
           days: '14',
           timezone: userTimezone,
         });
