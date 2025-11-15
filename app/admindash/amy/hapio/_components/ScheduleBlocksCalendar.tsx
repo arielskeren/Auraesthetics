@@ -108,7 +108,14 @@ export default function ScheduleBlocksCalendar({
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[ScheduleBlocksCalendar] Availability data:', {
+          dates: Object.keys(data.availabilityByDate || {}).length,
+          sample: Object.entries(data.availabilityByDate || {}).slice(0, 3),
+        });
         setAvailability(data.availabilityByDate || {});
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('[ScheduleBlocksCalendar] Availability API error:', response.status, errorData);
       }
       // Silently fail if availability can't be loaded - it's not critical
     } catch (err: any) {
