@@ -466,11 +466,18 @@ export interface HapioLocation {
 export interface HapioService {
   id: string;
   name: string;
-  duration_minutes: number;
-  buffer_before_minutes?: number | null;
-  buffer_after_minutes?: number | null;
-  enabled: boolean;
+  type?: string | null;
+  duration?: string | null; // ISO 8601 format
+  price?: string | null;
+  bookable_interval?: string | null; // ISO 8601 format
+  buffer_time_before?: string | null; // ISO 8601 format
+  buffer_time_after?: string | null; // ISO 8601 format
+  booking_window_start?: string | null; // ISO 8601 format
+  booking_window_end?: string | null; // ISO 8601 format
+  cancelation_threshold?: string | null; // ISO 8601 format
   metadata?: Record<string, unknown> | null;
+  protected_metadata?: Record<string, unknown> | null;
+  enabled: boolean;
 }
 
 export interface HapioBlock {
@@ -1413,36 +1420,29 @@ export async function listServices(params?: {
     allServicesRaw: response.data,
   });
 
-  const mapped = {
-    ...response,
-    data: response.data.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      duration_minutes: s.duration_minutes ?? null,
-      buffer_before_minutes: s.buffer_before_minutes ?? null,
-      buffer_after_minutes: s.buffer_after_minutes ?? null,
-      enabled: Boolean(s.enabled),
-      metadata: s.metadata ?? null,
-    })),
-  };
-
-  console.log('[Hapio] Mapped services:', {
-    firstServiceMapped: mapped.data?.[0],
-  });
-
-  return mapped;
+  // Return raw Hapio API response - don't map to incorrect field names
+  // Hapio API returns: name, type, duration, price, buffer_time_before, buffer_time_after, etc.
+  return response;
 }
 
 export async function getService(id: string): Promise<HapioService> {
   const response = await requestJson<any>('get', `services/${id}`);
+  // Return raw Hapio API response with all fields
   return {
     id: response.id,
     name: response.name,
-    duration_minutes: response.duration_minutes,
-    buffer_before_minutes: response.buffer_before_minutes ?? null,
-    buffer_after_minutes: response.buffer_after_minutes ?? null,
-    enabled: Boolean(response.enabled),
+    type: response.type ?? null,
+    duration: response.duration ?? null,
+    price: response.price ?? null,
+    bookable_interval: response.bookable_interval ?? null,
+    buffer_time_before: response.buffer_time_before ?? null,
+    buffer_time_after: response.buffer_time_after ?? null,
+    booking_window_start: response.booking_window_start ?? null,
+    booking_window_end: response.booking_window_end ?? null,
+    cancelation_threshold: response.cancelation_threshold ?? null,
     metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+    enabled: Boolean(response.enabled),
   };
 }
 
@@ -1461,14 +1461,22 @@ export async function createService(service: HapioServicePayload): Promise<Hapio
   if (service.metadata !== undefined) body.metadata = service.metadata;
 
   const response = await requestJson<any>('post', 'services', body);
+  // Return raw Hapio API response with all fields
   return {
     id: response.id,
     name: response.name,
-    duration_minutes: response.duration_minutes,
-    buffer_before_minutes: response.buffer_before_minutes ?? null,
-    buffer_after_minutes: response.buffer_after_minutes ?? null,
-    enabled: Boolean(response.enabled),
+    type: response.type ?? null,
+    duration: response.duration ?? null,
+    price: response.price ?? null,
+    bookable_interval: response.bookable_interval ?? null,
+    buffer_time_before: response.buffer_time_before ?? null,
+    buffer_time_after: response.buffer_time_after ?? null,
+    booking_window_start: response.booking_window_start ?? null,
+    booking_window_end: response.booking_window_end ?? null,
+    cancelation_threshold: response.cancelation_threshold ?? null,
     metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+    enabled: Boolean(response.enabled),
   };
 }
 
@@ -1489,14 +1497,22 @@ export async function updateService(
   if (service.metadata !== undefined) body.metadata = service.metadata;
 
   const response = await requestJson<any>('patch', `services/${id}`, body);
+  // Return raw Hapio API response with all fields
   return {
     id: response.id,
     name: response.name,
-    duration_minutes: response.duration_minutes,
-    buffer_before_minutes: response.buffer_before_minutes ?? null,
-    buffer_after_minutes: response.buffer_after_minutes ?? null,
-    enabled: Boolean(response.enabled),
+    type: response.type ?? null,
+    duration: response.duration ?? null,
+    price: response.price ?? null,
+    bookable_interval: response.bookable_interval ?? null,
+    buffer_time_before: response.buffer_time_before ?? null,
+    buffer_time_after: response.buffer_time_after ?? null,
+    booking_window_start: response.booking_window_start ?? null,
+    booking_window_end: response.booking_window_end ?? null,
+    cancelation_threshold: response.cancelation_threshold ?? null,
     metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+    enabled: Boolean(response.enabled),
   };
 }
 
@@ -1518,14 +1534,22 @@ export async function replaceService(
   if (service.metadata !== undefined) body.metadata = service.metadata;
 
   const response = await requestJson<any>('put', `services/${id}`, body);
+  // Return raw Hapio API response with all fields
   return {
     id: response.id,
     name: response.name,
-    duration_minutes: response.duration_minutes,
-    buffer_before_minutes: response.buffer_before_minutes ?? null,
-    buffer_after_minutes: response.buffer_after_minutes ?? null,
-    enabled: Boolean(response.enabled),
+    type: response.type ?? null,
+    duration: response.duration ?? null,
+    price: response.price ?? null,
+    bookable_interval: response.bookable_interval ?? null,
+    buffer_time_before: response.buffer_time_before ?? null,
+    buffer_time_after: response.buffer_time_after ?? null,
+    booking_window_start: response.booking_window_start ?? null,
+    booking_window_end: response.booking_window_end ?? null,
+    cancelation_threshold: response.cancelation_threshold ?? null,
     metadata: response.metadata ?? null,
+    protected_metadata: response.protected_metadata ?? null,
+    enabled: Boolean(response.enabled),
   };
 }
 

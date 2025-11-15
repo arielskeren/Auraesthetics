@@ -183,13 +183,19 @@ export default function ServicesManager() {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Type</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Buffer Before</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Buffer After</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Bookable Interval</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Booking Window Start</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Booking Window End</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Cancelation Threshold</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand">
                   {hapioServices.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-warm-gray">
+                      <td colSpan={12} className="px-4 py-8 text-center text-sm text-warm-gray">
                         No services found in Hapio. Sync services from Neon DB to create them.
                       </td>
                     </tr>
@@ -200,9 +206,21 @@ export default function ServicesManager() {
                           <IdDisplay id={service.id} label="Hapio Service ID" />
                         </td>
                         <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray">{service.type || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray">{service.duration || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray">{service.price || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                            {service.type || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.duration || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray">
+                          {service.price ? `$${Number(service.price).toFixed(3)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.buffer_time_before || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.buffer_time_after || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.bookable_interval || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.booking_window_start || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.booking_window_end || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.cancelation_threshold || '—'}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${

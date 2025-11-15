@@ -14,9 +14,10 @@ export async function GET(request: NextRequest) {
 
     const response = await listServices({ page, per_page: perPage });
 
+    // Return raw Hapio API response - it already has all the correct field names
     return NextResponse.json({
       success: true,
-      data: response.data,
+      data: response.data, // Raw Hapio service objects with all fields
       meta: response.meta,
     });
   } catch (error: any) {
