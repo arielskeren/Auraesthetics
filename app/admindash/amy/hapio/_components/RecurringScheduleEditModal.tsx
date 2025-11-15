@@ -35,7 +35,7 @@ const DAYS = [
   { value: 3, label: 'Wednesday', short: 'Wed' },
   { value: 4, label: 'Thursday', short: 'Thu' },
   { value: 5, label: 'Friday', short: 'Fri' },
-  { value: 6, label: 'Saturday', short: 'Sat' },
+  // Saturday (value: 6) is excluded - No Work on Shabbat ;)
 ];
 
 export default function RecurringScheduleEditModal({
@@ -123,6 +123,11 @@ export default function RecurringScheduleEditModal({
               // Hapio returns weekday as a string ("monday", "tuesday", etc.) or legacy number
               const hapioWeekday = block.weekday ?? block.day_of_week;
               const dayOfWeek = getWeekdayFromHapioString(hapioWeekday);
+              
+              // Skip Saturday (value: 6) - No Work on Shabbat ;)
+              if (dayOfWeek === 6) {
+                return;
+              }
               
               const dayIndex = DAYS.findIndex(day => day.value === dayOfWeek);
               if (dayIndex !== -1) {
@@ -419,6 +424,13 @@ export default function RecurringScheduleEditModal({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Shabbat Disclaimer */}
+        <div className="px-6 pt-4">
+          <div className="bg-sage-light/30 border border-sage rounded-lg px-4 py-2 text-center">
+            <p className="text-sm text-charcoal font-medium">No Work on Shabbat ;)</p>
+          </div>
         </div>
 
         <div className="p-4 space-y-4">
