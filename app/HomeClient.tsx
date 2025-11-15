@@ -27,10 +27,10 @@ export default function HomeClient() {
         const data = await response.json();
         // Map API response to match ServiceCard interface
         const mappedServices = data.map((s: any) => ({
-          category: s.category,
+          category: s.category || '',
           name: s.name,
           slug: s.slug,
-          summary: s.summary,
+          summary: s.summary || '',
           description: s.description,
           duration: s.duration_display || `${s.duration_minutes} min`,
           price: s.price || '',
