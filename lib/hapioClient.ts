@@ -1966,17 +1966,36 @@ export async function listRecurringScheduleBlocks(
     per_page?: number;
   }
 ): Promise<HapioPaginatedResponse<HapioRecurringScheduleBlock>> {
-  const parentPath = buildScheduleParentPath(parentType, parentId);
   const query: Record<string, string | number> = {};
   if (params?.recurring_schedule_id) query.recurring_schedule_id = params.recurring_schedule_id;
   if (params?.page) query.page = params.page;
   if (params?.per_page) query.per_page = params.per_page;
 
-  const response = await requestJson<HapioPaginatedResponse<any>>(
-    'get',
-    `${parentPath}/recurring-schedule-blocks`,
-    { params: query }
-  );
+  // Try nested under recurring schedule first if we have a schedule ID
+  let response: HapioPaginatedResponse<any>;
+  try {
+    if (params?.recurring_schedule_id) {
+      response = await requestJson<HapioPaginatedResponse<any>>(
+        'get',
+        `recurring-schedules/${params.recurring_schedule_id}/recurring-schedule-blocks`,
+        { params: query }
+      );
+    } else {
+      throw new Error('Need recurring_schedule_id for nested path');
+    }
+  } catch (error: any) {
+    // If that fails with 404, try the resource path
+    if (error?.status === 404 || error?.response?.status === 404 || error?.message?.includes('Need')) {
+      const parentPath = buildScheduleParentPath(parentType, parentId);
+      response = await requestJson<HapioPaginatedResponse<any>>(
+        'get',
+        `${parentPath}/recurring-schedule-blocks`,
+        { params: query }
+      );
+    } else {
+      throw error;
+    }
+  }
 
   return {
     ...response,
@@ -2017,7 +2036,8 @@ export async function createRecurringScheduleBlock(
   parentId: string | undefined,
   block: HapioRecurringScheduleBlockPayload
 ): Promise<HapioRecurringScheduleBlock> {
-  const parentPath = buildScheduleParentPath(parentType, parentId);
+  // Recurring schedule blocks might be nested under recurring schedules, not resources
+  // Try both paths: first try under recurring schedule, then fall back to resource
   const body: Record<string, unknown> = {
     recurring_schedule_id: block.recurring_schedule_id,
   };
@@ -2026,7 +2046,23 @@ export async function createRecurringScheduleBlock(
   if (block.end_time !== undefined) body.end_time = block.end_time;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
-  const response = await requestJson<any>('post', `${parentPath}/recurring-schedule-blocks`, body);
+  // Try nested under recurring schedule first
+  let response: any;
+  try {
+    response = await requestJson<any>(
+      'post',
+      `recurring-schedules/${block.recurring_schedule_id}/recurring-schedule-blocks`,
+      body
+    );
+  } catch (error: any) {
+    // If that fails with 404, try the resource path
+    if (error?.status === 404 || error?.response?.status === 404) {
+      const parentPath = buildScheduleParentPath(parentType, parentId);
+      response = await requestJson<any>('post', `${parentPath}/recurring-schedule-blocks`, body);
+    } else {
+      throw error;
+    }
+  }
   return {
     id: response.id,
     recurring_schedule_id: response.recurring_schedule_id,
