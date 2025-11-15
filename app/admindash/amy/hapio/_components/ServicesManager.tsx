@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -21,6 +21,10 @@ export default function ServicesManager() {
   const [hapioServices, setHapioServices] = useState<any[]>([]);
   const [loadingHapio, setLoadingHapio] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [selectedHapioServices, setSelectedHapioServices] = useState<Set<string>>(new Set());
+  const [linkedHapioIds, setLinkedHapioIds] = useState<Set<string>>(new Set());
+  const [deletingHapio, setDeletingHapio] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     loadServices();
@@ -124,17 +128,156 @@ export default function ServicesManager() {
   const loadHapioServices = async () => {
     try {
       setLoadingHapio(true);
-      const response = await fetch('/api/admin/hapio/services');
-      if (!response.ok) {
+      setError(null);
+      
+      // Load both Hapio services and Neon DB services to check links
+      const [hapioResponse, neonResponse] = await Promise.all([
+        fetch('/api/admin/hapio/services'),
+        fetch('/api/admin/services?per_page=1000'), // Get all Neon services to check links
+      ]);
+
+      if (!hapioResponse.ok) {
         throw new Error('Failed to load Hapio services');
       }
-      const data = await response.json();
-      setHapioServices(data.data || []);
+      if (!neonResponse.ok) {
+        throw new Error('Failed to load Neon DB services');
+      }
+
+      const hapioData = await hapioResponse.json();
+      const neonData = await neonResponse.json();
+
+      // Build set of linked Hapio service IDs
+      const linkedIds = new Set<string>();
+      (neonData.data || []).forEach((service: any) => {
+        if (service.hapio_service_id) {
+          linkedIds.add(service.hapio_service_id);
+        }
+      });
+
+      setHapioServices(hapioData.data || []);
+      setLinkedHapioIds(linkedIds);
+      setSelectedHapioServices(new Set()); // Reset selection
       setViewingHapioServices(true);
     } catch (err: any) {
       setError(err);
     } finally {
       setLoadingHapio(false);
+    }
+  };
+
+  const handleDeleteHapioService = async (serviceId: string) => {
+    const isLinked = linkedHapioIds.has(serviceId);
+    const warning = isLinked
+      ? 'WARNING: This service is linked to a Neon DB service. Deleting it will break the link. Are you sure?'
+      : 'Are you sure you want to delete this Hapio service? This action cannot be undone.';
+
+    if (!confirm(warning)) {
+      return;
+    }
+
+    try {
+      setDeletingHapio(serviceId);
+      setError(null);
+
+      const response = await fetch(`/api/admin/hapio/services/${serviceId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete Hapio service');
+      }
+
+      // Remove from local state
+      setHapioServices(hapioServices.filter((s) => s.id !== serviceId));
+      setSelectedHapioServices((prev) => {
+        const next = new Set(prev);
+        next.delete(serviceId);
+        return next;
+      });
+    } catch (err: any) {
+      setError(err);
+      alert(`Failed to delete service: ${err.message}`);
+    } finally {
+      setDeletingHapio(null);
+    }
+  };
+
+  const handleBulkDeleteHapioServices = async () => {
+    if (selectedHapioServices.size === 0) {
+      alert('Please select at least one service to delete.');
+      return;
+    }
+
+    const selectedArray = Array.from(selectedHapioServices);
+    const linkedCount = selectedArray.filter((id) => linkedHapioIds.has(id)).length;
+    const warning =
+      linkedCount > 0
+        ? `WARNING: ${linkedCount} of ${selectedArray.length} selected service(s) are linked to Neon DB. Deleting them will break the links. Are you sure you want to delete ${selectedArray.length} service(s)?`
+        : `Are you sure you want to delete ${selectedArray.length} Hapio service(s)? This action cannot be undone.`;
+
+    if (!confirm(warning)) {
+      return;
+    }
+
+    try {
+      setBulkDeleting(true);
+      setError(null);
+
+      const response = await fetch('/api/admin/hapio/services/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ serviceIds: selectedArray }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete services');
+      }
+
+      const data = await response.json();
+      
+      // Show results
+      const message = `${data.message}\n\nDetails:\n- Deleted: ${data.results.deleted}\n- Failed: ${data.results.failed}`;
+      
+      if (data.results.errors.length > 0) {
+        const errorDetails = data.results.errors.map((e: any) => `  • ${e.serviceId}: ${e.error}`).join('\n');
+        alert(`${message}\n\nErrors:\n${errorDetails}`);
+      } else {
+        alert(message);
+      }
+
+      // Remove deleted services from local state
+      const deletedIds = new Set(selectedArray);
+      setHapioServices(hapioServices.filter((s) => !deletedIds.has(s.id)));
+      setSelectedHapioServices(new Set());
+    } catch (err: any) {
+      setError(err);
+      alert(`Failed to delete services: ${err.message}`);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleToggleSelectHapioService = (serviceId: string) => {
+    setSelectedHapioServices((prev) => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllHapioServices = () => {
+    if (selectedHapioServices.size === hapioServices.length) {
+      setSelectedHapioServices(new Set());
+    } else {
+      setSelectedHapioServices(new Set(hapioServices.map((s) => s.id)));
     }
   };
 
@@ -215,10 +358,20 @@ export default function ServicesManager() {
 
       {viewingHapioServices ? (
         <div className="bg-white border border-sand rounded-lg overflow-hidden">
-          <div className="px-4 py-3 bg-blue-50 border-b border-sand">
+          <div className="px-4 py-3 bg-blue-50 border-b border-sand flex items-center justify-between">
             <p className="text-sm text-blue-700">
               <strong>Viewing Hapio Services:</strong> These are services synced to Hapio. Compare with Neon DB services above.
             </p>
+            {selectedHapioServices.size > 0 && (
+              <button
+                onClick={handleBulkDeleteHapioServices}
+                disabled={bulkDeleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 className={`w-4 h-4 ${bulkDeleting ? 'animate-pulse' : ''}`} />
+                {bulkDeleting ? 'Deleting...' : `Delete Selected (${selectedHapioServices.size})`}
+              </button>
+            )}
           </div>
           {loadingHapio ? (
             <div className="p-8 text-center">
@@ -229,6 +382,20 @@ export default function ServicesManager() {
               <table className="w-full">
                 <thead className="bg-sage-light/30 border-b border-sand">
                   <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">
+                      <button
+                        onClick={handleSelectAllHapioServices}
+                        className="flex items-center gap-1 hover:opacity-70 transition-opacity"
+                        title="Select/Deselect All"
+                      >
+                        {selectedHapioServices.size === hapioServices.length && hapioServices.length > 0 ? (
+                          <CheckSquare className="w-4 h-4" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Linked</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Hapio Service ID</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Type</th>
@@ -241,48 +408,90 @@ export default function ServicesManager() {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Booking Window End</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Cancelation Threshold</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand">
                   {hapioServices.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="px-4 py-8 text-center text-sm text-warm-gray">
+                      <td colSpan={15} className="px-4 py-8 text-center text-sm text-warm-gray">
                         No services found in Hapio. Sync services from Neon DB to create them.
                       </td>
                     </tr>
                   ) : (
-                    hapioServices.map((service: any) => (
-                      <tr key={service.id} className="hover:bg-sand/20">
-                        <td className="px-4 py-3">
-                          <IdDisplay id={service.id} label="Hapio Service ID" />
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                            {service.type || '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.duration || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray">
-                          {service.price ? `$${Number(service.price).toFixed(3)}` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.buffer_time_before || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.buffer_time_after || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.bookable_interval || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.booking_window_start || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.booking_window_end || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.cancelation_threshold || '—'}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {service.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    hapioServices.map((service: any) => {
+                      const isLinked = linkedHapioIds.has(service.id);
+                      const isSelected = selectedHapioServices.has(service.id);
+                      const isDeleting = deletingHapio === service.id;
+                      
+                      return (
+                        <tr key={service.id} className={`hover:bg-sand/20 ${isSelected ? 'bg-blue-50' : ''}`}>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleToggleSelectHapioService(service.id)}
+                              className="flex items-center gap-1 hover:opacity-70 transition-opacity"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <Square className="w-4 h-4 text-warm-gray" />
+                              )}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3">
+                            {isLinked ? (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium"
+                                title="Linked to Neon DB service"
+                              >
+                                <LinkIcon className="w-3 h-3" />
+                                Linked
+                              </span>
+                            ) : (
+                              <span className="text-xs text-warm-gray">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <IdDisplay id={service.id} label="Hapio Service ID" />
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                              {service.type || '—'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.duration || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray">
+                            {service.price ? `$${Number(service.price).toFixed(3)}` : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.buffer_time_before || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.buffer_time_after || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.bookable_interval || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.booking_window_start || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.booking_window_end || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-warm-gray font-mono">{service.cancelation_threshold || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {service.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleDeleteHapioService(service.id)}
+                              disabled={isDeleting}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={isLinked ? 'Delete (Linked to Neon DB - will break link)' : 'Delete'}
+                            >
+                              <Trash2 className={`w-4 h-4 ${isDeleting ? 'animate-pulse' : ''}`} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
