@@ -17,7 +17,7 @@ export async function POST(
     // Check if service exists
     const existing = await sql`
       SELECT id, image_url FROM services WHERE id = ${id}
-    `;
+    ` as Array<{ id: string; image_url: string | null }>;
     if (existing.length === 0) {
       return NextResponse.json(
         { error: 'Service not found' },
@@ -98,7 +98,7 @@ export async function DELETE(
     // Get service with image URL
     const existing = await sql`
       SELECT id, image_url FROM services WHERE id = ${id}
-    `;
+    ` as Array<{ id: string; image_url: string | null }>;
     if (existing.length === 0) {
       return NextResponse.json(
         { error: 'Service not found' },

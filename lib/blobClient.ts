@@ -4,10 +4,12 @@
 
 import { put, del, head } from '@vercel/blob';
 
-const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
-
-if (!BLOB_READ_WRITE_TOKEN) {
-  console.warn('BLOB_READ_WRITE_TOKEN is not set. Image uploads will fail.');
+function getBlobToken(): string {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) {
+    throw new Error('BLOB_READ_WRITE_TOKEN is not configured');
+  }
+  return token;
 }
 
 export interface UploadImageResult {
@@ -27,9 +29,7 @@ export async function uploadImage(
   filename: string,
   folder: string = 'services'
 ): Promise<UploadImageResult> {
-  if (!BLOB_READ_WRITE_TOKEN) {
-    throw new Error('BLOB_READ_WRITE_TOKEN is not configured');
-  }
+  const token = getBlobToken();
 
   // Generate a unique filename with timestamp to avoid collisions
   const timestamp = Date.now();
@@ -38,7 +38,7 @@ export async function uploadImage(
 
   const blob = await put(blobPath, file, {
     access: 'public',
-    token: BLOB_READ_WRITE_TOKEN,
+    token: token,
   });
 
   return {
@@ -52,9 +52,7 @@ export async function uploadImage(
  * @param url - Full blob URL or pathname
  */
 export async function deleteImage(url: string): Promise<void> {
-  if (!BLOB_READ_WRITE_TOKEN) {
-    throw new Error('BLOB_READ_WRITE_TOKEN is not configured');
-  }
+  const token = getBlobToken();
 
   try {
     // Extract pathname from URL if full URL is provided
@@ -65,7 +63,7 @@ export async function deleteImage(url: string): Promise<void> {
     }
 
     await del(pathname, {
-      token: BLOB_READ_WRITE_TOKEN,
+      token: token,
     });
   } catch (error: any) {
     // If image doesn't exist, that's okay - just log it
@@ -83,11 +81,9 @@ export async function deleteImage(url: string): Promise<void> {
  * @returns true if image exists, false otherwise
  */
 export async function imageExists(url: string): Promise<boolean> {
-  if (!BLOB_READ_WRITE_TOKEN) {
-    return false;
-  }
-
   try {
+    const token = getBlobToken();
+    
     // Extract pathname from URL if full URL is provided
     let pathname = url;
     if (url.startsWith('http')) {
@@ -96,7 +92,7 @@ export async function imageExists(url: string): Promise<boolean> {
     }
 
     await head(pathname, {
-      token: BLOB_READ_WRITE_TOKEN,
+      token: token,
     });
     return true;
   } catch (error: any) {
