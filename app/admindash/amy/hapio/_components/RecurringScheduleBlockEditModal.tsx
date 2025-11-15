@@ -41,6 +41,7 @@ export default function RecurringScheduleBlockEditModal({
   const [weekday, setWeekday] = useState<number>(1); // Monday by default
   const [startTime, setStartTime] = useState<string>('00:00');
   const [endTime, setEndTime] = useState<string>('23:59');
+  const [isAllDay, setIsAllDay] = useState<boolean>(true); // Default to all day
   const [loading, setLoading] = useState(false);
   const [loadingSchedules, setLoadingSchedules] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -106,6 +107,12 @@ export default function RecurringScheduleBlockEditModal({
             const time = block.end_time.split(':').slice(0, 2).join(':');
             setEndTime(time);
           }
+          
+          // Check if it's all day
+          const startTimeStr = block.start_time || '00:00';
+          const endTimeStr = block.end_time || '23:59';
+          const isAllDayBlock = startTimeStr.startsWith('00:00') && endTimeStr.startsWith('23:59');
+          setIsAllDay(isAllDayBlock);
         }
       }
     } catch (err) {
@@ -182,8 +189,6 @@ export default function RecurringScheduleBlockEditModal({
     }
   };
 
-  const isAllDay = startTime === '00:00' && endTime === '23:59';
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -255,20 +260,61 @@ export default function RecurringScheduleBlockEditModal({
               <Clock className="w-4 h-4" />
               Time Range <span className="text-red-500">*</span>
             </label>
+            
+            {/* All Day Checkbox */}
+            <div className="mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isAllDay}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsAllDay(checked);
+                    if (checked) {
+                      setStartTime('00:00');
+                      setEndTime('23:59');
+                    }
+                  }}
+                  className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                />
+                <span className="text-sm text-charcoal font-medium">All Day</span>
+              </label>
+            </div>
+
             <div className="flex items-center gap-3">
               <input
                 type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                onChange={(e) => {
+                  const newStartTime = e.target.value;
+                  setStartTime(newStartTime);
+                  // Auto-check all day if both times are set to all day
+                  if (newStartTime === '00:00' && endTime === '23:59') {
+                    setIsAllDay(true);
+                  } else {
+                    setIsAllDay(false);
+                  }
+                }}
+                disabled={isAllDay}
+                className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage disabled:bg-gray-100 disabled:cursor-not-allowed"
                 required
               />
               <span className="text-warm-gray">to</span>
               <input
                 type="time"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                onChange={(e) => {
+                  const newEndTime = e.target.value;
+                  setEndTime(newEndTime);
+                  // Auto-check all day if both times are set to all day
+                  if (startTime === '00:00' && newEndTime === '23:59') {
+                    setIsAllDay(true);
+                  } else {
+                    setIsAllDay(false);
+                  }
+                }}
+                disabled={isAllDay}
+                className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage disabled:bg-gray-100 disabled:cursor-not-allowed"
                 required
               />
             </div>

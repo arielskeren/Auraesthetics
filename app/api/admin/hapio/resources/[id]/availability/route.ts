@@ -48,6 +48,13 @@ export async function GET(
     // Process each recurring schedule
     if (recurringSchedulesResponse.data && Array.isArray(recurringSchedulesResponse.data)) {
       for (const schedule of recurringSchedulesResponse.data) {
+        // Skip exception schedules (they block availability, not add it)
+        const isException = schedule.metadata && typeof schedule.metadata === 'object' && 
+                           (schedule.metadata as any)?.is_exception === true;
+        if (isException) {
+          continue; // Skip exception schedules - they're handled in recurringBlocksByDate
+        }
+
         // Check if schedule is active for the date range
         const scheduleStart = schedule.start_date ? new Date(schedule.start_date) : null;
         if (scheduleStart) scheduleStart.setHours(0, 0, 0, 0);
@@ -59,7 +66,7 @@ export async function GET(
         if (scheduleEnd && scheduleEnd < fromDate) continue;
         if (scheduleStart && scheduleStart > toDate) continue;
 
-        // Fetch blocks for this schedule
+        // Fetch blocks for this schedule (these define working hours/availability)
         try {
           const blocksResponse = await listRecurringScheduleBlocks('resource', params.id, {
             recurring_schedule_id: schedule.id,
@@ -128,9 +135,15 @@ export async function GET(
     // Now fetch recurring schedule blocks (exceptions that block availability)
     const recurringBlocksByDate: Record<string, Array<{ start: string; end: string; isAllDay: boolean }>> = {};
     
-    // Fetch all recurring schedule blocks across all schedules
+    // Fetch recurring schedule blocks only from exception schedules
     if (recurringSchedulesResponse.data && Array.isArray(recurringSchedulesResponse.data)) {
       for (const schedule of recurringSchedulesResponse.data) {
+        // Only process exception schedules (they block availability)
+        const isException = schedule.metadata && typeof schedule.metadata === 'object' && 
+                           (schedule.metadata as any)?.is_exception === true;
+        if (!isException) {
+          continue; // Skip non-exception schedules - they're already in availabilityByDate
+        }
         // Check if schedule is active for the date range
         const scheduleStart = schedule.start_date ? new Date(schedule.start_date) : null;
         if (scheduleStart) scheduleStart.setHours(0, 0, 0, 0);
