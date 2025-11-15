@@ -1941,7 +1941,8 @@ export async function deleteRecurringSchedule(
 export interface HapioRecurringScheduleBlock {
   id: string;
   recurring_schedule_id: string;
-  day_of_week?: number | null; // 0 = Sunday, 6 = Saturday
+  weekday?: number | null; // 0 = Sunday, 6 = Saturday (Hapio uses "weekday" not "day_of_week")
+  day_of_week?: number | null; // Alias for weekday (for backwards compatibility)
   start_time?: string | null; // HH:mm format
   end_time?: string | null; // HH:mm format
   metadata?: Record<string, unknown> | null;
@@ -1951,7 +1952,8 @@ export interface HapioRecurringScheduleBlock {
 
 export interface HapioRecurringScheduleBlockPayload {
   recurring_schedule_id: string;
-  day_of_week?: number | null;
+  weekday?: number | null; // Hapio API uses "weekday"
+  day_of_week?: number | null; // Alias - will be converted to weekday
   start_time?: string | null;
   end_time?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -1966,43 +1968,33 @@ export async function listRecurringScheduleBlocks(
     per_page?: number;
   }
 ): Promise<HapioPaginatedResponse<HapioRecurringScheduleBlock>> {
+  if (!parentId) {
+    throw new Error('Parent ID is required for listing recurring schedule blocks');
+  }
+  if (!params?.recurring_schedule_id) {
+    throw new Error('recurring_schedule_id is required for listing recurring schedule blocks');
+  }
+
   const query: Record<string, string | number> = {};
-  if (params?.recurring_schedule_id) query.recurring_schedule_id = params.recurring_schedule_id;
   if (params?.page) query.page = params.page;
   if (params?.per_page) query.per_page = params.per_page;
 
-  // Try nested under recurring schedule first if we have a schedule ID
-  let response: HapioPaginatedResponse<any>;
-  try {
-    if (params?.recurring_schedule_id) {
-      response = await requestJson<HapioPaginatedResponse<any>>(
-        'get',
-        `recurring-schedules/${params.recurring_schedule_id}/recurring-schedule-blocks`,
-        { params: query }
-      );
-    } else {
-      throw new Error('Need recurring_schedule_id for nested path');
-    }
-  } catch (error: any) {
-    // If that fails with 404, try the resource path
-    if (error?.status === 404 || error?.response?.status === 404 || error?.message?.includes('Need')) {
-      const parentPath = buildScheduleParentPath(parentType, parentId);
-      response = await requestJson<HapioPaginatedResponse<any>>(
-        'get',
-        `${parentPath}/recurring-schedule-blocks`,
-        { params: query }
-      );
-    } else {
-      throw error;
-    }
-  }
+  // Based on Postman: /v1/resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks
+  const path = `resources/${parentId}/recurring-schedules/${params.recurring_schedule_id}/schedule-blocks`;
+  
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    path,
+    { params: query }
+  );
 
   return {
     ...response,
     data: response.data.map((block: any) => ({
       id: block.id,
       recurring_schedule_id: block.recurring_schedule_id,
-      day_of_week: block.day_of_week ?? null,
+      weekday: block.weekday ?? block.day_of_week ?? null,
+      day_of_week: block.weekday ?? block.day_of_week ?? null, // Alias for compatibility
       start_time: block.start_time ?? null,
       end_time: block.end_time ?? null,
       metadata: block.metadata ?? null,
@@ -2015,14 +2007,20 @@ export async function listRecurringScheduleBlocks(
 export async function getRecurringScheduleBlock(
   parentType: 'project' | 'location' | 'resource',
   parentId: string | undefined,
-  id: string
+  id: string,
+  recurringScheduleId: string
 ): Promise<HapioRecurringScheduleBlock> {
-  const parentPath = buildScheduleParentPath(parentType, parentId);
-  const response = await requestJson<any>('get', `${parentPath}/recurring-schedule-blocks/${id}`);
+  if (!parentId) {
+    throw new Error('Parent ID is required for getting recurring schedule blocks');
+  }
+  // Based on Postman: /v1/resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks/{id}
+  const path = `resources/${parentId}/recurring-schedules/${recurringScheduleId}/schedule-blocks/${id}`;
+  const response = await requestJson<any>('get', path);
   return {
     id: response.id,
     recurring_schedule_id: response.recurring_schedule_id,
-    day_of_week: response.day_of_week ?? null,
+    weekday: response.weekday ?? response.day_of_week ?? null,
+    day_of_week: response.weekday ?? response.day_of_week ?? null, // Alias for compatibility
     start_time: response.start_time ?? null,
     end_time: response.end_time ?? null,
     metadata: response.metadata ?? null,
@@ -2036,37 +2034,35 @@ export async function createRecurringScheduleBlock(
   parentId: string | undefined,
   block: HapioRecurringScheduleBlockPayload
 ): Promise<HapioRecurringScheduleBlock> {
-  // Recurring schedule blocks might be nested under recurring schedules, not resources
-  // Try both paths: first try under recurring schedule, then fall back to resource
-  const body: Record<string, unknown> = {
-    recurring_schedule_id: block.recurring_schedule_id,
-  };
-  if (block.day_of_week !== undefined) body.day_of_week = block.day_of_week;
+  // Based on Postman: /v1/resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks
+  if (!parentId) {
+    throw new Error('Parent ID is required for creating recurring schedule blocks');
+  }
+  if (!block.recurring_schedule_id) {
+    throw new Error('recurring_schedule_id is required for creating recurring schedule blocks');
+  }
+
+  const body: Record<string, unknown> = {};
+  // Hapio API uses "weekday" not "day_of_week"
+  if (block.weekday !== undefined) {
+    body.weekday = block.weekday;
+  } else if (block.day_of_week !== undefined) {
+    // Support both for backwards compatibility
+    body.weekday = block.day_of_week;
+  }
   if (block.start_time !== undefined) body.start_time = block.start_time;
   if (block.end_time !== undefined) body.end_time = block.end_time;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
-  // Try nested under recurring schedule first
-  let response: any;
-  try {
-    response = await requestJson<any>(
-      'post',
-      `recurring-schedules/${block.recurring_schedule_id}/recurring-schedule-blocks`,
-      body
-    );
-  } catch (error: any) {
-    // If that fails with 404, try the resource path
-    if (error?.status === 404 || error?.response?.status === 404) {
-      const parentPath = buildScheduleParentPath(parentType, parentId);
-      response = await requestJson<any>('post', `${parentPath}/recurring-schedule-blocks`, body);
-    } else {
-      throw error;
-    }
-  }
+  // Exact path from Postman: resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks
+  const path = `resources/${parentId}/recurring-schedules/${block.recurring_schedule_id}/schedule-blocks`;
+  
+  const response = await requestJson<any>('post', path, body);
   return {
     id: response.id,
     recurring_schedule_id: response.recurring_schedule_id,
-    day_of_week: response.day_of_week ?? null,
+    weekday: response.weekday ?? response.day_of_week ?? null,
+    day_of_week: response.weekday ?? response.day_of_week ?? null, // Alias for compatibility
     start_time: response.start_time ?? null,
     end_time: response.end_time ?? null,
     metadata: response.metadata ?? null,
@@ -2079,26 +2075,31 @@ export async function updateRecurringScheduleBlock(
   parentType: 'project' | 'location' | 'resource',
   parentId: string | undefined,
   id: string,
-  block: Partial<HapioRecurringScheduleBlockPayload>
+  block: Partial<HapioRecurringScheduleBlockPayload>,
+  recurringScheduleId: string
 ): Promise<HapioRecurringScheduleBlock> {
-  const parentPath = buildScheduleParentPath(parentType, parentId);
+  if (!parentId) {
+    throw new Error('Parent ID is required for updating recurring schedule blocks');
+  }
   const body: Record<string, unknown> = {};
-  if (block.recurring_schedule_id !== undefined)
-    body.recurring_schedule_id = block.recurring_schedule_id;
-  if (block.day_of_week !== undefined) body.day_of_week = block.day_of_week;
+  // Hapio API uses "weekday" not "day_of_week"
+  if (block.weekday !== undefined) {
+    body.weekday = block.weekday;
+  } else if (block.day_of_week !== undefined) {
+    body.weekday = block.day_of_week;
+  }
   if (block.start_time !== undefined) body.start_time = block.start_time;
   if (block.end_time !== undefined) body.end_time = block.end_time;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
-  const response = await requestJson<any>(
-    'patch',
-    `${parentPath}/recurring-schedule-blocks/${id}`,
-    body
-  );
+  // Based on Postman: /v1/resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks/{id}
+  const path = `resources/${parentId}/recurring-schedules/${recurringScheduleId}/schedule-blocks/${id}`;
+  const response = await requestJson<any>('patch', path, body);
   return {
     id: response.id,
     recurring_schedule_id: response.recurring_schedule_id,
-    day_of_week: response.day_of_week ?? null,
+    weekday: response.weekday ?? response.day_of_week ?? null,
+    day_of_week: response.weekday ?? response.day_of_week ?? null, // Alias for compatibility
     start_time: response.start_time ?? null,
     end_time: response.end_time ?? null,
     metadata: response.metadata ?? null,
@@ -2111,22 +2112,31 @@ export async function replaceRecurringScheduleBlock(
   parentType: 'project' | 'location' | 'resource',
   parentId: string | undefined,
   id: string,
-  block: HapioRecurringScheduleBlockPayload
+  block: HapioRecurringScheduleBlockPayload,
+  recurringScheduleId: string
 ): Promise<HapioRecurringScheduleBlock> {
-  const parentPath = buildScheduleParentPath(parentType, parentId);
-  const body: Record<string, unknown> = {
-    recurring_schedule_id: block.recurring_schedule_id,
-  };
-  if (block.day_of_week !== undefined) body.day_of_week = block.day_of_week;
+  if (!parentId) {
+    throw new Error('Parent ID is required for replacing recurring schedule blocks');
+  }
+  const body: Record<string, unknown> = {};
+  // Hapio API uses "weekday" not "day_of_week"
+  if (block.weekday !== undefined) {
+    body.weekday = block.weekday;
+  } else if (block.day_of_week !== undefined) {
+    body.weekday = block.day_of_week;
+  }
   if (block.start_time !== undefined) body.start_time = block.start_time;
   if (block.end_time !== undefined) body.end_time = block.end_time;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
-  const response = await requestJson<any>('put', `${parentPath}/recurring-schedule-blocks/${id}`, body);
+  // Based on Postman: /v1/resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks/{id}
+  const path = `resources/${parentId}/recurring-schedules/${recurringScheduleId}/schedule-blocks/${id}`;
+  const response = await requestJson<any>('put', path, body);
   return {
     id: response.id,
     recurring_schedule_id: response.recurring_schedule_id,
-    day_of_week: response.day_of_week ?? null,
+    weekday: response.weekday ?? response.day_of_week ?? null,
+    day_of_week: response.weekday ?? response.day_of_week ?? null, // Alias for compatibility
     start_time: response.start_time ?? null,
     end_time: response.end_time ?? null,
     metadata: response.metadata ?? null,
@@ -2138,10 +2148,15 @@ export async function replaceRecurringScheduleBlock(
 export async function deleteRecurringScheduleBlock(
   parentType: 'project' | 'location' | 'resource',
   parentId: string | undefined,
-  id: string
+  id: string,
+  recurringScheduleId: string
 ): Promise<void> {
-  const parentPath = buildScheduleParentPath(parentType, parentId);
-  await requestJson('delete', `${parentPath}/recurring-schedule-blocks/${id}`);
+  if (!parentId) {
+    throw new Error('Parent ID is required for deleting recurring schedule blocks');
+  }
+  // Based on Postman: /v1/resources/{resource_id}/recurring-schedules/{recurring_schedule_id}/schedule-blocks/{id}
+  const path = `resources/${parentId}/recurring-schedules/${recurringScheduleId}/schedule-blocks/${id}`;
+  await requestJson('delete', path);
 }
 
 // ============================================================================

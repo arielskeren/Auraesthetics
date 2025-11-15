@@ -11,10 +11,21 @@ export async function GET(
   { params }: { params: { id: string; blockId: string } }
 ) {
   try {
+    const { searchParams } = new URL(request.url);
+    const recurringScheduleId = searchParams.get('recurring_schedule_id');
+    
+    if (!recurringScheduleId) {
+      return NextResponse.json(
+        { error: 'recurring_schedule_id query parameter is required' },
+        { status: 400 }
+      );
+    }
+
     const block = await getRecurringScheduleBlock(
       'resource',
       params.id,
-      params.blockId
+      params.blockId,
+      recurringScheduleId
     );
 
     return NextResponse.json({ block });
@@ -38,12 +49,22 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
+    const { searchParams } = new URL(request.url);
+    const recurringScheduleId = searchParams.get('recurring_schedule_id') || body.recurring_schedule_id;
+    
+    if (!recurringScheduleId) {
+      return NextResponse.json(
+        { error: 'recurring_schedule_id is required (as query param or in body)' },
+        { status: 400 }
+      );
+    }
 
     const block = await updateRecurringScheduleBlock(
       'resource',
       params.id,
       params.blockId,
-      body
+      body,
+      recurringScheduleId
     );
 
     return NextResponse.json({ block });
@@ -67,12 +88,22 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
+    const { searchParams } = new URL(request.url);
+    const recurringScheduleId = searchParams.get('recurring_schedule_id') || body.recurring_schedule_id;
+    
+    if (!recurringScheduleId) {
+      return NextResponse.json(
+        { error: 'recurring_schedule_id is required (as query param or in body)' },
+        { status: 400 }
+      );
+    }
 
     const block = await replaceRecurringScheduleBlock(
       'resource',
       params.id,
       params.blockId,
-      body
+      body,
+      recurringScheduleId
     );
 
     return NextResponse.json({ block });
@@ -95,10 +126,21 @@ export async function DELETE(
   { params }: { params: { id: string; blockId: string } }
 ) {
   try {
+    const { searchParams } = new URL(request.url);
+    const recurringScheduleId = searchParams.get('recurring_schedule_id');
+    
+    if (!recurringScheduleId) {
+      return NextResponse.json(
+        { error: 'recurring_schedule_id query parameter is required' },
+        { status: 400 }
+      );
+    }
+
     await deleteRecurringScheduleBlock(
       'resource',
       params.id,
-      params.blockId
+      params.blockId,
+      recurringScheduleId
     );
 
     return NextResponse.json({ success: true });

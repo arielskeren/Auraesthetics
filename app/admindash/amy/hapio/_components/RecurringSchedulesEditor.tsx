@@ -223,24 +223,45 @@ export default function RecurringSchedulesEditor({
       }
 
       const scheduleData = await scheduleResponse.json();
-      const recurringScheduleId = scheduleData.schedule?.id || scheduleData.id;
+      console.log('[RecurringSchedulesEditor] Schedule creation response:', scheduleData);
+      
+      // Extract the recurring schedule ID from the response
+      const recurringScheduleId = scheduleData.schedule?.id || scheduleData.id || scheduleData.data?.id;
+      
+      if (!recurringScheduleId) {
+        console.error('[RecurringSchedulesEditor] Failed to extract recurring schedule ID:', scheduleData);
+        throw new Error('Failed to get recurring schedule ID from response');
+      }
+
+      console.log('[RecurringSchedulesEditor] Creating blocks for schedule:', {
+        recurringScheduleId,
+        resourceId,
+        enabledSchedulesCount: enabledSchedules.length,
+      });
 
       // Create recurring schedule blocks for each enabled day
       for (const daySchedule of enabledSchedules) {
+        const blockPayload = {
+          recurring_schedule_id: recurringScheduleId,
+          weekday: daySchedule.dayOfWeek, // Hapio uses "weekday" not "day_of_week"
+          start_time: daySchedule.startTime,
+          end_time: daySchedule.endTime,
+          metadata: {
+            service_ids: daySchedule.serviceIds,
+          },
+        };
+        
+        console.log('[RecurringSchedulesEditor] Creating block:', {
+          day: DAYS[daySchedule.dayOfWeek].label,
+          payload: blockPayload,
+        });
+
         const blockResponse = await fetch(
           `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              recurring_schedule_id: recurringScheduleId,
-              day_of_week: daySchedule.dayOfWeek,
-              start_time: daySchedule.startTime,
-              end_time: daySchedule.endTime,
-              metadata: {
-                service_ids: daySchedule.serviceIds,
-              },
-            }),
+            body: JSON.stringify(blockPayload),
           }
         );
 

@@ -10,9 +10,16 @@ export async function GET(
 ) {
   try {
     const { searchParams } = new URL(request.url);
-    const recurringScheduleId = searchParams.get('recurring_schedule_id') ?? undefined;
+    const recurringScheduleId = searchParams.get('recurring_schedule_id');
     const page = searchParams.get('page') ? Number(searchParams.get('page')) : undefined;
     const perPage = searchParams.get('per_page') ? Number(searchParams.get('per_page')) : undefined;
+
+    if (!recurringScheduleId) {
+      return NextResponse.json(
+        { error: 'recurring_schedule_id query parameter is required' },
+        { status: 400 }
+      );
+    }
 
     const response = await listRecurringScheduleBlocks(
       'resource',
@@ -68,6 +75,20 @@ export async function POST(
 ) {
   try {
     const body = await request.json();
+    
+    console.log('[Recurring Schedule Blocks API] POST request:', {
+      resourceId: params.id,
+      body,
+      recurringScheduleId: body.recurring_schedule_id,
+      hasRecurringScheduleId: !!body.recurring_schedule_id,
+    });
+
+    if (!body.recurring_schedule_id) {
+      return NextResponse.json(
+        { error: 'recurring_schedule_id is required in request body' },
+        { status: 400 }
+      );
+    }
 
     const block = await createRecurringScheduleBlock(
       'resource',

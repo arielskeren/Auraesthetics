@@ -236,7 +236,7 @@ export default function RecurringScheduleBlocksEditor({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               recurring_schedule_id: recurringScheduleId,
-              day_of_week: daySchedule.dayOfWeek,
+              weekday: daySchedule.dayOfWeek, // Hapio uses "weekday" not "day_of_week"
               start_time: daySchedule.startTime,
               end_time: daySchedule.endTime,
               metadata: {
