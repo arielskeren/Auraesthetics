@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Copy, Filter } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -9,12 +9,20 @@ import ServiceEditModal from './ServiceEditModal';
 import IdDisplay from './IdDisplay';
 
 export default function ServicesManager() {
+  const [allServices, setAllServices] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [pagination, setPagination] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [perPage] = useState(20);
+  
+  // Filtering and sorting state
+  const [viewMode, setViewMode] = useState<'grouped' | 'sorted'>('grouped');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'duration' | 'category'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterName, setFilterName] = useState<string>('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [viewingHapioServices, setViewingHapioServices] = useState(false);
@@ -29,16 +37,90 @@ export default function ServicesManager() {
   useEffect(() => {
     loadServices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, []);
+
+  // Get unique categories for filter dropdown
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    allServices.forEach((s) => {
+      if (s.category) cats.add(s.category);
+    });
+    return Array.from(cats).sort();
+  }, [allServices]);
+
+  // Filter and sort services
+  const filteredAndSortedServices = useMemo(() => {
+    let filtered = [...allServices];
+
+    // Apply filters
+    if (filterCategory) {
+      filtered = filtered.filter((s) => s.category === filterCategory);
+    }
+    if (filterName) {
+      const searchTerm = filterName.toLowerCase();
+      filtered = filtered.filter((s) => s.name?.toLowerCase().includes(searchTerm));
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortBy) {
+        case 'name':
+          aVal = a.name || '';
+          bVal = b.name || '';
+          break;
+        case 'price':
+          aVal = a.price ?? 0;
+          bVal = b.price ?? 0;
+          break;
+        case 'duration':
+          aVal = a.duration_minutes ?? 0;
+          bVal = b.duration_minutes ?? 0;
+          break;
+        case 'category':
+          aVal = a.category || '';
+          bVal = b.category || '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [allServices, filterCategory, filterName, sortBy, sortOrder]);
+
+  // Group services by category
+  const groupedServices = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredAndSortedServices.forEach((service) => {
+      const category = service.category || 'Uncategorized';
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(service);
+    });
+    return groups;
+  }, [filteredAndSortedServices]);
+
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    // You could add a toast notification here
+  };
 
   const loadServices = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Load all services for client-side filtering/sorting
       const params = new URLSearchParams();
-      params.append('page', String(page));
-      params.append('per_page', String(perPage));
+      params.append('per_page', '1000'); // Get all services
 
       const response = await fetch(`/api/admin/services?${params.toString()}`);
       if (!response.ok) {
@@ -52,7 +134,7 @@ export default function ServicesManager() {
         firstService: data.data?.[0],
         allServices: data.data,
       });
-      setServices(data.data || []);
+      setAllServices(data.data || []);
       setPagination(data.meta ? { ...data.meta, links: data.links } : null);
     } catch (err: any) {
       setError(err);
@@ -500,99 +582,287 @@ export default function ServicesManager() {
         </div>
       ) : (
         <div className="bg-white border border-sand rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-sage-light/30 border-b border-sand">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Image</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Service ID</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Category</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sand">
-              {services.map((service) => (
-                <tr key={service.id} className="hover:bg-sand/20">
-                  <td className="px-4 py-3">
-                    {service.image_url ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={service.image_url}
-                          alt={service.name || 'Service image'}
-                          className="w-16 h-16 object-cover rounded-lg border border-sand"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
-                        />
-                      </>
-                    ) : (
-                      <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
-                        No image
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <IdDisplay id={service.id} label="Service ID" />
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">{service.category || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">
-                    {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">
-                    {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {service.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleSync(service.id)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Sync to Hapio"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(service)}
-                        className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(service.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          {/* Filters and Sort Controls */}
+          <div className="px-6 py-4 border-b border-sand bg-sage-light/20">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-warm-gray" />
+                <label className="text-sm font-medium text-charcoal">Sort by:</label>
+                <select
+                  value={`${viewMode}-${sortBy}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [mode, by, order] = e.target.value.split('-');
+                    setViewMode(mode as 'grouped' | 'sorted');
+                    setSortBy(by as 'name' | 'price' | 'duration' | 'category');
+                    setSortOrder(order as 'asc' | 'desc');
+                  }}
+                  className="px-3 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                >
+                  <optgroup label="Grouped Views">
+                    <option value="grouped-name-asc">Grouped by Category (Name A-Z)</option>
+                    <option value="grouped-name-desc">Grouped by Category (Name Z-A)</option>
+                    <option value="grouped-price-asc">Grouped by Category (Price Low-High)</option>
+                    <option value="grouped-price-desc">Grouped by Category (Price High-Low)</option>
+                    <option value="grouped-duration-asc">Grouped by Category (Duration Short-Long)</option>
+                    <option value="grouped-duration-desc">Grouped by Category (Duration Long-Short)</option>
+                  </optgroup>
+                  <optgroup label="Sorted Views">
+                    <option value="sorted-name-asc">All Services (Name A-Z)</option>
+                    <option value="sorted-name-desc">All Services (Name Z-A)</option>
+                    <option value="sorted-price-asc">All Services (Price Low-High)</option>
+                    <option value="sorted-price-desc">All Services (Price High-Low)</option>
+                    <option value="sorted-duration-asc">All Services (Duration Short-Long)</option>
+                    <option value="sorted-duration-desc">All Services (Duration Long-Short)</option>
+                    <option value="sorted-category-asc">All Services (Category A-Z)</option>
+                    <option value="sorted-category-desc">All Services (Category Z-A)</option>
+                  </optgroup>
+                </select>
+              </div>
 
-        {pagination && (
-          <div className="px-4 py-4 border-t border-sand">
-            <PaginationControls meta={pagination} onPageChange={handlePageChange} />
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-charcoal">Category:</label>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="px-3 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 flex-1">
+                <label className="text-sm font-medium text-charcoal">Name:</label>
+                <input
+                  type="text"
+                  value={filterName}
+                  onChange={(e) => setFilterName(e.target.value)}
+                  placeholder="Search by name..."
+                  className="flex-1 px-3 py-1.5 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                />
+              </div>
+
+              <div className="text-sm text-warm-gray">
+                Showing {filteredAndSortedServices.length} of {allServices.length} services
+              </div>
+            </div>
           </div>
-        )}
+
+          <div className="overflow-x-auto">
+            {viewMode === 'grouped' ? (
+              // Grouped by Category View
+              <div className="divide-y divide-sand">
+                {Object.entries(groupedServices)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([category, categoryServices]) => (
+                    <div key={category} className="p-6">
+                      <h3 className="text-lg font-semibold text-charcoal mb-4 pb-2 border-b border-sand">
+                        {category || 'Uncategorized'}
+                        <span className="ml-2 text-sm font-normal text-warm-gray">
+                          ({categoryServices.length} {categoryServices.length === 1 ? 'service' : 'services'})
+                        </span>
+                      </h3>
+                      <table className="w-full">
+                        <thead className="bg-sage-light/30 border-b border-sand">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal w-12">#</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Image</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-sand">
+                          {categoryServices.map((service, index) => (
+                            <tr key={service.id} className="hover:bg-sand/20">
+                              <td className="px-4 py-3 text-sm text-warm-gray font-mono">
+                                {index + 1}
+                              </td>
+                              <td className="px-4 py-3">
+                                {service.image_url ? (
+                                  <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={service.image_url}
+                                      alt={service.name || 'Service image'}
+                                      className="w-16 h-16 object-cover rounded-lg border border-sand"
+                                      onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                      }}
+                                    />
+                                  </>
+                                ) : (
+                                  <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                                    No image
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-charcoal">{service.name || '—'}</span>
+                                  <button
+                                    onClick={() => handleCopyId(service.id)}
+                                    className="p-1 text-warm-gray hover:text-charcoal hover:bg-sand/30 rounded transition-colors"
+                                    title="Copy Service ID"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-warm-gray">
+                                {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-warm-gray">
+                                {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                  }`}
+                                >
+                                  {service.enabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleSync(service.id)}
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    title="Sync to Hapio"
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEdit(service)}
+                                    className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(service.id)}
+                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              // Sorted View (All Services)
+              <table className="w-full">
+                <thead className="bg-sage-light/30 border-b border-sand">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal w-12">#</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Image</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Category</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand">
+                  {filteredAndSortedServices.map((service, index) => (
+                    <tr key={service.id} className="hover:bg-sand/20">
+                      <td className="px-4 py-3 text-sm text-warm-gray font-mono">
+                        {index + 1}
+                      </td>
+                      <td className="px-4 py-3">
+                        {service.image_url ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={service.image_url}
+                              alt={service.name || 'Service image'}
+                              className="w-16 h-16 object-cover rounded-lg border border-sand"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                              }}
+                            />
+                          </>
+                        ) : (
+                          <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                            No image
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-charcoal">{service.name || '—'}</span>
+                          <button
+                            onClick={() => handleCopyId(service.id)}
+                            className="p-1 text-warm-gray hover:text-charcoal hover:bg-sand/30 rounded transition-colors"
+                            title="Copy Service ID"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">{service.category || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">
+                        {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">
+                        {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {service.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleSync(service.id)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Sync to Hapio"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(service)}
+                            className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(service.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 
