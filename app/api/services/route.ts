@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       `;
     }
 
-    const services = await query;
+    const services = await query as Array<any>;
 
     return NextResponse.json(services as Service[]);
   } catch (error: any) {

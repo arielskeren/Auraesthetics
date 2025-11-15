@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     // Get total count
     const countResult = await sql`
       SELECT COUNT(*) as total FROM services
-    `;
+    ` as Array<{ total: number | string }>;
     const total = Number(countResult[0]?.total || 0);
 
     // Get services
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       ORDER BY display_order ASC, created_at DESC
       LIMIT ${perPage}
       OFFSET ${offset}
-    `;
+    ` as Array<any>;
 
     const lastPage = Math.ceil(total / perPage);
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Check if slug already exists
     const existing = await sql`
       SELECT id FROM services WHERE slug = ${body.slug}
-    `;
+    ` as Array<any>;
     if (existing.length > 0) {
       return NextResponse.json(
         { error: 'Service with this slug already exists' },
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         ${body.display_order || 0}
       )
       RETURNING *
-    `;
+    ` as Array<any>;
 
     return NextResponse.json(result[0] as Service, { status: 201 });
   } catch (error: any) {

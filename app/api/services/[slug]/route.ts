@@ -36,7 +36,7 @@ export async function GET(
       FROM services
       WHERE slug = ${slug} AND enabled = true
       LIMIT 1
-    `;
+    ` as Array<any>;
 
     if (services.length === 0) {
       return NextResponse.json(

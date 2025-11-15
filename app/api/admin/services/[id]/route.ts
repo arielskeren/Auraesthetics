@@ -35,7 +35,7 @@ export async function GET(
       FROM services
       WHERE id = ${id}
       LIMIT 1
-    `;
+    ` as Array<any>;
 
     if (services.length === 0) {
       return NextResponse.json(
@@ -70,7 +70,7 @@ export async function PATCH(
     // Check if service exists
     const existing = await sql`
       SELECT id FROM services WHERE id = ${id}
-    `;
+    ` as Array<any>;
     if (existing.length === 0) {
       return NextResponse.json(
         { error: 'Service not found' },
@@ -82,7 +82,7 @@ export async function PATCH(
     if (body.slug) {
       const slugConflict = await sql`
         SELECT id FROM services WHERE slug = ${body.slug} AND id != ${id}
-      `;
+      ` as Array<any>;
       if (slugConflict.length > 0) {
         return NextResponse.json(
           { error: 'Service with this slug already exists' },
@@ -94,7 +94,7 @@ export async function PATCH(
     // Get current service to merge with updates
     const current = await sql`
       SELECT * FROM services WHERE id = ${id}
-    `;
+    ` as Array<any>;
     
     if (current.length === 0) {
       return NextResponse.json(
@@ -138,7 +138,7 @@ export async function PATCH(
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *
-    `;
+    ` as Array<any>;
 
     return NextResponse.json(result[0] as Service);
   } catch (error: any) {
@@ -165,7 +165,7 @@ export async function DELETE(
     // Check if service exists
     const existing = await sql`
       SELECT id, image_url FROM services WHERE id = ${id}
-    `;
+    ` as Array<{ id: string; image_url: string | null }>;
     if (existing.length === 0) {
       return NextResponse.json(
         { error: 'Service not found' },
