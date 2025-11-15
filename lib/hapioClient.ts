@@ -831,7 +831,24 @@ export async function updateLocation(
   if (location.enabled !== undefined) body.enabled = location.enabled;
   if (location.metadata !== undefined) body.metadata = location.metadata;
 
+  console.log('[Hapio Client] Updating location:', {
+    id,
+    body,
+    bodyKeys: Object.keys(body),
+    bodyValues: Object.values(body),
+  });
+
   const response = await requestJson<any>('patch', `locations/${id}`, body);
+  
+  console.log('[Hapio Client] Location update response:', {
+    id: response.id,
+    name: response.name,
+    address: response.address,
+    timezone: response.timezone,
+    enabled: response.enabled,
+    fullResponse: response,
+  });
+  
   return {
     id: response.id,
     name: response.name,

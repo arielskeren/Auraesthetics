@@ -33,10 +33,31 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
+    console.log('[Location API] PATCH request:', {
+      locationId: params.id,
+      body,
+      bodyKeys: Object.keys(body),
+    });
+    
     const location = await updateLocation(params.id, body);
+    
+    console.log('[Location API] Update successful:', {
+      locationId: location.id,
+      name: location.name,
+      address: location.address,
+      timezone: location.timezone,
+      enabled: location.enabled,
+    });
+    
     return NextResponse.json({ location });
   } catch (error: any) {
-    console.error('[Hapio] Failed to update location', error);
+    console.error('[Hapio] Failed to update location', {
+      locationId: params.id,
+      error: error.message,
+      status: error?.status,
+      responseData: error?.response?.data,
+      fullError: error,
+    });
     const message = typeof error?.message === 'string' ? error.message : 'Failed to update location';
     const status = Number(error?.status) || 500;
     return NextResponse.json(
