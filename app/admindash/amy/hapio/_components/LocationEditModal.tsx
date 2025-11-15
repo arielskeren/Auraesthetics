@@ -50,8 +50,22 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Preserve the current form data before starting the save
-    const dataToSave = { ...formData };
+    // Normalize form data: convert empty strings to null for optional fields
+    const dataToSave = {
+      name: formData.name,
+      address: formData.address === '' ? null : formData.address,
+      timezone: formData.timezone === '' ? null : formData.timezone,
+      enabled: formData.enabled,
+    };
+    
+    console.log('[Location Edit Modal] Form submission:', {
+      originalFormData: formData,
+      normalizedData: dataToSave,
+      emptyStringNormalized: {
+        address: formData.address === '' ? 'converted to null' : 'unchanged',
+        timezone: formData.timezone === '' ? 'converted to null' : 'unchanged',
+      },
+    });
     
     setLoading(true);
     setError(null);
@@ -65,6 +79,12 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         ? `/api/admin/hapio/locations/${location.id}`
         : '/api/admin/hapio/locations';
       const method = location ? 'PATCH' : 'POST';
+
+      console.log('[Location Edit Modal] Sending request:', {
+        url,
+        method,
+        payload: dataToSave,
+      });
 
       const response = await fetch(url, {
         method,

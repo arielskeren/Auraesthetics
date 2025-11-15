@@ -804,12 +804,39 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
   const body: Record<string, unknown> = {
     name: location.name,
   };
-  if (location.address !== undefined) body.address = location.address;
-  if (location.timezone !== undefined) body.timezone = location.timezone;
+  
+  // Handle address: convert empty strings to null, omit if undefined
+  if (location.address !== undefined) {
+    body.address = location.address === '' ? null : location.address;
+  }
+  
+  // Handle timezone: convert empty strings to null, omit if undefined
+  if (location.timezone !== undefined) {
+    body.timezone = location.timezone === '' ? null : location.timezone;
+  }
+  
   if (location.enabled !== undefined) body.enabled = location.enabled;
   if (location.metadata !== undefined) body.metadata = location.metadata;
 
+  console.log('[Hapio Client] Creating location:', {
+    originalInput: location,
+    transformedBody: body,
+    emptyStringNormalized: {
+      address: location.address === '' ? 'converted to null' : 'unchanged',
+      timezone: location.timezone === '' ? 'converted to null' : 'unchanged',
+    },
+  });
+
   const response = await requestJson<any>('post', 'locations', body);
+  
+  console.log('[Hapio Client] Location created:', {
+    id: response.id,
+    name: response.name,
+    address: response.address,
+    timezone: response.timezone,
+    enabled: response.enabled,
+  });
+  
   return {
     id: response.id,
     name: response.name,
@@ -825,20 +852,63 @@ export async function updateLocation(
   location: Partial<HapioLocationPayload>
 ): Promise<HapioLocation> {
   const body: Record<string, unknown> = {};
+  
+  // Handle name (required field)
   if (location.name !== undefined) body.name = location.name;
-  if (location.address !== undefined) body.address = location.address;
-  if (location.timezone !== undefined) body.timezone = location.timezone;
+  
+  // Handle address: convert empty strings to null, omit if undefined
+  if (location.address !== undefined) {
+    body.address = location.address === '' ? null : location.address;
+  }
+  
+  // Handle timezone: convert empty strings to null, omit if undefined
+  if (location.timezone !== undefined) {
+    body.timezone = location.timezone === '' ? null : location.timezone;
+  }
+  
+  // Handle enabled
   if (location.enabled !== undefined) body.enabled = location.enabled;
+  
+  // Handle metadata
   if (location.metadata !== undefined) body.metadata = location.metadata;
 
   console.log('[Hapio Client] Updating location:', {
     id,
-    body,
+    originalInput: location,
+    transformedBody: body,
     bodyKeys: Object.keys(body),
     bodyValues: Object.values(body),
+    emptyStringNormalized: {
+      address: location.address === '' ? 'converted to null' : 'unchanged',
+      timezone: location.timezone === '' ? 'converted to null' : 'unchanged',
+    },
   });
 
   const response = await requestJson<any>('patch', `locations/${id}`, body);
+  
+  // Compare request vs response to detect mismatches
+  const requestResponseComparison = {
+    address: {
+      requested: body.address,
+      received: response.address,
+      match: body.address === response.address,
+    },
+    timezone: {
+      requested: body.timezone,
+      received: response.timezone,
+      match: body.timezone === response.timezone,
+    },
+    name: {
+      requested: body.name,
+      received: response.name,
+      match: body.name === response.name,
+    },
+    enabled: {
+      requested: body.enabled,
+      received: response.enabled,
+      match: body.enabled === response.enabled,
+    },
+  };
   
   console.log('[Hapio Client] Location update response:', {
     id: response.id,
@@ -848,6 +918,17 @@ export async function updateLocation(
     enabled: response.enabled,
     fullResponse: response,
   });
+  
+  console.log('[Hapio Client] Request vs Response comparison:', requestResponseComparison);
+  
+  // Log any mismatches
+  const mismatches = Object.entries(requestResponseComparison)
+    .filter(([_, comparison]) => !comparison.match)
+    .map(([field, comparison]) => ({ field, ...comparison }));
+  
+  if (mismatches.length > 0) {
+    console.warn('[Hapio Client] Field mismatches detected:', mismatches);
+  }
   
   return {
     id: response.id,
@@ -866,12 +947,40 @@ export async function replaceLocation(
   const body: Record<string, unknown> = {
     name: location.name,
   };
-  if (location.address !== undefined) body.address = location.address;
-  if (location.timezone !== undefined) body.timezone = location.timezone;
+  
+  // Handle address: convert empty strings to null, omit if undefined
+  if (location.address !== undefined) {
+    body.address = location.address === '' ? null : location.address;
+  }
+  
+  // Handle timezone: convert empty strings to null, omit if undefined
+  if (location.timezone !== undefined) {
+    body.timezone = location.timezone === '' ? null : location.timezone;
+  }
+  
   if (location.enabled !== undefined) body.enabled = location.enabled;
   if (location.metadata !== undefined) body.metadata = location.metadata;
 
+  console.log('[Hapio Client] Replacing location:', {
+    id,
+    originalInput: location,
+    transformedBody: body,
+    emptyStringNormalized: {
+      address: location.address === '' ? 'converted to null' : 'unchanged',
+      timezone: location.timezone === '' ? 'converted to null' : 'unchanged',
+    },
+  });
+
   const response = await requestJson<any>('put', `locations/${id}`, body);
+  
+  console.log('[Hapio Client] Location replaced:', {
+    id: response.id,
+    name: response.name,
+    address: response.address,
+    timezone: response.timezone,
+    enabled: response.enabled,
+  });
+  
   return {
     id: response.id,
     name: response.name,

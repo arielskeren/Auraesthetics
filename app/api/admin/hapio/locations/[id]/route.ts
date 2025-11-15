@@ -33,13 +33,38 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    console.log('[Location API] PATCH request:', {
+    console.log('[Location API] PATCH request received:', {
       locationId: params.id,
-      body,
+      requestBody: body,
       bodyKeys: Object.keys(body),
+      bodyValues: Object.values(body),
     });
     
     const location = await updateLocation(params.id, body);
+    
+    // Compare request vs response to detect mismatches
+    const requestResponseComparison = {
+      address: {
+        requested: body.address,
+        received: location.address,
+        match: body.address === location.address,
+      },
+      timezone: {
+        requested: body.timezone,
+        received: location.timezone,
+        match: body.timezone === location.timezone,
+      },
+      name: {
+        requested: body.name,
+        received: location.name,
+        match: body.name === location.name,
+      },
+      enabled: {
+        requested: body.enabled,
+        received: location.enabled,
+        match: body.enabled === location.enabled,
+      },
+    };
     
     console.log('[Location API] Update successful:', {
       locationId: location.id,
@@ -48,6 +73,19 @@ export async function PATCH(
       timezone: location.timezone,
       enabled: location.enabled,
     });
+    
+    console.log('[Location API] Request vs Response comparison:', requestResponseComparison);
+    
+    // Log any mismatches
+    const mismatches = Object.entries(requestResponseComparison)
+      .filter(([_, comparison]) => !comparison.match)
+      .map(([field, comparison]) => ({ field, ...comparison }));
+    
+    if (mismatches.length > 0) {
+      console.warn('[Location API] Field mismatches detected between request and response:', mismatches);
+    } else {
+      console.log('[Location API] All fields match between request and response');
+    }
     
     return NextResponse.json({ location });
   } catch (error: any) {
