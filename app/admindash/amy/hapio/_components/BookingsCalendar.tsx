@@ -148,7 +148,7 @@ export default function BookingsCalendar() {
       params.append('to', to.split('T')[0]);
       if (resourceId) params.append('resource_id', resourceId);
       if (locationId) params.append('location_id', locationId);
-      params.append('per_page', '1000'); // Get all bookings for the month
+      params.append('per_page', '100'); // Hapio API limit is 100
 
       const response = await fetch(`/api/admin/hapio/bookings?${params.toString()}`);
       if (!response.ok) {
