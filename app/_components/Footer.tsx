@@ -80,6 +80,22 @@ export default function Footer() {
             <Link href="/terms" className="hover:text-charcoal transition-colors">
               Terms of Service
             </Link>
+            {/* Secret admin links - subtle but discoverable */}
+            <span className="text-warm-gray/30">•</span>
+            <Link 
+              href="/admindash/amy" 
+              className="hover:text-charcoal transition-colors opacity-40 hover:opacity-100"
+              title="Admin Dashboard"
+            >
+              Admin
+            </Link>
+            <Link 
+              href="/admindash/amy/hapio" 
+              className="hover:text-charcoal transition-colors opacity-40 hover:opacity-100"
+              title="Hapio Management"
+            >
+              Hapio
+            </Link>
           </div>
 
           <p className="text-xs text-warm-gray">

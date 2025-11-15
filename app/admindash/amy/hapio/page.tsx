@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import HapioManagementClient from './HapioManagementClient';
+import AdminPasswordProtection from '@/app/_components/AdminPasswordProtection';
 
 export const metadata: Metadata = {
   title: 'Hapio Management - Admin Dashboard',
@@ -7,6 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function HapioManagementPage() {
-  return <HapioManagementClient />;
+  return (
+    <AdminPasswordProtection>
+      <HapioManagementClient />
+    </AdminPasswordProtection>
+  );
 }
 

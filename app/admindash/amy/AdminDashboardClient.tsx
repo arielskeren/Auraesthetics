@@ -261,8 +261,9 @@ export default function AdminDashboardClient() {
             </div>
             <a
               href="/admindash/amy/hapio"
-              className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium flex items-center gap-2"
             >
+              <Calendar className="w-4 h-4" />
               Hapio Management
             </a>
           </div>

@@ -29,10 +29,20 @@ export default function HapioManagementClient() {
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           {/* Header */}
           <div className="bg-dark-sage text-charcoal px-6 py-4 border-b border-sage-light">
-            <h1 className="text-2xl font-bold">Hapio Management Portal</h1>
-            <p className="text-sm text-charcoal/70 mt-1">
-              Manage availability, schedules, bookings, and employees
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">Hapio Management Portal</h1>
+                <p className="text-sm text-charcoal/70 mt-1">
+                  Manage availability, schedules, bookings, and employees
+                </p>
+              </div>
+              <a
+                href="/admindash/amy"
+                className="px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-charcoal/80 transition-colors text-sm font-medium"
+              >
+                Main Dashboard
+              </a>
+            </div>
           </div>
 
           {/* Tabs */}

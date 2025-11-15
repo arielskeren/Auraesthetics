@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import AdminDashboardClient from './AdminDashboardClient';
+import AdminPasswordProtection from '@/app/_components/AdminPasswordProtection';
 
 export const metadata: Metadata = {
   title: 'Admin Dashboard - Aura Wellness Aesthetics',
@@ -7,6 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function AdminDashboardPage() {
-  return <AdminDashboardClient />;
+  return (
+    <AdminPasswordProtection>
+      <AdminDashboardClient />
+    </AdminPasswordProtection>
+  );
 }
 
