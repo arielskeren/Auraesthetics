@@ -515,41 +515,99 @@ export default function ScheduleBlocksCalendar({
                   
                   {/* Hover Tooltip */}
                   {showTooltip && (
-                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-charcoal text-white text-xs rounded shadow-lg max-w-[200px]">
-                      {tooltipContent ? (
-                        typeof tooltipContent === 'string' ? (
-                          <div>{tooltipContent}</div>
-                        ) : Array.isArray(tooltipContent) ? (
-                          <div className="space-y-1">
-                            {tooltipContent.map((line, idx) => (
-                              <div
-                                key={idx}
-                                className={line === 'Blocks:' ? 'font-semibold mt-1.5 pt-1 border-t border-white/20' : ''}
-                              >
-                                {line}
-                              </div>
-                            ))}
+                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-64">
+                      <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden">
+                        {/* Tooltip Header */}
+                        <div className="bg-sage-light/30 px-3 py-2 border-b border-sand">
+                          <div className="text-xs font-semibold text-charcoal">
+                            {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                           </div>
-                        ) : null
-                      ) : dateBlocks.length > 0 && blockType === 'open' ? (
-                        // Fallback: show blocks even if no availability
-                        <div className="space-y-1">
-                          <div className="font-semibold">Blocks:</div>
-                          {dateBlocks.map((block) => {
-                            const start = new Date(block.starts_at);
-                            const end = new Date(block.ends_at);
-                            const startTime = start.toTimeString().slice(0, 5);
-                            const endTime = end.toTimeString().slice(0, 5);
-                            return (
-                              <div key={block.id}>
-                                {formatTime(startTime)} - {formatTime(endTime)}
-                              </div>
-                            );
-                          })}
                         </div>
-                      ) : null}
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                        <div className="w-2 h-2 bg-charcoal rotate-45" />
+                        
+                        {/* Tooltip Content */}
+                        <div className="px-3 py-2.5">
+                          {tooltipContent ? (
+                            typeof tooltipContent === 'string' ? (
+                              <div className="text-sm text-charcoal">
+                                {tooltipContent.includes('Unavailable') ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                                    <span className="text-red-700 font-medium">{tooltipContent}</span>
+                                  </div>
+                                ) : tooltipContent.includes('Closed') ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                                    <span className="text-red-700 font-medium">{tooltipContent}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                                    <span className="text-charcoal">{tooltipContent}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : Array.isArray(tooltipContent) ? (
+                              <div className="space-y-2.5">
+                                {tooltipContent.map((line, idx) => {
+                                  // Check if this is a header line
+                                  if (line === 'Blocks:' || line === 'Recurring Blocks:') {
+                                    return (
+                                      <div key={idx} className="pt-2 border-t border-sand">
+                                        <div className="text-xs font-semibold text-warm-gray uppercase tracking-wide mb-1.5">
+                                          {line}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  // Check if this is availability (first item before any "Blocks:" header)
+                                  const isAvailability = idx === 0 || !tooltipContent.slice(0, idx).includes('Blocks:') && !tooltipContent.slice(0, idx).includes('Recurring Blocks:');
+                                  return (
+                                    <div key={idx} className="flex items-center gap-2 text-sm">
+                                      {isAvailability ? (
+                                        <>
+                                          <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
+                                          <span className="text-charcoal font-medium">{line}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
+                                          <span className="text-charcoal">{line}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null
+                          ) : dateBlocks.length > 0 && blockType === 'open' ? (
+                            // Fallback: show blocks even if no availability
+                            <div className="space-y-2.5">
+                              <div className="pt-2 border-t border-sand">
+                                <div className="text-xs font-semibold text-warm-gray uppercase tracking-wide mb-1.5">
+                                  Blocks:
+                                </div>
+                              </div>
+                              {dateBlocks.map((block) => {
+                                const start = new Date(block.starts_at);
+                                const end = new Date(block.ends_at);
+                                const startTime = start.toTimeString().slice(0, 5);
+                                const endTime = end.toTimeString().slice(0, 5);
+                                return (
+                                  <div key={block.id} className="flex items-center gap-2 text-sm">
+                                    <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
+                                    <span className="text-charcoal">
+                                      {formatTime(startTime)} - {formatTime(endTime)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      {/* Tooltip Arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
+                        <div className="w-3 h-3 bg-white border-r border-b border-sand transform rotate-45" />
                       </div>
                     </div>
                   )}
