@@ -17,7 +17,7 @@ export default function HapioManagementClient() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: <Calendar className="w-4 h-4" /> },
     { id: 'bookings', label: 'Bookings', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'resources', label: 'Resources', icon: <Users className="w-4 h-4" /> },
+    { id: 'resources', label: 'Employees', icon: <Users className="w-4 h-4" /> },
     { id: 'services', label: 'Services', icon: <Settings className="w-4 h-4" /> },
     { id: 'schedules', label: 'Schedules', icon: <Clock className="w-4 h-4" /> },
     { id: 'locations', label: 'Locations', icon: <MapPin className="w-4 h-4" /> },
@@ -31,7 +31,7 @@ export default function HapioManagementClient() {
           <div className="bg-dark-sage text-charcoal px-6 py-4 border-b border-sage-light">
             <h1 className="text-2xl font-bold">Hapio Management Portal</h1>
             <p className="text-sm text-charcoal/70 mt-1">
-              Manage availability, schedules, bookings, and resources
+              Manage availability, schedules, bookings, and employees
             </p>
           </div>
 

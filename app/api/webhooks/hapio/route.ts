@@ -21,18 +21,39 @@ function safeCompare(a: string, b: string) {
 
 function verifySignature(rawBody: string, signature: string | null, secret: string) {
   if (!secret) {
+    console.error('[Hapio webhook] Missing HAPIO_SECRET');
     return false;
   }
 
   // Allow local testing when signature is omitted by comparing directly against the secret.
   if (!signature) {
-    return rawBody === secret;
+    console.warn('[Hapio webhook] No signature provided, skipping verification (local testing only)');
+    return false; // Don't allow in production
   }
 
+  // Hapio sends signature as hex string
   const expectedHex = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   const expectedBase64 = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
+  
+  // Try both hex and base64, and also try with/without prefix
+  const signatureClean = signature.trim();
+  const matches = 
+    safeCompare(signatureClean, expectedHex) || 
+    safeCompare(signatureClean, expectedBase64) ||
+    safeCompare(signatureClean, `sha256=${expectedHex}`) ||
+    safeCompare(signatureClean, `sha256=${expectedBase64}`);
 
-  return safeCompare(signature, expectedHex) || safeCompare(signature, expectedBase64);
+  if (!matches) {
+    console.warn('[Hapio webhook] Signature mismatch', {
+      receivedLength: signatureClean.length,
+      expectedHexLength: expectedHex.length,
+      expectedBase64Length: expectedBase64.length,
+      receivedPrefix: signatureClean.substring(0, 10),
+      expectedHexPrefix: expectedHex.substring(0, 10),
+    });
+  }
+
+  return matches;
 }
 
 async function findBookingByHapioId(

@@ -130,7 +130,7 @@ export default function HapioOverview({ onNavigate }: HapioOverviewProps) {
         <div className="bg-white border border-sand rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-warm-gray mb-1">Resources</p>
+              <p className="text-sm text-warm-gray mb-1">Employees</p>
               <p className="text-2xl font-bold text-charcoal">{stats.totalResources}</p>
             </div>
             <Users className="w-8 h-8 text-dark-sage" />
@@ -162,7 +162,7 @@ export default function HapioOverview({ onNavigate }: HapioOverviewProps) {
             onClick={() => onNavigate?.('resources')}
             className="px-4 py-2 bg-sage-light text-charcoal rounded-lg hover:bg-sage-light/80 transition-colors text-sm font-medium"
           >
-            Manage Resources
+            Manage Employees
           </button>
           <button
             onClick={() => onNavigate?.('schedules')}

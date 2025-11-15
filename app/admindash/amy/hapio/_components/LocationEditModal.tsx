@@ -52,8 +52,13 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('[Location Edit] API error:', errorData);
         throw new Error(errorData.error || 'Failed to save location');
       }
+
+      // Verify the response contains the updated location
+      const responseData = await response.json();
+      console.log('[Location Edit] Save response:', responseData);
 
       // Show success message
       setSuccess(true);

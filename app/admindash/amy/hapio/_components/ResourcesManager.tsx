@@ -113,19 +113,19 @@ export default function ResourcesManager() {
   };
 
   if (loading && resources.length === 0) {
-    return <LoadingState message="Loading resources..." />;
+    return <LoadingState message="Loading employees..." />;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-charcoal">Resources</h2>
+        <h2 className="text-xl font-semibold text-charcoal">Employees</h2>
         <button
           onClick={handleAdd}
           className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
-          Add Resource
+          Add Employee
         </button>
       </div>
 

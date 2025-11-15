@@ -4,63 +4,61 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 
-interface ResourceEditModalProps {
-  resource?: any;
-  locations?: any[];
+interface ServiceEditModalProps {
+  service?: any;
   onClose: () => void;
   onSave: () => void;
 }
 
-export default function ResourceEditModal({ resource, locations = [], onClose, onSave }: ResourceEditModalProps) {
+export default function ServiceEditModal({ service, onClose, onSave }: ServiceEditModalProps) {
   const [formData, setFormData] = useState({
     name: '',
-    location_id: '',
-    max_simultaneous_bookings: 1,
+    duration_minutes: 60,
+    buffer_before_minutes: 0,
+    buffer_after_minutes: 0,
     enabled: true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (resource) {
+    if (service) {
       setFormData({
-        name: resource.name || '',
-        location_id: resource.location_id || '',
-        max_simultaneous_bookings: resource.max_simultaneous_bookings || 1,
-        enabled: resource.enabled !== false,
+        name: service.name || '',
+        duration_minutes: service.duration_minutes || 60,
+        buffer_before_minutes: service.buffer_before_minutes || 0,
+        buffer_after_minutes: service.buffer_after_minutes || 0,
+        enabled: service.enabled !== false,
       });
     }
-  }, [resource]);
+  }, [service]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(false);
 
     try {
-      const url = resource
-        ? `/api/admin/hapio/resources/${resource.id}`
-        : '/api/admin/hapio/resources';
-      const method = resource ? 'PATCH' : 'POST';
-
-      // Ensure location_id is included even if empty (for validation)
-      const payload = {
-        ...formData,
-        location_id: formData.location_id || undefined, // Send undefined instead of empty string
-      };
+      const url = service
+        ? `/api/admin/hapio/services/${service.id}`
+        : '/api/admin/hapio/services';
+      const method = service ? 'PATCH' : 'POST';
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save employee');
+        throw new Error(errorData.error || 'Failed to save service');
       }
 
-      // Wait for save callback to complete before closing
+      setSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 500));
       await onSave();
       onClose();
     } catch (err: any) {
@@ -75,7 +73,7 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="sticky top-0 bg-white border-b border-sand px-6 py-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-charcoal">
-            {resource ? 'Edit Employee' : 'Create Employee'}
+            {service ? 'Edit Service' : 'Create Service'}
           </h2>
           <button
             onClick={onClose}
@@ -87,6 +85,11 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <ErrorDisplay error={error} />}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
+              Service saved successfully!
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">
@@ -103,38 +106,43 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
 
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">
-              Location <span className="text-red-500">*</span>
-            </label>
-            <select
-              required
-              value={formData.location_id}
-              onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
-              className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-            >
-              <option value="">Select a location</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name || loc.id}
-                </option>
-              ))}
-            </select>
-            {locations.length === 0 && (
-              <p className="text-xs text-warm-gray mt-1">No locations available. Please create a location first.</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-charcoal mb-1">
-              Max Simultaneous Bookings
+              Duration (minutes) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
+              required
               min="1"
-              value={formData.max_simultaneous_bookings}
-              onChange={(e) => setFormData({ ...formData, max_simultaneous_bookings: Number(e.target.value) })}
+              value={formData.duration_minutes}
+              onChange={(e) => setFormData({ ...formData, duration_minutes: Number(e.target.value) })}
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
             />
-            <p className="text-xs text-warm-gray mt-1">Maximum number of bookings that can occur simultaneously</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">
+                Buffer Before (minutes)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.buffer_before_minutes}
+                onChange={(e) => setFormData({ ...formData, buffer_before_minutes: Number(e.target.value) })}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">
+                Buffer After (minutes)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.buffer_after_minutes}
+                onChange={(e) => setFormData({ ...formData, buffer_after_minutes: Number(e.target.value) })}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -163,7 +171,7 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
               disabled={loading}
               className="flex-1 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Saving...' : resource ? 'Update' : 'Create'}
+              {loading ? 'Saving...' : service ? 'Update' : 'Create'}
             </button>
           </div>
         </form>

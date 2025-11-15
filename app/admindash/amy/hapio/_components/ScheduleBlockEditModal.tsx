@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 
@@ -11,13 +11,45 @@ interface ScheduleBlockEditModalProps {
 
 export default function ScheduleBlockEditModal({ onClose, onSave }: ScheduleBlockEditModalProps) {
   const [formData, setFormData] = useState({
-    parent_type: 'resource',
-    parent_id: '',
+    schedule_for: 'employee', // 'employee' | 'location' | 'project'
+    employee_id: '',
+    location_id: '',
     starts_at: '',
     ends_at: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadEmployees();
+    loadLocations();
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      const response = await fetch('/api/admin/hapio/resources?per_page=100');
+      if (response.ok) {
+        const data = await response.json();
+        setEmployees(data.data || []);
+      }
+    } catch (err) {
+      // Silently fail
+    }
+  };
+
+  const loadLocations = async () => {
+    try {
+      const response = await fetch('/api/admin/hapio/locations?per_page=100');
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data.data || []);
+      }
+    } catch (err) {
+      // Silently fail
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,14 +69,30 @@ export default function ScheduleBlockEditModal({ onClose, onSave }: ScheduleBloc
         ends_at: endsAtFormatted,
       };
 
-      // Validate parent_id for non-project types
-      if (formData.parent_type !== 'project' && !formData.parent_id) {
-        throw new Error('Parent ID is required for location and resource types');
+      // Map schedule_for to parent_type and parent_id
+      let parentType: 'project' | 'location' | 'resource';
+      let parentId: string | undefined;
+
+      if (formData.schedule_for === 'employee') {
+        if (!formData.employee_id) {
+          throw new Error('Please select an employee');
+        }
+        parentType = 'resource';
+        parentId = formData.employee_id;
+      } else if (formData.schedule_for === 'location') {
+        if (!formData.location_id) {
+          throw new Error('Please select a location');
+        }
+        parentType = 'location';
+        parentId = formData.location_id;
+      } else {
+        parentType = 'project';
+        parentId = undefined;
       }
 
       const requestBody = {
-        parent_type: formData.parent_type,
-        parent_id: formData.parent_type === 'project' ? undefined : formData.parent_id,
+        parent_type: parentType,
+        parent_id: parentId,
         ...payload,
       };
 
@@ -96,33 +144,60 @@ export default function ScheduleBlockEditModal({ onClose, onSave }: ScheduleBloc
 
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">
-              Parent Type <span className="text-red-500">*</span>
+              Schedule For <span className="text-red-500">*</span>
             </label>
             <select
               required
-              value={formData.parent_type}
-              onChange={(e) => setFormData({ ...formData, parent_type: e.target.value as any })}
+              value={formData.schedule_for}
+              onChange={(e) => setFormData({ ...formData, schedule_for: e.target.value as any, employee_id: '', location_id: '' })}
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
             >
-              <option value="project">Project</option>
+              <option value="employee">Employee</option>
               <option value="location">Location</option>
-              <option value="resource">Resource</option>
+              <option value="project">Entire Business</option>
             </select>
+            <p className="text-xs text-warm-gray mt-1">Who or what this schedule applies to</p>
           </div>
 
-          {formData.parent_type !== 'project' && (
+          {formData.schedule_for === 'employee' && (
             <div>
               <label className="block text-sm font-medium text-charcoal mb-1">
-                Parent ID <span className="text-red-500">*</span>
+                Select Employee <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 required
-                value={formData.parent_id}
-                onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
-                placeholder="Enter parent ID (UUID)"
+                value={formData.employee_id}
+                onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
                 className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-              />
+              >
+                <option value="">Choose an employee...</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {formData.schedule_for === 'location' && (
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">
+                Select Location <span className="text-red-500">*</span>
+              </label>
+              <select
+                required
+                value={formData.location_id}
+                onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              >
+                <option value="">Choose a location...</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name || loc.id}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
