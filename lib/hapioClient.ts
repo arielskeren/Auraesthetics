@@ -451,7 +451,13 @@ export interface HapioResource {
 export interface HapioLocation {
   id: string;
   name: string;
-  address?: string | null;
+  address?: string | null; // Deprecated: use address fields below
+  street1?: string | null;
+  street2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip?: string | null;
   timezone?: string | null;
   enabled: boolean;
   metadata?: Record<string, unknown> | null;
@@ -755,7 +761,13 @@ export async function getCurrentProject(): Promise<HapioProject> {
 
 export interface HapioLocationPayload {
   name: string;
-  address?: string | null;
+  address?: string | null; // Deprecated: use address fields below
+  street1?: string | null;
+  street2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip?: string | null;
   timezone?: string | null;
   enabled?: boolean;
   metadata?: Record<string, unknown> | null;
@@ -780,7 +792,13 @@ export async function listLocations(params?: {
     data: response.data.map((l: any) => ({
       id: l.id,
       name: l.name,
-      address: l.address ?? null,
+      address: l.address ?? null, // Deprecated: for backwards compatibility
+      street1: l.street1 ?? l.street_1 ?? l.address_line_1 ?? null,
+      street2: l.street2 ?? l.street_2 ?? l.address_line_2 ?? null,
+      city: l.city ?? null,
+      state: l.state ?? null,
+      country: l.country ?? null,
+      zip: l.zip ?? l.postal_code ?? l.zip_code ?? null,
       timezone: l.time_zone ?? l.timezone ?? null, // Map time_zone to timezone
       enabled: Boolean(l.enabled),
       metadata: l.metadata ?? null,
@@ -793,7 +811,13 @@ export async function getLocation(id: string): Promise<HapioLocation> {
   return {
     id: response.id,
     name: response.name,
-    address: response.address ?? null,
+    address: response.address ?? null, // Deprecated: for backwards compatibility
+    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
+    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
+    city: response.city ?? null,
+    state: response.state ?? null,
+    country: response.country ?? null,
+    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
     timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
@@ -805,7 +829,37 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
     name: location.name,
   };
   
-  // Handle address: convert empty strings to null, omit if undefined
+  // Handle address fields: convert empty strings to null, omit if undefined
+  // Try multiple field name variations that Hapio might use
+  if (location.street1 !== undefined) {
+    const value = location.street1 === '' ? null : location.street1;
+    body.street1 = value;
+    body.street_1 = value; // Try snake_case
+    body.address_line_1 = value; // Try alternative format
+  }
+  if (location.street2 !== undefined) {
+    const value = location.street2 === '' ? null : location.street2;
+    body.street2 = value;
+    body.street_2 = value;
+    body.address_line_2 = value;
+  }
+  if (location.city !== undefined) {
+    body.city = location.city === '' ? null : location.city;
+  }
+  if (location.state !== undefined) {
+    body.state = location.state === '' ? null : location.state;
+  }
+  if (location.country !== undefined) {
+    body.country = location.country === '' ? null : location.country;
+  }
+  if (location.zip !== undefined) {
+    const value = location.zip === '' ? null : location.zip;
+    body.zip = value;
+    body.postal_code = value; // Try alternative format
+    body.zip_code = value;
+  }
+  
+  // Handle legacy address field for backwards compatibility
   if (location.address !== undefined) {
     body.address = location.address === '' ? null : location.address;
   }
@@ -846,7 +900,13 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
   return {
     id: response.id,
     name: response.name,
-    address: response.address ?? null,
+    address: response.address ?? null, // Deprecated: for backwards compatibility
+    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
+    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
+    city: response.city ?? null,
+    state: response.state ?? null,
+    country: response.country ?? null,
+    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
     timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
@@ -902,7 +962,13 @@ export async function updateLocation(
   const mappedResponse = {
     id: response.id,
     name: response.name,
-    address: response.address ?? null, // Hapio may not support address field
+    address: response.address ?? null, // Deprecated: for backwards compatibility
+    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
+    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
+    city: response.city ?? null,
+    state: response.state ?? null,
+    country: response.country ?? null,
+    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
     timezone: response.time_zone ?? response.timezone ?? null, // Support both formats
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
@@ -910,15 +976,35 @@ export async function updateLocation(
   
   // Compare request vs response to detect mismatches
   const requestResponseComparison = {
+    street1: {
+      requested: body.street1 ?? body.street_1 ?? body.address_line_1,
+      received: mappedResponse.street1,
+      match: (body.street1 ?? body.street_1 ?? body.address_line_1) === mappedResponse.street1,
+    },
+    city: {
+      requested: body.city,
+      received: mappedResponse.city,
+      match: body.city === mappedResponse.city,
+    },
+    state: {
+      requested: body.state,
+      received: mappedResponse.state,
+      match: body.state === mappedResponse.state,
+    },
+    zip: {
+      requested: body.zip ?? body.postal_code ?? body.zip_code,
+      received: mappedResponse.zip,
+      match: (body.zip ?? body.postal_code ?? body.zip_code) === mappedResponse.zip,
+    },
     address: {
       requested: body.address,
       received: mappedResponse.address,
       match: body.address === mappedResponse.address,
     },
     timezone: {
-      requested: body.timezone,
+      requested: body.time_zone ?? body.timezone,
       received: mappedResponse.timezone,
-      match: body.timezone === mappedResponse.timezone,
+      match: (body.time_zone ?? body.timezone) === mappedResponse.timezone,
     },
     name: {
       requested: body.name,
@@ -936,6 +1022,12 @@ export async function updateLocation(
     id: response.id,
     name: response.name,
     address: response.address,
+    street1: response.street1 ?? response.street_1 ?? response.address_line_1,
+    street2: response.street2 ?? response.street_2 ?? response.address_line_2,
+    city: response.city,
+    state: response.state,
+    country: response.country,
+    zip: response.zip ?? response.postal_code ?? response.zip_code,
     time_zone: response.time_zone,
     timezone: response.timezone,
     enabled: response.enabled,
@@ -1009,7 +1101,13 @@ export async function replaceLocation(
   return {
     id: response.id,
     name: response.name,
-    address: response.address ?? null,
+    address: response.address ?? null, // Deprecated: for backwards compatibility
+    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
+    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
+    city: response.city ?? null,
+    state: response.state ?? null,
+    country: response.country ?? null,
+    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
     timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,

@@ -44,6 +44,26 @@ export async function PATCH(
     
     // Compare request vs response to detect mismatches
     const requestResponseComparison = {
+      street1: {
+        requested: body.street1,
+        received: location.street1,
+        match: body.street1 === location.street1,
+      },
+      city: {
+        requested: body.city,
+        received: location.city,
+        match: body.city === location.city,
+      },
+      state: {
+        requested: body.state,
+        received: location.state,
+        match: body.state === location.state,
+      },
+      zip: {
+        requested: body.zip,
+        received: location.zip,
+        match: body.zip === location.zip,
+      },
       address: {
         requested: body.address,
         received: location.address,
@@ -69,7 +89,13 @@ export async function PATCH(
     console.log('[Location API] Update successful:', {
       locationId: location.id,
       name: location.name,
-      address: location.address,
+      street1: location.street1,
+      street2: location.street2,
+      city: location.city,
+      state: location.state,
+      country: location.country,
+      zip: location.zip,
+      address: location.address, // Deprecated
       timezone: location.timezone,
       enabled: location.enabled,
     });

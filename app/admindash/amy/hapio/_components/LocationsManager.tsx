@@ -130,17 +130,22 @@ export default function LocationsManager() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Address</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">City, State</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Timezone</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand">
-              {locations.map((location) => (
-                <tr key={location.id} className="hover:bg-sand/20">
-                  <td className="px-4 py-3 text-sm font-medium text-charcoal">{location.name}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">{location.address || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">{location.timezone || '—'}</td>
+              {locations.map((location) => {
+                const addressLine1 = location.street1 || location.address || '';
+                const cityState = [location.city, location.state].filter(Boolean).join(', ') || '—';
+                return (
+                  <tr key={location.id} className="hover:bg-sand/20">
+                    <td className="px-4 py-3 text-sm font-medium text-charcoal">{location.name}</td>
+                    <td className="px-4 py-3 text-sm text-warm-gray">{addressLine1 || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-warm-gray">{cityState}</td>
+                    <td className="px-4 py-3 text-sm text-warm-gray">{location.timezone || '—'}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -169,7 +174,8 @@ export default function LocationsManager() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
