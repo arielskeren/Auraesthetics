@@ -61,14 +61,87 @@ export default function RecurringSchedulesEditor({
 
   const loadExistingSchedules = async () => {
     try {
-      // Load existing recurring schedules and blocks
+      // Load existing recurring schedules
       const response = await fetch(
         `/api/admin/hapio/resources/${resourceId}/recurring-schedules?per_page=100`
       );
       if (response.ok) {
         const data = await response.json();
-        // TODO: Parse and populate schedules from API response
-        // This will be updated once we have the exact API structure
+        const schedulesList = data.data || [];
+        
+        console.log('[RecurringSchedulesEditor] Loaded schedules:', schedulesList);
+        
+        if (schedulesList.length > 0) {
+          // Use the first schedule (or most recent) to populate the form
+          const firstSchedule = schedulesList[0];
+          
+          // Set date range if available
+          if (firstSchedule.start_date) {
+            setStartDate(firstSchedule.start_date.split('T')[0]);
+          }
+          if (firstSchedule.end_date) {
+            setEndDate(firstSchedule.end_date.split('T')[0]);
+            setEndDateType('date');
+          } else {
+            setEndDateType('indefinite');
+          }
+          
+          // Load blocks for this schedule
+          if (firstSchedule.id) {
+            try {
+              const blocksResponse = await fetch(
+                `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?recurring_schedule_id=${firstSchedule.id}&per_page=100`
+              );
+              
+              if (blocksResponse.ok) {
+                const blocksData = await blocksResponse.json();
+                const blocks = blocksData.data || [];
+                
+                console.log('[RecurringSchedulesEditor] Loaded blocks:', blocks);
+                
+                // Populate the day schedules from blocks
+                const newSchedules = [...schedules];
+                
+                blocks.forEach((block: any) => {
+                  // Convert Hapio weekday (1-7, Monday-Sunday) to our format (0-6, Sunday-Saturday)
+                  const hapioWeekday = block.weekday ?? block.day_of_week;
+                  let dayOfWeek: number;
+                  if (hapioWeekday === 7) {
+                    dayOfWeek = 0; // Sunday
+                  } else {
+                    dayOfWeek = hapioWeekday; // Monday-Saturday
+                  }
+                  
+                  // Find the day index
+                  const dayIndex = DAYS.findIndex(day => day.value === dayOfWeek);
+                  if (dayIndex !== -1) {
+                    // Parse time from HH:mm:ss to HH:mm
+                    const parseTime = (time: string | null | undefined): string => {
+                      if (!time) return '09:00';
+                      const parts = time.split(':');
+                      return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : time;
+                    };
+                    
+                    // Get service IDs from metadata
+                    const serviceIds = (block.metadata?.service_ids as string[]) || [];
+                    
+                    newSchedules[dayIndex] = {
+                      dayOfWeek,
+                      startTime: parseTime(block.start_time),
+                      endTime: parseTime(block.end_time),
+                      enabled: true,
+                      serviceIds,
+                    };
+                  }
+                });
+                
+                setSchedules(newSchedules);
+              }
+            } catch (blockErr) {
+              console.warn('[RecurringSchedulesEditor] Error loading blocks:', blockErr);
+            }
+          }
+        }
       } else if (response.status === 404) {
         // 404 is expected if no schedules exist yet - silently ignore
         return;

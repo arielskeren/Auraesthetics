@@ -27,20 +27,48 @@ export async function GET(request: NextRequest) {
 
     // 1. Try to list recurring schedules
     try {
+      // Get raw response directly from API to see all fields
+      const rawSchedulesResponse = await fetch(
+        `https://eu-central-1.hapio.net/v1/resources/${resourceId}/recurring-schedules`,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.HAPIO_API_TOKEN}`,
+            'Accept': 'application/json',
+          },
+        }
+      );
+      const rawSchedulesData = await rawSchedulesResponse.json();
+      
       const schedules = await listRecurringSchedules('resource', resourceId);
       results.recurring_schedules = {
         count: schedules.data?.length || 0,
         sample: schedules.data?.[0] || null,
         full_response_structure: schedules.data?.[0] ? Object.keys(schedules.data[0]) : [],
+        raw_api_response_sample: rawSchedulesData.data?.[0] || null,
+        raw_api_all_fields: rawSchedulesData.data?.[0] ? Object.keys(rawSchedulesData.data[0]) : [],
       };
       
-      // If we have a schedule, try to get it individually
+      // If we have a schedule, try to get it individually - get raw response
       if (schedules.data?.[0]?.id) {
-        const schedule = await getRecurringSchedule('resource', resourceId, schedules.data[0].id);
+        const scheduleId = schedules.data[0].id;
+        const rawScheduleResponse = await fetch(
+          `https://eu-central-1.hapio.net/v1/resources/${resourceId}/recurring-schedules/${scheduleId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.HAPIO_API_TOKEN}`,
+              'Accept': 'application/json',
+            },
+          }
+        );
+        const rawScheduleData = await rawScheduleResponse.json();
+        
+        const schedule = await getRecurringSchedule('resource', resourceId, scheduleId);
         results.recurring_schedule_detail = {
           id: schedule.id,
           all_fields: Object.keys(schedule),
           full_object: schedule,
+          raw_api_response: rawScheduleData,
+          raw_api_all_fields: Object.keys(rawScheduleData),
         };
       }
     } catch (error: any) {
@@ -56,6 +84,18 @@ export async function GET(request: NextRequest) {
       const scheduleIdForBlocks = scheduleId || recurringSchedules?.sample?.id;
       
       if (scheduleIdForBlocks) {
+        // Get raw response directly from API
+        const rawBlocksResponse = await fetch(
+          `https://eu-central-1.hapio.net/v1/resources/${resourceId}/recurring-schedules/${scheduleIdForBlocks}/schedule-blocks`,
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.HAPIO_API_TOKEN}`,
+              'Accept': 'application/json',
+            },
+          }
+        );
+        const rawBlocksData = await rawBlocksResponse.json();
+        
         const blocks = await listRecurringScheduleBlocks(
           'resource',
           resourceId,
@@ -66,14 +106,28 @@ export async function GET(request: NextRequest) {
           count: blocks.data?.length || 0,
           sample: blocks.data?.[0] || null,
           full_response_structure: blocks.data?.[0] ? Object.keys(blocks.data[0]) : [],
+          raw_api_response_sample: rawBlocksData.data?.[0] || null,
+          raw_api_all_fields: rawBlocksData.data?.[0] ? Object.keys(rawBlocksData.data[0]) : [],
         };
 
-        // If we have a block, try to get it individually
+        // If we have a block, try to get it individually - get raw response
         if (blocks.data?.[0]?.id) {
+          const blockId = blocks.data[0].id;
+          const rawBlockResponse = await fetch(
+            `https://eu-central-1.hapio.net/v1/resources/${resourceId}/recurring-schedules/${scheduleIdForBlocks}/schedule-blocks/${blockId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${process.env.HAPIO_API_TOKEN}`,
+                'Accept': 'application/json',
+              },
+            }
+          );
+          const rawBlockData = await rawBlockResponse.json();
+          
           const block = await getRecurringScheduleBlock(
             'resource',
             resourceId,
-            blocks.data[0].id,
+            blockId,
             scheduleIdForBlocks
           );
           results.recurring_schedule_block_detail = {
@@ -86,6 +140,11 @@ export async function GET(request: NextRequest) {
             end_time_format: block.end_time,
             start_time_length: block.start_time?.length,
             end_time_length: block.end_time?.length,
+            raw_api_response: rawBlockData,
+            raw_api_all_fields: Object.keys(rawBlockData),
+            raw_weekday_value: rawBlockData.weekday ?? rawBlockData.day_of_week,
+            raw_start_time: rawBlockData.start_time,
+            raw_end_time: rawBlockData.end_time,
           };
         }
       } else {
