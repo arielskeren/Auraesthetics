@@ -69,9 +69,16 @@ export default function RecurringScheduleBlocksEditor({
         const data = await response.json();
         // TODO: Parse and populate schedules from API response
         // This will be updated once we have the exact API structure
+      } else if (response.status === 404) {
+        // 404 is expected if no blocks exist yet - silently ignore
+        return;
+      } else {
+        // Other errors - log but don't show to user
+        console.warn('[RecurringScheduleBlocksEditor] Failed to load existing blocks:', response.status);
       }
     } catch (err) {
       // Silently fail - will create new blocks
+      console.warn('[RecurringScheduleBlocksEditor] Error loading existing blocks:', err);
     }
   };
 

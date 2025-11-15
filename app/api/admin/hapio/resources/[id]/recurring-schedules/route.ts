@@ -24,6 +24,29 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error: any) {
+    // Handle 404 errors gracefully - return empty array if endpoint doesn't exist
+    if (error?.status === 404 || error?.response?.status === 404) {
+      const { searchParams } = new URL(request.url);
+      const perPage = searchParams.get('per_page') ? Number(searchParams.get('per_page')) : 20;
+      return NextResponse.json({
+        data: [],
+        meta: {
+          current_page: 1,
+          last_page: 1,
+          per_page: perPage,
+          total: 0,
+          from: null,
+          to: null,
+        },
+        links: {
+          first: null,
+          last: null,
+          prev: null,
+          next: null,
+        },
+      });
+    }
+
     console.error('[Hapio] Failed to list recurring schedules', error);
     const message = typeof error?.message === 'string' ? error.message : 'Failed to retrieve recurring schedules';
     const status = Number(error?.status) || 500;

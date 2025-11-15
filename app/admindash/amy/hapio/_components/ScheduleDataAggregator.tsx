@@ -43,9 +43,13 @@ export async function fetchScheduleData(
     : [];
   const recurringScheduleBlocks = recurringBlocksRes.ok
     ? (await recurringBlocksRes.json()).data || []
+    : recurringBlocksRes.status === 404
+    ? [] // 404 is expected if no blocks exist yet
     : [];
   const scheduleBlocks = scheduleBlocksRes.ok
     ? (await scheduleBlocksRes.json()).data || []
+    : scheduleBlocksRes.status === 404
+    ? [] // 404 is expected if no blocks exist yet
     : [];
 
   return {

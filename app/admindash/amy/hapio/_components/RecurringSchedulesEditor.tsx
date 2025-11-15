@@ -69,9 +69,16 @@ export default function RecurringSchedulesEditor({
         const data = await response.json();
         // TODO: Parse and populate schedules from API response
         // This will be updated once we have the exact API structure
+      } else if (response.status === 404) {
+        // 404 is expected if no schedules exist yet - silently ignore
+        return;
+      } else {
+        // Other errors - log but don't show to user
+        console.warn('[RecurringSchedulesEditor] Failed to load existing schedules:', response.status);
       }
     } catch (err) {
       // Silently fail - will create new schedules
+      console.warn('[RecurringSchedulesEditor] Error loading existing schedules:', err);
     }
   };
 
