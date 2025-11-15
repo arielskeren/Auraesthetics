@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAvailability } from '@/lib/hapioClient';
 import { getHapioServiceConfig } from '@/lib/hapioServiceCatalog';
+import { getOutlookBusySlots } from '@/lib/outlookClient';
 
 type CacheKey = string;
 
@@ -12,6 +13,7 @@ interface CacheEntry {
 const availabilityCache = new Map<CacheKey, CacheEntry>();
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const MAX_CACHE_TTL_MS = 60_000;
+const OUTLOOK_SYNC_ENABLED = process.env.OUTLOOK_SYNC_ENABLED !== 'false';
 
 function resolveCacheTtl(): number {
   const envValue = process.env.HAPIO_AVAILABILITY_CACHE_TTL_MS;
@@ -71,6 +73,30 @@ function buildCacheKey(parts: Record<string, string | number | null | undefined>
     .map(([key, value]) => `${key}=${value ?? ''}`)
     .sort()
     .join('&');
+}
+
+function toTimestamp(value: string | null | undefined): number {
+  if (!value) return Number.NaN;
+  const date = new Date(value);
+  return date.getTime();
+}
+
+function intervalsOverlap(slotStart: string, slotEnd: string, busyStart: string, busyEnd: string): boolean {
+  const startA = toTimestamp(slotStart);
+  const endA = toTimestamp(slotEnd);
+  const startB = toTimestamp(busyStart);
+  const endB = toTimestamp(busyEnd);
+  if (
+    Number.isNaN(startA) ||
+    Number.isNaN(endA) ||
+    Number.isNaN(startB) ||
+    Number.isNaN(endB) ||
+    endA <= startA ||
+    endB <= startB
+  ) {
+    return false;
+  }
+  return Math.max(startA, startB) < Math.min(endA, endB);
 }
 
 export async function GET(request: NextRequest) {
@@ -161,13 +187,34 @@ export async function GET(request: NextRequest) {
       page,
     });
 
+    let outlookBusy: { start: string; end: string }[] = [];
+    if (OUTLOOK_SYNC_ENABLED) {
+      try {
+        outlookBusy = await getOutlookBusySlots({
+          from: fromIso,
+          to: toIso,
+          timeZone: timezone,
+        });
+      } catch (error) {
+        console.error('[Outlook] Failed to retrieve busy slots', error);
+      }
+    }
+
+    const filteredSlotEntities =
+      outlookBusy.length > 0
+        ? availability.slots.filter(
+            (slot) =>
+              outlookBusy.every((block) => !intervalsOverlap(slot.startsAt, slot.endsAt, block.start, block.end))
+          )
+        : availability.slots;
+
     const payload = {
       service: {
         slug: slug ?? null,
         serviceId,
         locationId,
       },
-      availability: availability.slots.map((slot) => ({
+      availability: filteredSlotEntities.map((slot) => ({
         start: slot.startsAt,
         end: slot.endsAt,
         bufferStart: slot.bufferStartsAt,
@@ -186,6 +233,10 @@ export async function GET(request: NextRequest) {
         range: {
           from: fromIso,
           to: toIso,
+        },
+        outlook: {
+          enabled: OUTLOOK_SYNC_ENABLED,
+          busyBlocks: outlookBusy.length,
         },
         cache: {
           ttlMs: cacheTtl,

@@ -7,6 +7,8 @@ interface Booking {
   id: string;
   cal_booking_id: string | null;
   hapio_booking_id: string | null;
+  outlook_event_id: string | null;
+  outlook_sync_status: string | null;
   service_name: string;
   client_name: string | null;
   client_email: string | null;
@@ -282,6 +284,18 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                   <p className="text-xs text-warm-gray mt-1">
                     Legacy Cal.com ID:{' '}
                     <span className="font-mono">{booking.cal_booking_id}</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm text-warm-gray">Outlook Sync</label>
+                <p className="font-medium text-charcoal text-sm">
+                  {booking.outlook_sync_status ? booking.outlook_sync_status : 'Not synced'}
+                </p>
+                {booking.outlook_event_id && (
+                  <p className="text-xs text-warm-gray mt-1">
+                    Event ID:{' '}
+                    <span className="font-mono break-all">{booking.outlook_event_id}</span>
                   </p>
                 )}
               </div>

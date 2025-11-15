@@ -8,6 +8,8 @@ interface Booking {
   id: string;
   cal_booking_id: string | null;
   hapio_booking_id: string | null;
+  outlook_event_id: string | null;
+  outlook_sync_status: string | null;
   service_name: string;
   client_name: string | null;
   client_email: string | null;
@@ -22,6 +24,8 @@ interface Booking {
   payment_status: string;
   payment_intent_id: string | null;
   created_at: string;
+  updated_at?: string;
+  metadata?: any;
 }
 
 export default function AdminDashboardClient() {
@@ -98,7 +102,8 @@ export default function AdminDashboardClient() {
         b.client_email?.toLowerCase().includes(query) ||
         b.service_name?.toLowerCase().includes(query) ||
         b.hapio_booking_id?.toLowerCase().includes(query) ||
-        b.cal_booking_id?.toLowerCase().includes(query)
+        b.cal_booking_id?.toLowerCase().includes(query) ||
+        b.outlook_event_id?.toLowerCase().includes(query)
       );
     }
 
@@ -163,6 +168,26 @@ export default function AdminDashboardClient() {
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getOutlookStatusBadge = (status: string | null | undefined) => {
+    const normalized = (status ?? '').toLowerCase();
+    switch (normalized) {
+      case 'synced':
+      case 'created':
+      case 'updated':
+        return { className: 'bg-green-100 text-green-700', label: 'Synced' };
+      case 'cancelled':
+      case 'deleted':
+        return { className: 'bg-gray-100 text-gray-700', label: 'Removed' };
+      case 'skipped':
+        return { className: 'bg-yellow-100 text-yellow-700', label: 'Skipped' };
+      case 'error':
+      case 'delete_failed':
+        return { className: 'bg-red-100 text-red-700', label: 'Error' };
+      default:
+        return { className: 'bg-sand/40 text-charcoal', label: 'Not synced' };
     }
   };
 
@@ -379,7 +404,7 @@ export default function AdminDashboardClient() {
                     Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-charcoal uppercase tracking-wider">
-                    Booking IDs
+                    Booking IDs / Sync
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-charcoal uppercase tracking-wider">
                     Actions
@@ -394,7 +419,9 @@ export default function AdminDashboardClient() {
                     </td>
                   </tr>
                 ) : (
-                  filteredBookings.map((booking) => (
+                  filteredBookings.map((booking) => {
+                    const outlookStatus = getOutlookStatusBadge(booking.outlook_sync_status);
+                    return (
                     <tr 
                       key={booking.id} 
                       className="hover:bg-sand/20 cursor-pointer"
@@ -473,15 +500,25 @@ export default function AdminDashboardClient() {
                           {booking.payment_status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-warm-gray">
+                      <td className="px-6 py-4 text-xs text-warm-gray space-y-1">
                         <div className="font-mono break-all">
-                          {booking.hapio_booking_id || 'No Hapio ID'}
+                          Hapio: {booking.hapio_booking_id || 'none'}
                         </div>
                         {booking.cal_booking_id && (
-                          <div className="font-mono break-all text-warm-gray/80 mt-1">
+                          <div className="font-mono break-all text-warm-gray/80">
                             Cal: {booking.cal_booking_id}
                           </div>
                         )}
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${outlookStatus.className}`}>
+                            Outlook: {outlookStatus.label}
+                          </span>
+                          {booking.outlook_event_id && (
+                            <span className="font-mono text-[10px] text-warm-gray/70">
+                              {booking.outlook_event_id.slice(0, 8)}…
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <button
@@ -497,7 +534,8 @@ export default function AdminDashboardClient() {
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

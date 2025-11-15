@@ -50,6 +50,17 @@ HAPIO_SECRET=your_hapio_webhook_secret
 # Stripe
 STRIPE_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+
+# Outlook Calendar Sync
+OUTLOOK_CLIENT_ID=your_azure_app_id
+OUTLOOK_CLIENT_SECRET=your_outlook_client_secret
+OUTLOOK_TENANT_ID=your_tenant_id
+OUTLOOK_REDIRECT_URI=http://localhost:9999/api/auth/outlook/callback
+OUTLOOK_SCOPES=offline_access User.Read Calendars.ReadWrite
+# Optional: set to the mailbox you want to sync (defaults to current user)
+OUTLOOK_CALENDAR_USER=me
+# Set to 'false' to temporarily disable Outlook syncing without removing tokens
+OUTLOOK_SYNC_ENABLED=true
 ```
 
 ### Development
@@ -99,6 +110,7 @@ The site is deployed to Vercel and automatically updates on push to `main` branc
 - **Workflow:** Availability → temporary booking lock → payment → Hapio confirm/cancel via webhooks
 - **Webhooks:** `/api/webhooks/stripe` (Stripe) and `/api/webhooks/hapio` (Hapio booking events)
 - **Management:** Admin dashboard uses Hapio IDs; legacy Cal.com data archived in `docs/archive/cal-com/`
+- **Calendar Sync:** OAuth once via `/api/auth/outlook/start`, tokens stored in Postgres (`integration_tokens`), events created/cancelled automatically, and Outlook busy blocks removed from availability.
 
 ## 💻 Project Structure
 

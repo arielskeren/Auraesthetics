@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
+import { deleteOutlookEventForBooking } from '@/lib/outlookBookingSync';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
 });
+
+const OUTLOOK_SYNC_ENABLED = process.env.OUTLOOK_SYNC_ENABLED !== 'false';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -15,6 +18,10 @@ function normalizeRows(result: any): any[] {
     return (result as any).rows;
   }
   return [];
+}
+
+function ensureObject<T extends Record<string, any>>(value: any): T {
+  return value && typeof value === 'object' ? { ...(value as T) } : ({} as T);
 }
 
 // GET /api/admin/bookings/[id] - Get booking details and client history
@@ -117,6 +124,14 @@ export async function POST(
       let refundProcessed = false;
       let refundId = null;
 
+      const existingMetadata = ensureObject<Record<string, any>>(bookingData.metadata);
+      const existingOutlookMeta = ensureObject<Record<string, any>>(existingMetadata.outlook);
+      let outlookEventId = bookingData.outlook_event_id ?? existingOutlookMeta.eventId ?? null;
+      let outlookSyncStatus = bookingData.outlook_sync_status ?? existingOutlookMeta.status ?? null;
+      let outlookLastAttemptAt = existingOutlookMeta.lastAttemptAt ?? null;
+      let outlookLastAction = existingOutlookMeta.lastAction ?? null;
+      let outlookError = existingOutlookMeta.error ?? null;
+
       // If booking is paid, process refund first
       if (bookingData.payment_status === 'paid' && bookingData.payment_intent_id) {
         try {
@@ -148,9 +163,42 @@ export async function POST(
         }
       }
 
+      if (OUTLOOK_SYNC_ENABLED && outlookEventId) {
+        const attemptAt = new Date().toISOString();
+        outlookLastAttemptAt = attemptAt;
+        const removed = await deleteOutlookEventForBooking({
+          id: bookingData.id,
+          service_id: bookingData.service_id ?? null,
+          service_name: bookingData.service_name ?? null,
+          client_name: bookingData.client_name ?? null,
+          client_email: bookingData.client_email ?? null,
+          metadata: existingMetadata,
+          booking_date: bookingData.booking_date ?? null,
+          outlook_event_id: outlookEventId,
+        });
+        if (removed) {
+          outlookEventId = null;
+          outlookSyncStatus = 'cancelled';
+          outlookLastAction = 'deleted';
+          outlookError = null;
+        } else {
+          outlookSyncStatus = 'error';
+          outlookLastAction = 'delete_failed';
+          outlookError = 'Failed to delete Outlook event';
+        }
+      }
+
       let updatedMetadata: any = {
-        ...(bookingData.metadata || {}),
+        ...existingMetadata,
         cancelledAt: new Date().toISOString(),
+        outlook: {
+          ...existingOutlookMeta,
+          eventId: outlookEventId,
+          status: outlookSyncStatus,
+          lastAttemptAt: outlookLastAttemptAt,
+          lastAction: outlookLastAction,
+          error: outlookError,
+        },
       };
       
       if (refundProcessed && refundId) {
@@ -161,6 +209,13 @@ export async function POST(
         UPDATE bookings
         SET 
           payment_status = 'cancelled',
+          outlook_event_id = ${outlookEventId},
+          outlook_sync_status = ${outlookSyncStatus ?? null},
+          outlook_sync_log = ${JSON.stringify({
+            lastAction: outlookLastAction,
+            lastAttemptAt: outlookLastAttemptAt,
+            error: outlookError,
+          })}::jsonb,
           metadata = ${JSON.stringify(updatedMetadata)}::jsonb,
           updated_at = NOW()
         WHERE id = ${bookingId}

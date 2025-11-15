@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
         id,
         cal_booking_id,
         hapio_booking_id,
+        outlook_event_id,
+        outlook_sync_status,
         service_id,
         service_name,
         client_name,
@@ -29,6 +31,7 @@ export async function GET(request: NextRequest) {
         payment_type,
         payment_status,
         payment_intent_id,
+        metadata,
         created_at,
         updated_at
       FROM bookings
