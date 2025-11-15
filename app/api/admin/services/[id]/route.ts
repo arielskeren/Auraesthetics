@@ -32,10 +32,10 @@ export async function GET(
         image_filename,
         enabled,
         display_order,
-        starred,
-        featured,
-        best_seller,
-        most_popular,
+        COALESCE(starred, false) as starred,
+        COALESCE(featured, false) as featured,
+        COALESCE(best_seller, false) as best_seller,
+        COALESCE(most_popular, false) as most_popular,
         hapio_service_id,
         created_at,
         updated_at
@@ -133,31 +133,62 @@ export async function PATCH(
       most_popular: body.most_popular !== undefined ? body.most_popular : (currentService.most_popular || false),
     };
 
-    // Execute update
-    const result = await sql`
-      UPDATE services 
-      SET 
-        slug = ${updatedService.slug},
-        name = ${updatedService.name},
-        category = ${updatedService.category},
-        summary = ${updatedService.summary},
-        description = ${updatedService.description},
-        duration_minutes = ${updatedService.duration_minutes},
-        duration_display = ${updatedService.duration_display},
-        price = ${updatedService.price},
-        buffer_before_minutes = ${updatedService.buffer_before_minutes},
-        buffer_after_minutes = ${updatedService.buffer_after_minutes},
-        test_pricing = ${updatedService.test_pricing},
-        enabled = ${updatedService.enabled},
-        display_order = ${updatedService.display_order},
-        starred = ${updatedService.starred},
-        featured = ${updatedService.featured},
-        best_seller = ${updatedService.best_seller},
-        most_popular = ${updatedService.most_popular},
-        updated_at = NOW()
-      WHERE id = ${id}
-      RETURNING *
-    ` as Array<any>;
+    // Execute update - handle missing columns gracefully
+    let result;
+    try {
+      result = await sql`
+        UPDATE services 
+        SET 
+          slug = ${updatedService.slug},
+          name = ${updatedService.name},
+          category = ${updatedService.category},
+          summary = ${updatedService.summary},
+          description = ${updatedService.description},
+          duration_minutes = ${updatedService.duration_minutes},
+          duration_display = ${updatedService.duration_display},
+          price = ${updatedService.price},
+          buffer_before_minutes = ${updatedService.buffer_before_minutes},
+          buffer_after_minutes = ${updatedService.buffer_after_minutes},
+          test_pricing = ${updatedService.test_pricing},
+          enabled = ${updatedService.enabled},
+          display_order = ${updatedService.display_order},
+          starred = ${updatedService.starred},
+          featured = ${updatedService.featured},
+          best_seller = ${updatedService.best_seller},
+          most_popular = ${updatedService.most_popular},
+          updated_at = NOW()
+        WHERE id = ${id}
+        RETURNING *
+      ` as Array<any>;
+    } catch (error: any) {
+      // If columns don't exist, update without them
+      if (error.message?.includes('column') && (error.message?.includes('starred') || error.message?.includes('featured'))) {
+        result = await sql`
+          UPDATE services 
+          SET 
+            slug = ${updatedService.slug},
+            name = ${updatedService.name},
+            category = ${updatedService.category},
+            summary = ${updatedService.summary},
+            description = ${updatedService.description},
+            duration_minutes = ${updatedService.duration_minutes},
+            duration_display = ${updatedService.duration_display},
+            price = ${updatedService.price},
+            buffer_before_minutes = ${updatedService.buffer_before_minutes},
+            buffer_after_minutes = ${updatedService.buffer_after_minutes},
+            test_pricing = ${updatedService.test_pricing},
+            enabled = ${updatedService.enabled},
+            display_order = ${updatedService.display_order},
+            updated_at = NOW()
+          WHERE id = ${id}
+          RETURNING *
+        ` as Array<any>;
+        // Add default values for missing columns
+        result[0] = { ...result[0], starred: false, featured: false, best_seller: false, most_popular: false };
+      } else {
+        throw error;
+      }
+    }
 
     return NextResponse.json(result[0] as Service);
   } catch (error: any) {

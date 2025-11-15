@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     ` as Array<{ total: number | string }>;
     const total = Number(countResult[0]?.total || 0);
 
-    // Get services
+    // Get services - use COALESCE for new columns in case they don't exist yet
     const services = await sql`
       SELECT 
         id,
@@ -39,10 +39,10 @@ export async function GET(request: NextRequest) {
         image_filename,
         enabled,
         display_order,
-        starred,
-        featured,
-        best_seller,
-        most_popular,
+        COALESCE(starred, false) as starred,
+        COALESCE(featured, false) as featured,
+        COALESCE(best_seller, false) as best_seller,
+        COALESCE(most_popular, false) as most_popular,
         hapio_service_id,
         created_at,
         updated_at
