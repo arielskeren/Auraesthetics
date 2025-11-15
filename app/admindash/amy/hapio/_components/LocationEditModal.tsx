@@ -13,12 +13,6 @@ interface LocationEditModalProps {
 export default function LocationEditModal({ location, onClose, onSave }: LocationEditModalProps) {
   const [formData, setFormData] = useState({
     name: '',
-    street1: '',
-    street2: '',
-    city: '',
-    state: '',
-    country: '',
-    zip: '',
     timezone: 'UTC',
     enabled: true,
   });
@@ -37,12 +31,6 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       console.log('[Location Edit Modal] Location prop updated:', location);
       setFormData({
         name: location.name || '',
-        street1: location.street1 || location.address || '',
-        street2: location.street2 || '',
-        city: location.city || '',
-        state: location.state || '',
-        country: location.country || '',
-        zip: location.zip || '',
         timezone: location.timezone || 'UTC',
         enabled: location.enabled !== false,
       });
@@ -50,12 +38,6 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       // Only reset form for new location if we're not showing success
       setFormData({
         name: '',
-        street1: '',
-        street2: '',
-        city: '',
-        state: '',
-        country: '',
-        zip: '',
         timezone: 'UTC',
         enabled: true,
       });
@@ -68,12 +50,6 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
     // Normalize form data: convert empty strings to null for optional fields
     const dataToSave = {
       name: formData.name,
-      street1: formData.street1 === '' ? null : formData.street1,
-      street2: formData.street2 === '' ? null : formData.street2,
-      city: formData.city === '' ? null : formData.city,
-      state: formData.state === '' ? null : formData.state,
-      country: formData.country === '' ? null : formData.country,
-      zip: formData.zip === '' ? null : formData.zip,
       timezone: formData.timezone === '' ? null : formData.timezone,
       enabled: formData.enabled,
     };
@@ -81,15 +57,6 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
     console.log('[Location Edit Modal] Form submission:', {
       originalFormData: formData,
       normalizedData: dataToSave,
-      emptyStringNormalized: {
-        street1: formData.street1 === '' ? 'converted to null' : 'unchanged',
-        street2: formData.street2 === '' ? 'converted to null' : 'unchanged',
-        city: formData.city === '' ? 'converted to null' : 'unchanged',
-        state: formData.state === '' ? 'converted to null' : 'unchanged',
-        country: formData.country === '' ? 'converted to null' : 'unchanged',
-        zip: formData.zip === '' ? 'converted to null' : 'unchanged',
-        timezone: formData.timezone === '' ? 'converted to null' : 'unchanged',
-      },
     });
     
     setLoading(true);
@@ -133,12 +100,6 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         console.log('[Location Edit] Updating form with saved location:', savedLocation);
         setFormData({
           name: savedLocation.name || '',
-          street1: savedLocation.street1 || savedLocation.address || '',
-          street2: savedLocation.street2 || '',
-          city: savedLocation.city || '',
-          state: savedLocation.state || '',
-          country: savedLocation.country || '',
-          zip: savedLocation.zip || '',
           timezone: savedLocation.timezone || 'UTC',
           enabled: savedLocation.enabled !== false,
         });
@@ -203,80 +164,6 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
             />
-          </div>
-
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-charcoal mb-2">Address</label>
-            
-            <div>
-              <label className="block text-xs font-medium text-warm-gray mb-1">Street Address 1</label>
-              <input
-                type="text"
-                value={formData.street1}
-                onChange={(e) => setFormData({ ...formData, street1: e.target.value })}
-                placeholder="123 Main Street"
-                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-medium text-warm-gray mb-1">Street Address 2 (Optional)</label>
-              <input
-                type="text"
-                value={formData.street2}
-                onChange={(e) => setFormData({ ...formData, street2: e.target.value })}
-                placeholder="Suite 100"
-                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-warm-gray mb-1">City</label>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  placeholder="Fort Lauderdale"
-                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-warm-gray mb-1">State</label>
-                <input
-                  type="text"
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  placeholder="FL"
-                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-warm-gray mb-1">ZIP Code</label>
-                <input
-                  type="text"
-                  value={formData.zip}
-                  onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
-                  placeholder="33301"
-                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-warm-gray mb-1">Country</label>
-                <input
-                  type="text"
-                  value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                  placeholder="USA"
-                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                />
-              </div>
-            </div>
           </div>
 
           <div>

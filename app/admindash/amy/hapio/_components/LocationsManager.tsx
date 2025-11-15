@@ -129,8 +129,6 @@ export default function LocationsManager() {
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Address</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">City, State</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Timezone</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
@@ -138,13 +136,9 @@ export default function LocationsManager() {
             </thead>
             <tbody className="divide-y divide-sand">
               {locations.map((location) => {
-                const addressLine1 = location.street1 || location.address || '';
-                const cityState = [location.city, location.state].filter(Boolean).join(', ') || '—';
                 return (
                   <tr key={location.id} className="hover:bg-sand/20">
                     <td className="px-4 py-3 text-sm font-medium text-charcoal">{location.name}</td>
-                    <td className="px-4 py-3 text-sm text-warm-gray">{addressLine1 || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-warm-gray">{cityState}</td>
                     <td className="px-4 py-3 text-sm text-warm-gray">{location.timezone || '—'}</td>
                   <td className="px-4 py-3">
                     <span

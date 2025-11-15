@@ -789,35 +789,39 @@ export async function listLocations(params?: {
 
   return {
     ...response,
-    data: response.data.map((l: any) => ({
-      id: l.id,
-      name: l.name,
-      address: l.address ?? null, // Deprecated: for backwards compatibility
-      street1: l.street1 ?? l.street_1 ?? l.address_line_1 ?? null,
-      street2: l.street2 ?? l.street_2 ?? l.address_line_2 ?? null,
-      city: l.city ?? null,
-      state: l.state ?? null,
-      country: l.country ?? null,
-      zip: l.zip ?? l.postal_code ?? l.zip_code ?? null,
-      timezone: l.time_zone ?? l.timezone ?? null, // Map time_zone to timezone
-      enabled: Boolean(l.enabled),
-      metadata: l.metadata ?? null,
-    })),
+    data: response.data.map((l: any) => {
+      // Note: Address fields are NOT stored in Hapio - they're managed separately
+      return {
+        id: l.id,
+        name: l.name,
+        address: null, // Address fields not supported by Hapio
+        street1: null,
+        street2: null,
+        city: null,
+        state: null,
+        country: null,
+        zip: null,
+        timezone: l.time_zone ?? l.timezone ?? null, // Map time_zone to timezone
+        enabled: Boolean(l.enabled),
+        metadata: l.metadata ?? null,
+      };
+    }),
   };
 }
 
 export async function getLocation(id: string): Promise<HapioLocation> {
   const response = await requestJson<any>('get', `locations/${id}`);
+  // Note: Address fields are NOT stored in Hapio - they're managed separately
   return {
     id: response.id,
     name: response.name,
-    address: response.address ?? null, // Deprecated: for backwards compatibility
-    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
-    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
-    city: response.city ?? null,
-    state: response.state ?? null,
-    country: response.country ?? null,
-    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
+    address: null, // Address fields not supported by Hapio
+    street1: null,
+    street2: null,
+    city: null,
+    state: null,
+    country: null,
+    zip: null,
     timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
@@ -829,40 +833,7 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
     name: location.name,
   };
   
-  // Handle address fields: convert empty strings to null, omit if undefined
-  // Try multiple field name variations that Hapio might use
-  if (location.street1 !== undefined) {
-    const value = location.street1 === '' ? null : location.street1;
-    body.street1 = value;
-    body.street_1 = value; // Try snake_case
-    body.address_line_1 = value; // Try alternative format
-  }
-  if (location.street2 !== undefined) {
-    const value = location.street2 === '' ? null : location.street2;
-    body.street2 = value;
-    body.street_2 = value;
-    body.address_line_2 = value;
-  }
-  if (location.city !== undefined) {
-    body.city = location.city === '' ? null : location.city;
-  }
-  if (location.state !== undefined) {
-    body.state = location.state === '' ? null : location.state;
-  }
-  if (location.country !== undefined) {
-    body.country = location.country === '' ? null : location.country;
-  }
-  if (location.zip !== undefined) {
-    const value = location.zip === '' ? null : location.zip;
-    body.zip = value;
-    body.postal_code = value; // Try alternative format
-    body.zip_code = value;
-  }
-  
-  // Handle legacy address field for backwards compatibility
-  if (location.address !== undefined) {
-    body.address = location.address === '' ? null : location.address;
-  }
+  // Note: Address fields are NOT sent to Hapio - they're managed separately
   
   // Handle timezone: convert empty strings to null, omit if undefined
   // Hapio API uses time_zone (snake_case) in responses, but may accept timezone (camelCase) in requests
@@ -875,12 +846,20 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
   }
   
   if (location.enabled !== undefined) body.enabled = location.enabled;
+  
+  // Handle metadata (address fields are NOT stored in Hapio - they're managed separately)
   if (location.metadata !== undefined) body.metadata = location.metadata;
 
   console.log('[Hapio Client] Creating location:', {
     originalInput: location,
     transformedBody: body,
     emptyStringNormalized: {
+      street1: location.street1 === '' ? 'converted to null' : 'unchanged',
+      street2: location.street2 === '' ? 'converted to null' : 'unchanged',
+      city: location.city === '' ? 'converted to null' : 'unchanged',
+      state: location.state === '' ? 'converted to null' : 'unchanged',
+      country: location.country === '' ? 'converted to null' : 'unchanged',
+      zip: location.zip === '' ? 'converted to null' : 'unchanged',
       address: location.address === '' ? 'converted to null' : 'unchanged',
       timezone: location.timezone === '' ? 'converted to null' : 'unchanged',
     },
@@ -891,22 +870,22 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
   console.log('[Hapio Client] Location created (raw):', {
     id: response.id,
     name: response.name,
-    address: response.address,
     time_zone: response.time_zone,
     timezone: response.timezone,
     enabled: response.enabled,
   });
   
+  // Note: Address fields are NOT stored in Hapio - they're managed separately
   return {
     id: response.id,
     name: response.name,
-    address: response.address ?? null, // Deprecated: for backwards compatibility
-    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
-    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
-    city: response.city ?? null,
-    state: response.state ?? null,
-    country: response.country ?? null,
-    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
+    address: null, // Address fields not supported by Hapio
+    street1: null,
+    street2: null,
+    city: null,
+    state: null,
+    country: null,
+    zip: null,
     timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
@@ -922,40 +901,7 @@ export async function updateLocation(
   // Handle name (required field)
   if (location.name !== undefined) body.name = location.name;
   
-  // Handle address fields: convert empty strings to null, omit if undefined
-  // Try multiple field name variations that Hapio might use
-  if (location.street1 !== undefined) {
-    const value = location.street1 === '' ? null : location.street1;
-    body.street1 = value;
-    body.street_1 = value; // Try snake_case
-    body.address_line_1 = value; // Try alternative format
-  }
-  if (location.street2 !== undefined) {
-    const value = location.street2 === '' ? null : location.street2;
-    body.street2 = value;
-    body.street_2 = value;
-    body.address_line_2 = value;
-  }
-  if (location.city !== undefined) {
-    body.city = location.city === '' ? null : location.city;
-  }
-  if (location.state !== undefined) {
-    body.state = location.state === '' ? null : location.state;
-  }
-  if (location.country !== undefined) {
-    body.country = location.country === '' ? null : location.country;
-  }
-  if (location.zip !== undefined) {
-    const value = location.zip === '' ? null : location.zip;
-    body.zip = value;
-    body.postal_code = value; // Try alternative format
-    body.zip_code = value;
-  }
-  
-  // Handle legacy address field for backwards compatibility
-  if (location.address !== undefined) {
-    body.address = location.address === '' ? null : location.address;
-  }
+  // Note: Address fields are NOT sent to Hapio - they're managed separately
   
   // Handle timezone: convert empty strings to null, omit if undefined
   // Hapio API uses time_zone (snake_case) in responses, but may accept timezone (camelCase) in requests
@@ -970,7 +916,7 @@ export async function updateLocation(
   // Handle enabled
   if (location.enabled !== undefined) body.enabled = location.enabled;
   
-  // Handle metadata
+  // Handle metadata (address fields are NOT stored in Hapio - they're managed separately)
   if (location.metadata !== undefined) body.metadata = location.metadata;
 
   console.log('[Hapio Client] Updating location:', {
@@ -995,16 +941,17 @@ export async function updateLocation(
   
   // Hapio returns time_zone (snake_case) but we use timezone (camelCase)
   // Map the response fields correctly
+  // Note: Address fields are NOT stored in Hapio - they're managed separately
   const mappedResponse = {
     id: response.id,
     name: response.name,
-    address: response.address ?? null, // Deprecated: for backwards compatibility
-    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
-    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
-    city: response.city ?? null,
-    state: response.state ?? null,
-    country: response.country ?? null,
-    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
+    address: null, // Address fields not supported by Hapio
+    street1: null,
+    street2: null,
+    city: null,
+    state: null,
+    country: null,
+    zip: null,
     timezone: response.time_zone ?? response.timezone ?? null, // Support both formats
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
@@ -1095,10 +1042,7 @@ export async function replaceLocation(
     name: location.name,
   };
   
-  // Handle address: convert empty strings to null, omit if undefined
-  if (location.address !== undefined) {
-    body.address = location.address === '' ? null : location.address;
-  }
+  // Note: Address fields are NOT sent to Hapio - they're managed separately
   
   // Handle timezone: convert empty strings to null, omit if undefined
   // Hapio API uses time_zone (snake_case) in responses, but may accept timezone (camelCase) in requests
@@ -1111,13 +1055,39 @@ export async function replaceLocation(
   }
   
   if (location.enabled !== undefined) body.enabled = location.enabled;
-  if (location.metadata !== undefined) body.metadata = location.metadata;
+  
+  // Handle metadata
+  // Since Hapio doesn't support address fields directly, store them in metadata as a workaround
+  const addressMetadata: Record<string, unknown> = {};
+  if (location.street1 !== undefined) addressMetadata.street1 = location.street1 === '' ? null : location.street1;
+  if (location.street2 !== undefined) addressMetadata.street2 = location.street2 === '' ? null : location.street2;
+  if (location.city !== undefined) addressMetadata.city = location.city === '' ? null : location.city;
+  if (location.state !== undefined) addressMetadata.state = location.state === '' ? null : location.state;
+  if (location.country !== undefined) addressMetadata.country = location.country === '' ? null : location.country;
+  if (location.zip !== undefined) addressMetadata.zip = location.zip === '' ? null : location.zip;
+  if (location.address !== undefined) addressMetadata.address = location.address === '' ? null : location.address;
+  
+  // Merge address metadata with existing metadata
+  if (Object.keys(addressMetadata).length > 0) {
+    body.metadata = {
+      ...(location.metadata || {}),
+      ...addressMetadata,
+    };
+  } else if (location.metadata !== undefined) {
+    body.metadata = location.metadata;
+  }
 
   console.log('[Hapio Client] Replacing location:', {
     id,
     originalInput: location,
     transformedBody: body,
     emptyStringNormalized: {
+      street1: location.street1 === '' ? 'converted to null' : 'unchanged',
+      street2: location.street2 === '' ? 'converted to null' : 'unchanged',
+      city: location.city === '' ? 'converted to null' : 'unchanged',
+      state: location.state === '' ? 'converted to null' : 'unchanged',
+      country: location.country === '' ? 'converted to null' : 'unchanged',
+      zip: location.zip === '' ? 'converted to null' : 'unchanged',
       address: location.address === '' ? 'converted to null' : 'unchanged',
       timezone: location.timezone === '' ? 'converted to null' : 'unchanged',
     },
@@ -1128,22 +1098,22 @@ export async function replaceLocation(
   console.log('[Hapio Client] Location replaced (raw):', {
     id: response.id,
     name: response.name,
-    address: response.address,
     time_zone: response.time_zone,
     timezone: response.timezone,
     enabled: response.enabled,
   });
   
+  // Note: Address fields are NOT stored in Hapio - they're managed separately
   return {
     id: response.id,
     name: response.name,
-    address: response.address ?? null, // Deprecated: for backwards compatibility
-    street1: response.street1 ?? response.street_1 ?? response.address_line_1 ?? null,
-    street2: response.street2 ?? response.street_2 ?? response.address_line_2 ?? null,
-    city: response.city ?? null,
-    state: response.state ?? null,
-    country: response.country ?? null,
-    zip: response.zip ?? response.postal_code ?? response.zip_code ?? null,
+    address: null, // Address fields not supported by Hapio
+    street1: null,
+    street2: null,
+    city: null,
+    state: null,
+    country: null,
+    zip: null,
     timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
