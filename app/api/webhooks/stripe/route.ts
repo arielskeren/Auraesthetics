@@ -99,7 +99,7 @@ async function findBooking(
     const rows = normalizeRows(result);
     if (rows.length > 0) {
       return rows[0] as BookingRow;
-    }
+  }
   }
 
   return null;

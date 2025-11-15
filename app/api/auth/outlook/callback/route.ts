@@ -8,6 +8,20 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
   const code = searchParams.get('code');
+  const state = searchParams.get('state');
+  const sessionState = searchParams.get('session_state');
+
+  // Log all parameters for debugging
+  console.log('[Outlook OAuth Callback] Received parameters:', {
+    hasError: !!error,
+    error,
+    errorDescription,
+    hasCode: !!code,
+    codeLength: code?.length,
+    state,
+    sessionState,
+    allParams: Object.fromEntries(searchParams.entries()),
+  });
 
   if (error) {
     console.error('[Outlook OAuth] Error response', error, errorDescription);
@@ -21,8 +35,20 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
+    // Log the full URL to help debug
+    console.error('[Outlook OAuth] Missing code parameter. Full URL:', request.url);
+    console.error('[Outlook OAuth] Search params:', Object.fromEntries(searchParams.entries()));
+    
     return NextResponse.json(
-      { error: 'Missing authorization code from Outlook' },
+      {
+        error: 'Missing authorization code from Outlook',
+        debug: {
+          url: request.url,
+          hasCode: false,
+          allParams: Object.fromEntries(searchParams.entries()),
+        },
+        hint: 'Make sure you completed the Microsoft sign-in and were redirected back. If you accessed this URL directly, please start the OAuth flow from /api/auth/outlook/start',
+      },
       { status: 400 }
     );
   }
