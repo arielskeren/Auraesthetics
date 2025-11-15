@@ -27,13 +27,15 @@ export async function fetchScheduleData(
   recurringScheduleBlocks: any[];
   scheduleBlocks: any[];
 }> {
-  const fromISO = from.toISOString();
-  const toISO = to.toISOString();
+  // Format dates in Hapio format: Y-m-d\TH:i:sP
+  const { formatDateForHapioUTC } = await import('@/lib/hapioDateUtils');
+  const fromFormatted = formatDateForHapioUTC(from);
+  const toFormatted = formatDateForHapioUTC(to);
 
   const [recurringSchedulesRes, recurringBlocksRes, scheduleBlocksRes] = await Promise.all([
     fetch(`/api/admin/hapio/resources/${resourceId}/recurring-schedules?per_page=100`),
     fetch(`/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?per_page=100`),
-    fetch(`/api/admin/hapio/resources/${resourceId}/schedule-blocks?from=${fromISO}&to=${toISO}&per_page=100`),
+    fetch(`/api/admin/hapio/resources/${resourceId}/schedule-blocks?from=${encodeURIComponent(fromFormatted)}&to=${encodeURIComponent(toFormatted)}&per_page=100`),
   ]);
 
   const recurringSchedules = recurringSchedulesRes.ok

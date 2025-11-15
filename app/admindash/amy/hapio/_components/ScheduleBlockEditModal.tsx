@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
+import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
 
 interface ScheduleBlockEditModalProps {
   resourceId: string;
@@ -64,15 +65,8 @@ export default function ScheduleBlockEditModal({
     }
   }, [selectedDate, selectedBlock]);
 
-  const formatDateForHapio = (date: Date): string => {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hour = String(date.getUTCHours()).padStart(2, '0');
-    const minute = String(date.getUTCMinutes()).padStart(2, '0');
-    const second = String(date.getUTCSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hour}:${minute}:${second}+00:00`;
-  };
+  // Use the shared utility function
+  const formatDateForHapio = formatDateForHapioUTC;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

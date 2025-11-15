@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ScheduleBlockEditModal from './ScheduleBlockEditModal';
+import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
 
 interface ScheduleBlocksCalendarProps {
   resourceId: string;
@@ -41,11 +42,17 @@ export default function ScheduleBlocksCalendar({
 
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
-      const from = new Date(year, month, 1).toISOString();
-      const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+      const fromDate = new Date(year, month, 1);
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(year, month + 1, 0);
+      toDate.setHours(23, 59, 59, 999);
+      
+      // Format dates in Hapio format: Y-m-d\TH:i:sP
+      const from = formatDateForHapioUTC(fromDate);
+      const to = formatDateForHapioUTC(toDate);
 
       const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/schedule-blocks?from=${from}&to=${to}&per_page=100`
+        `/api/admin/hapio/resources/${resourceId}/schedule-blocks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&per_page=100`
       );
 
       if (!response.ok) {
