@@ -67,7 +67,7 @@ export async function POST(
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *
-    `;
+    ` as Array<any>;
 
     return NextResponse.json({
       image_url: result.url,
