@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import BookingDetailModal from './BookingDetailModal';
@@ -38,8 +38,10 @@ export default function BookingsCalendar() {
   const [error, setError] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; bottom: number } | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const dateButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [resourceId, setResourceId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [services, setServices] = useState<Record<string, { id: string; name: string }>>({});
@@ -416,10 +418,28 @@ export default function BookingsCalendar() {
                 <div
                   key={date.toISOString()}
                   className="relative"
-                  onMouseEnter={() => setHoveredDate(date)}
-                  onMouseLeave={() => setHoveredDate(null)}
+                  onMouseEnter={() => {
+                    if (!isPast) {
+                      setHoveredDate(date);
+                      const button = dateButtonRefs.current[date.toISOString()];
+                      if (button) {
+                        const rect = button.getBoundingClientRect();
+                        setTooltipPosition({
+                          left: rect.left + rect.width / 2,
+                          bottom: window.innerHeight - rect.top + 12,
+                        });
+                      }
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredDate(null);
+                    setTooltipPosition(null);
+                  }}
                 >
                   <button
+                    ref={(el) => {
+                      dateButtonRefs.current[date.toISOString()] = el;
+                    }}
                     onClick={() => setSelectedDate(isSelected ? null : date)}
                     disabled={isPast}
                     className={`aspect-square border rounded-lg text-xs transition-colors w-full ${
@@ -447,22 +467,16 @@ export default function BookingsCalendar() {
                   </button>
 
                   {/* Tooltip */}
-                  {hoveredDate && hoveredDate.toDateString() === date.toDateString() && !isPast && (
-                    <div className="fixed z-[9999] pointer-events-none" style={{
-                      left: `${date.getBoundingClientRect ? 0 : '50%'}`,
-                      top: '0',
-                      transform: 'translate(-50%, -100%)',
-                    }}>
-                      <div 
-                        className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-64"
-                        style={{
-                          position: 'fixed',
-                          left: `${typeof window !== 'undefined' ? (date.getBoundingClientRect?.()?.left || 0) + (date.getBoundingClientRect?.()?.width || 0) / 2 : '50%'}px`,
-                          bottom: `${typeof window !== 'undefined' ? window.innerHeight - (date.getBoundingClientRect?.()?.top || 0) + 12 : 'auto'}px`,
-                          transform: 'translate(-50%, 0)',
-                        }}
-                      >
-                        <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden">
+                  {hoveredDate && hoveredDate.toDateString() === date.toDateString() && !isPast && tooltipPosition && (
+                    <div 
+                      className="fixed z-[9999] pointer-events-none"
+                      style={{
+                        left: `${tooltipPosition.left}px`,
+                        bottom: `${tooltipPosition.bottom}px`,
+                        transform: 'translate(-50%, 0)',
+                      }}
+                    >
+                      <div className="bg-white border border-sand rounded-lg shadow-xl overflow-hidden w-64">
                           <div className="bg-sage-light/30 px-3 py-2 border-b border-sand">
                             <div className="text-xs font-semibold text-charcoal">
                               {formatDate(date)}
@@ -491,7 +505,6 @@ export default function BookingsCalendar() {
                             <div className="w-3 h-3 bg-white border-r border-b border-sand transform rotate-45" />
                           </div>
                         </div>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -562,7 +575,7 @@ export default function BookingsCalendar() {
                               className="absolute left-0 right-0 border-t border-sand/30"
                               style={{ top: `${position}%` }}
                             >
-                              <div className="absolute left-2 top-0 text-xs text-warm-gray font-medium pt-1">
+                              <div className="absolute left-2 top-0 text-xs text-warm-gray font-medium pt-1 whitespace-nowrap">
                                 {hourTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                               </div>
                             </div>
