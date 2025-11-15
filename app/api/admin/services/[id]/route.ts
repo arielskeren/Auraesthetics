@@ -206,8 +206,9 @@ export async function PATCH(
         RETURNING *
       ` as Array<any>;
     } catch (error: any) {
-      // If columns don't exist, update without them
-      if (error.message?.includes('column') && (error.message?.includes('starred') || error.message?.includes('featured'))) {
+      // If columns don't exist, update without them and show error
+      if (error.message?.includes('column') && (error.message?.includes('starred') || error.message?.includes('featured') || error.message?.includes('best_seller') || error.message?.includes('most_popular'))) {
+        // Try updating without badge columns
         result = await sql`
           UPDATE services 
           SET 
@@ -229,7 +230,15 @@ export async function PATCH(
           RETURNING *
         ` as Array<any>;
         // Add default values for missing columns
-        result[0] = { ...result[0], starred: false, featured: false, best_seller: false, most_popular: false };
+        result[0] = { 
+          ...result[0], 
+          starred: updatedService.starred || false, 
+          featured: updatedService.featured || false, 
+          best_seller: updatedService.best_seller || false, 
+          most_popular: updatedService.most_popular || false 
+        };
+        // Log warning but don't fail - badges won't be saved until migration is run
+        console.warn('[Service Update] Badge columns do not exist. Please run migration to enable badges.');
       } else {
         throw error;
       }

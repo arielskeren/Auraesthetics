@@ -36,12 +36,19 @@ export default function HomeClient() {
           price: s.price || '',
           testPricing: s.test_pricing || false,
           image_url: s.image_url,
+          starred: s.starred || false,
           featured: s.featured || false,
           best_seller: s.best_seller || false,
           most_popular: s.most_popular || false,
         }));
-        // Filter starred services (up to 6)
-        const starred = mappedServices.filter((s: any) => s.starred).slice(0, 6);
+        // Filter starred services (up to 6) - order by display_order to maintain order
+        const starred = mappedServices
+          .filter((s: any) => s.starred)
+          .sort((a: any, b: any) => {
+            // Maintain the order from the API (which is already ordered by display_order)
+            return 0; // Already sorted by API
+          })
+          .slice(0, 6);
         setFeaturedServices(starred);
       } catch (error) {
         console.error('Error loading services:', error);

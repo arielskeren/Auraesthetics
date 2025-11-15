@@ -7,6 +7,7 @@ import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import ServiceEditModal from './ServiceEditModal';
 import ServiceReorderModal from './ServiceReorderModal';
+import UnstarServiceModal from './UnstarServiceModal';
 import IdDisplay from './IdDisplay';
 
 export default function ServicesManager() {
@@ -28,6 +29,8 @@ export default function ServicesManager() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showUnstarModal, setShowUnstarModal] = useState(false);
+  const [pendingStarServiceId, setPendingStarServiceId] = useState<string | null>(null);
   const [starringService, setStarringService] = useState<string | null>(null);
   const [viewingHapioServices, setViewingHapioServices] = useState(false);
   const [hapioServices, setHapioServices] = useState<any[]>([]);
@@ -129,13 +132,19 @@ export default function ServicesManager() {
     
     // Check if we're trying to star and already have 6 starred
     if (newStarred) {
-      const starredCount = allServices.filter((s) => s.starred).length;
-      if (starredCount >= 6) {
-        alert('You can only star up to 6 services. Please unstar another service first.');
+      const starredServices = allServices.filter((s) => s.starred);
+      if (starredServices.length >= 6) {
+        // Show modal to select which service to unstar
+        setPendingStarServiceId(serviceId);
+        setShowUnstarModal(true);
         return;
       }
     }
 
+    await performStarToggle(serviceId, newStarred);
+  };
+
+  const performStarToggle = async (serviceId: string, starred: boolean) => {
     try {
       setStarringService(serviceId);
       const response = await fetch(`/api/admin/services/${serviceId}/star`, {
@@ -143,7 +152,7 @@ export default function ServicesManager() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ starred: newStarred }),
+        body: JSON.stringify({ starred }),
       });
 
       if (!response.ok) {
@@ -153,13 +162,24 @@ export default function ServicesManager() {
 
       // Update local state
       setAllServices((prev) =>
-        prev.map((s) => (s.id === serviceId ? { ...s, starred: newStarred } : s))
+        prev.map((s) => (s.id === serviceId ? { ...s, starred } : s))
       );
     } catch (err: any) {
       setError(err);
-      alert(`Failed to ${newStarred ? 'star' : 'unstar'} service: ${err.message}`);
+      alert(`Failed to ${starred ? 'star' : 'unstar'} service: ${err.message}`);
     } finally {
       setStarringService(null);
+    }
+  };
+
+  const handleUnstarAndStar = async (unstarServiceId: string) => {
+    // First unstar the selected service
+    await performStarToggle(unstarServiceId, false);
+    
+    // Then star the pending service
+    if (pendingStarServiceId) {
+      await performStarToggle(pendingStarServiceId, true);
+      setPendingStarServiceId(null);
     }
   };
 
@@ -975,6 +995,17 @@ export default function ServicesManager() {
             await loadServices();
             setShowReorderModal(false);
           }}
+        />
+      )}
+
+      {showUnstarModal && (
+        <UnstarServiceModal
+          services={allServices.filter((s) => s.starred)}
+          onClose={() => {
+            setShowUnstarModal(false);
+            setPendingStarServiceId(null);
+          }}
+          onUnstar={handleUnstarAndStar}
         />
       )}
     </div>
