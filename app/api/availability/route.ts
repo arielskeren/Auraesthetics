@@ -66,6 +66,43 @@ function parseDate(value: string | null): Date | null {
   return parsed;
 }
 
+/**
+ * Format date for Hapio API: Y-m-d\TH:i:sP format
+ * Example: 2025-11-15T03:17:09+00:00 (no milliseconds, timezone offset instead of Z)
+ */
+function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
+  // Get date components in the specified timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  const hour = parts.find(p => p.type === 'hour')?.value;
+  const minute = parts.find(p => p.type === 'minute')?.value;
+  const second = parts.find(p => p.type === 'second')?.value;
+
+  // Get timezone offset
+  const dateInTz = new Date(date.toLocaleString('en-US', { timeZone }));
+  const utcDate = new Date(date.toUTCString());
+  const offsetMs = dateInTz.getTime() - utcDate.getTime();
+  const offsetHours = Math.floor(Math.abs(offsetMs) / (1000 * 60 * 60));
+  const offsetMinutes = Math.floor((Math.abs(offsetMs) % (1000 * 60 * 60)) / (1000 * 60));
+  const offsetSign = offsetMs >= 0 ? '+' : '-';
+  const offset = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+}
+
 function toIsoString(date: Date): string {
   return date.toISOString();
 }
