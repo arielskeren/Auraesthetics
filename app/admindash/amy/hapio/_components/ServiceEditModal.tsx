@@ -33,7 +33,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
     description: '',
     duration_minutes: 60,
     duration_display: '60 min',
-    price: '',
+    price: null as number | null,
+    buffer_before_minutes: 0,
+    buffer_after_minutes: 0,
     test_pricing: false,
     enabled: true,
     display_order: 0,
@@ -59,7 +61,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
         description: service.description || '',
         duration_minutes: service.duration_minutes || 60,
         duration_display: service.duration_display || `${service.duration_minutes || 60} min`,
-        price: service.price || '',
+        price: service.price != null ? Number(service.price) : null,
+        buffer_before_minutes: service.buffer_before_minutes || 0,
+        buffer_after_minutes: service.buffer_after_minutes || 0,
         test_pricing: service.test_pricing || false,
         enabled: service.enabled !== false,
         display_order: service.display_order || 0,
@@ -152,7 +156,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
         description: formData.description || null,
         duration_minutes: formData.duration_minutes,
         duration_display: formData.duration_display || null,
-        price: formData.price || null,
+        price: formData.price,
+        buffer_before_minutes: formData.buffer_before_minutes,
+        buffer_after_minutes: formData.buffer_after_minutes,
         test_pricing: formData.test_pricing,
         enabled: formData.enabled,
         display_order: formData.display_order,
@@ -413,15 +419,42 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-charcoal mb-1">Price</label>
+            <label className="block text-sm font-medium text-charcoal mb-1">Price ($)</label>
             <input
-              type="text"
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.price ?? ''}
+              onChange={(e) => setFormData({ ...formData, price: e.target.value ? Number(e.target.value) : null })}
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-              placeholder="from $150"
+              placeholder="150.00"
             />
-            <p className="text-xs text-warm-gray mt-1">e.g., &quot;from $150&quot;</p>
+            <p className="text-xs text-warm-gray mt-1">Numeric price in dollars (e.g., 150.00 for $150)</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Buffer Before (minutes)</label>
+              <input
+                type="number"
+                min="0"
+                value={formData.buffer_before_minutes}
+                onChange={(e) => setFormData({ ...formData, buffer_before_minutes: Number(e.target.value) || 0 })}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              />
+              <p className="text-xs text-warm-gray mt-1">Time buffer before service starts</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Buffer After (minutes)</label>
+              <input
+                type="number"
+                min="0"
+                value={formData.buffer_after_minutes}
+                onChange={(e) => setFormData({ ...formData, buffer_after_minutes: Number(e.target.value) || 0 })}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              />
+              <p className="text-xs text-warm-gray mt-1">Time buffer after service ends</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

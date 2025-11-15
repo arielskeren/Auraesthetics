@@ -32,11 +32,14 @@ export async function GET(request: NextRequest) {
         duration_minutes,
         duration_display,
         price,
+        buffer_before_minutes,
+        buffer_after_minutes,
         test_pricing,
         image_url,
         image_filename,
         enabled,
         display_order,
+        hapio_service_id,
         created_at,
         updated_at
       FROM services
@@ -106,6 +109,8 @@ export async function POST(request: NextRequest) {
         duration_minutes,
         duration_display,
         price,
+        buffer_before_minutes,
+        buffer_after_minutes,
         test_pricing,
         enabled,
         display_order
@@ -118,6 +123,8 @@ export async function POST(request: NextRequest) {
         ${body.duration_minutes},
         ${body.duration_display || null},
         ${body.price || null},
+        ${body.buffer_before_minutes || 0},
+        ${body.buffer_after_minutes || 0},
         ${body.test_pricing || false},
         ${body.enabled !== false},
         ${body.display_order || 0}

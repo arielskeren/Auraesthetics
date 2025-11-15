@@ -64,7 +64,13 @@ export async function GET(request: NextRequest) {
 
     const services = await query as Array<any>;
 
-    return NextResponse.json(services as Service[]);
+    // Format price for display (add "from $" prefix if price exists)
+    const formattedServices = services.map((s: any) => ({
+      ...s,
+      price: s.price != null ? `from $${Number(s.price).toFixed(2).replace(/\.00$/, '')}` : null,
+    }));
+
+    return NextResponse.json(formattedServices as Service[]);
   } catch (error: any) {
     console.error('[Services API] Error fetching services:', error);
     return NextResponse.json(

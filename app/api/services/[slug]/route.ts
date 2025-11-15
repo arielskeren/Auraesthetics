@@ -45,7 +45,15 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(services[0] as Service);
+    const service = services[0];
+    
+    // Format price for display (add "from $" prefix if price exists)
+    const formattedService = {
+      ...service,
+      price: service.price != null ? `from $${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : null,
+    };
+
+    return NextResponse.json(formattedService as Service);
   } catch (error: any) {
     console.error('[Services API] Error fetching service:', error);
     return NextResponse.json(

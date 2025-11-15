@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -88,6 +88,25 @@ export default function ServicesManager() {
     }
   };
 
+  const handleSync = async (serviceId: string) => {
+    try {
+      const response = await fetch(`/api/admin/services/${serviceId}/sync`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync service to Hapio');
+      }
+
+      const data = await response.json();
+      alert(data.message || 'Service synced to Hapio successfully');
+      loadServices(); // Refresh to show updated hapio_service_id
+    } catch (err: any) {
+      setError(err);
+    }
+  };
+
   const handleSave = async () => {
     // Force refresh - reload from page 1 to ensure we get fresh data
     if (page !== 1) {
@@ -163,7 +182,9 @@ export default function ServicesManager() {
                   <td className="px-4 py-3 text-sm text-warm-gray">
                     {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
                   </td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">{service.price || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-warm-gray">
+                    {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -175,6 +196,13 @@ export default function ServicesManager() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSync(service.id)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Sync to Hapio"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => handleEdit(service)}
                         className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
