@@ -22,6 +22,25 @@ export async function POST(
       );
     }
 
+    // Check if starred column exists by trying to query it
+    let columnExists = true;
+    try {
+      await sql`SELECT starred FROM services WHERE id = ${id} LIMIT 1` as Array<any>;
+    } catch (error: any) {
+      if (error.message?.includes('column') && error.message?.includes('starred')) {
+        columnExists = false;
+      } else {
+        throw error;
+      }
+    }
+
+    if (!columnExists) {
+      return NextResponse.json(
+        { error: 'Starred feature requires database migration. Please run the migration script to add the starred column.' },
+        { status: 400 }
+      );
+    }
+
     // If trying to star, check if we already have 6 starred services
     if (starred) {
       const starredCount = await sql`

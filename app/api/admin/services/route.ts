@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
           created_at,
           updated_at
         FROM services
-        ORDER BY display_order ASC, created_at DESC
+        ORDER BY display_order ASC, created_at ASC
         LIMIT ${perPage}
         OFFSET ${offset}
       ` as Array<any>;
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
             created_at,
             updated_at
           FROM services
-          ORDER BY display_order ASC, created_at DESC
+          ORDER BY display_order ASC, created_at ASC
           LIMIT ${perPage}
           OFFSET ${offset}
         ` as Array<any>;
