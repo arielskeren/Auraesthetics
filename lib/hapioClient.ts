@@ -1639,6 +1639,7 @@ export interface HapioScheduleBlock {
 }
 
 export interface HapioScheduleBlockPayload {
+  location_id?: string | null;
   starts_at: string;
   ends_at: string;
   metadata?: Record<string, unknown> | null;
@@ -1724,6 +1725,7 @@ export async function createScheduleBlock(
     starts_at: block.starts_at,
     ends_at: block.ends_at,
   };
+  if (block.location_id !== undefined) body.location_id = block.location_id;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
   const response = await requestJson<any>('post', `${parentPath}/schedule-blocks`, body);
@@ -1745,6 +1747,7 @@ export async function updateScheduleBlock(
 ): Promise<HapioScheduleBlock> {
   const parentPath = buildScheduleParentPath(parentType, parentId);
   const body: Record<string, unknown> = {};
+  if (block.location_id !== undefined) body.location_id = block.location_id;
   if (block.starts_at !== undefined) body.starts_at = block.starts_at;
   if (block.ends_at !== undefined) body.ends_at = block.ends_at;
   if (block.metadata !== undefined) body.metadata = block.metadata;
@@ -1771,6 +1774,7 @@ export async function replaceScheduleBlock(
     starts_at: block.starts_at,
     ends_at: block.ends_at,
   };
+  if (block.location_id !== undefined) body.location_id = block.location_id;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
   const response = await requestJson<any>('put', `${parentPath}/schedule-blocks/${id}`, body);

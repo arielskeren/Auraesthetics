@@ -90,13 +90,18 @@ export default function ScheduleBlockEditModal({
       const startsAtFormatted = formatDateForHapio(startDateTime);
       const endsAtFormatted = formatDateForHapio(endDateTime);
 
+      if (!locationId) {
+        throw new Error('Location ID is required. Please ensure a location exists.');
+      }
+
       const payload: any = {
+        location_id: locationId,
         starts_at: startsAtFormatted,
         ends_at: endsAtFormatted,
         metadata: {},
       };
 
-      // Add service IDs if block type is open
+      // Add service IDs if block type is partial (for service-specific blocking)
       if (formData.blockType === 'open' && formData.serviceIds.length > 0) {
         payload.metadata.service_ids = formData.serviceIds;
       }
@@ -194,13 +199,13 @@ export default function ScheduleBlockEditModal({
               }
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
             >
-              <option value="closed">Closed (entire day)</option>
-              <option value="open">Open (special hours)</option>
+              <option value="closed">Block entire day (unavailable all day)</option>
+              <option value="open">Block specific hours (unavailable during selected time)</option>
             </select>
             <p className="text-xs text-warm-gray mt-1">
               {formData.blockType === 'closed'
-                ? 'Block out this day completely'
-                : 'Set specific hours for this day'}
+                ? 'Makes this entire day unavailable for booking'
+                : 'Makes specific hours unavailable for booking (overrides recurring schedule)'}
             </p>
           </div>
 
