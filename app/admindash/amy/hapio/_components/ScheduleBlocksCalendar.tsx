@@ -24,7 +24,7 @@ export default function ScheduleBlocksCalendar({
 }: ScheduleBlocksCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
-  const [availability, setAvailability] = useState<Record<string, string[]>>({});
+  const [availability, setAvailability] = useState<Record<string, Array<{ start: string; end: string }>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -356,8 +356,8 @@ export default function ScheduleBlocksCalendar({
               const isPast = isPastDate(date);
               const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
               const dateStr = date.toISOString().split('T')[0];
-              const availableTimes = availability[dateStr] || [];
-              const hasAvailability = availableTimes.length > 0;
+              const availableTimeRanges = availability[dateStr] || [];
+              const hasAvailability = availableTimeRanges.length > 0;
 
               let blockType: 'closed' | 'open' | null = null;
               if (dateBlocks.length > 0) {
@@ -373,10 +373,11 @@ export default function ScheduleBlocksCalendar({
                 return `${displayHour}:${minutes} ${ampm}`;
               };
 
+              // Build availability text from time ranges
               const availabilityText = hasAvailability
-                ? availableTimes.length === 1
-                  ? `Available at ${formatTime(availableTimes[0])}`
-                  : `Available ${formatTime(availableTimes[0])} - ${formatTime(availableTimes[availableTimes.length - 1])}`
+                ? availableTimeRanges
+                    .map((range) => `${formatTime(range.start)} - ${formatTime(range.end)}`)
+                    .join(', ')
                 : '';
 
               return (

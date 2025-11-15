@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listResourceSchedule, listRecurringSchedules } from '@/lib/hapioClient';
+import { listRecurringSchedules, listRecurringScheduleBlocks } from '@/lib/hapioClient';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
+import { getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
 
 export async function GET(
   request: NextRequest,
@@ -19,67 +20,114 @@ export async function GET(
     }
 
     // Fetch the schedule (bookable slots) - this includes recurring schedules
-    const scheduleResponse = await listResourceSchedule(params.id, {
-      from,
-      to,
-      per_page: 1000,
+    // Parse date range and normalize to start/end of day
+    const fromDate = new Date(from);
+    fromDate.setHours(0, 0, 0, 0);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+
+    // Fetch recurring schedules
+    const recurringSchedulesResponse = await listRecurringSchedules('resource', params.id, {
+      per_page: 100,
     }).catch((err) => {
-      console.error('[Availability API] Failed to fetch schedule:', err);
+      console.error('[Availability API] Failed to fetch recurring schedules:', err);
       return { data: [], meta: { total: 0 } };
     });
 
-    console.log('[Availability API] Schedule response:', {
-      hasData: !!scheduleResponse.data,
-      dataType: Array.isArray(scheduleResponse.data) ? 'array' : typeof scheduleResponse.data,
-      dataLength: Array.isArray(scheduleResponse.data) ? scheduleResponse.data.length : 'N/A',
-      firstItem: Array.isArray(scheduleResponse.data) && scheduleResponse.data.length > 0 ? scheduleResponse.data[0] : null,
-      meta: scheduleResponse.meta,
+    console.log('[Availability API] Recurring schedules:', {
+      count: recurringSchedulesResponse.data?.length || 0,
+      schedules: recurringSchedulesResponse.data?.map((s: any) => ({
+        id: s.id,
+        start_date: s.start_date,
+        end_date: s.end_date,
+      })),
     });
 
-    // Group slots by date and extract time ranges
-    const availabilityByDate: Record<string, string[]> = {};
+    // Group availability by date - store time ranges as objects
+    const availabilityByDate: Record<string, Array<{ start: string; end: string }>> = {};
 
-    // Process schedule slots (bookable times)
-    // The response might be an array directly or wrapped in a data property
-    const slots = Array.isArray(scheduleResponse.data) 
-      ? scheduleResponse.data 
-      : Array.isArray(scheduleResponse) 
-        ? scheduleResponse 
-        : [];
+    // Process each recurring schedule
+    if (recurringSchedulesResponse.data && Array.isArray(recurringSchedulesResponse.data)) {
+      for (const schedule of recurringSchedulesResponse.data) {
+        // Check if schedule is active for the date range
+        const scheduleStart = schedule.start_date ? new Date(schedule.start_date) : null;
+        if (scheduleStart) scheduleStart.setHours(0, 0, 0, 0);
+        
+        const scheduleEnd = schedule.end_date ? new Date(schedule.end_date) : null;
+        if (scheduleEnd) scheduleEnd.setHours(23, 59, 59, 999);
 
-    slots.forEach((slot: any) => {
-      // Handle different possible field names
-      const startsAt = slot.starts_at || slot.startsAt || slot.start_time || slot.start;
-      
-      if (startsAt) {
+        // Skip if schedule doesn't overlap with our date range
+        if (scheduleEnd && scheduleEnd < fromDate) continue;
+        if (scheduleStart && scheduleStart > toDate) continue;
+
+        // Fetch blocks for this schedule
         try {
-          const slotDate = new Date(startsAt);
-          if (!isNaN(slotDate.getTime())) {
-            const dateStr = slotDate.toISOString().split('T')[0];
-            const timeStr = slotDate.toTimeString().slice(0, 5); // HH:mm format
-            
-            if (!availabilityByDate[dateStr]) {
-              availabilityByDate[dateStr] = [];
-            }
-            
-            // Add time if not already present (avoid duplicates)
-            if (!availabilityByDate[dateStr].includes(timeStr)) {
-              availabilityByDate[dateStr].push(timeStr);
-            }
+          const blocksResponse = await listRecurringScheduleBlocks('resource', params.id, {
+            recurring_schedule_id: schedule.id,
+            per_page: 100,
+          }).catch(() => ({ data: [], meta: { total: 0 } }));
+
+          if (blocksResponse.data && Array.isArray(blocksResponse.data)) {
+            blocksResponse.data.forEach((block: any) => {
+              // Get weekday (handle both string and number formats)
+              const hapioWeekday = block.weekday ?? block.day_of_week;
+              if (hapioWeekday === null || hapioWeekday === undefined) return;
+
+              const weekday = getWeekdayFromHapioString(hapioWeekday);
+              const startTime = block.start_time || '00:00';
+              const endTime = block.end_time || '23:59';
+
+              // Calculate which dates in the range fall on this weekday
+              const currentDate = new Date(fromDate);
+              while (currentDate <= toDate) {
+                const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
+
+                // Check if this date matches the weekday
+                if (dayOfWeek === weekday) {
+                  // Normalize current date for comparison (ignore time)
+                  const currentDateNormalized = new Date(currentDate);
+                  currentDateNormalized.setHours(0, 0, 0, 0);
+                  
+                  // Check if date is within schedule's date range
+                  const dateInRange = (!scheduleStart || currentDateNormalized >= scheduleStart) &&
+                                     (!scheduleEnd || currentDateNormalized <= scheduleEnd);
+
+                  if (dateInRange) {
+                    // Add this date with the time range
+                    const dateStr = currentDate.toISOString().split('T')[0];
+                    if (!availabilityByDate[dateStr]) {
+                      availabilityByDate[dateStr] = [];
+                    }
+
+                    // Add time range if not already present
+                    const timeRange = { start: startTime, end: endTime };
+                    const exists = availabilityByDate[dateStr].some(
+                      (tr) => tr.start === startTime && tr.end === endTime
+                    );
+                    if (!exists) {
+                      availabilityByDate[dateStr].push(timeRange);
+                    }
+                  }
+                }
+
+                // Always increment date to avoid infinite loop
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+            });
           }
         } catch (err) {
-          console.warn('[Availability API] Failed to parse date:', startsAt, err);
+          console.warn('[Availability API] Failed to fetch blocks for schedule', schedule.id, err);
         }
       }
-    });
+    }
 
-    // Sort times for each date
+    // Sort time ranges for each date by start time
     Object.keys(availabilityByDate).forEach(date => {
-      availabilityByDate[date].sort();
+      availabilityByDate[date].sort((a, b) => a.start.localeCompare(b.start));
     });
 
-    console.log('[Availability API] Final availability:', {
-      totalSlots: slots.length,
+    console.log('[Availability API] Final availability from recurring schedules:', {
+      schedulesProcessed: recurringSchedulesResponse.data?.length || 0,
       availabilityDates: Object.keys(availabilityByDate).length,
       sampleDates: Object.keys(availabilityByDate).slice(0, 5),
     });
@@ -98,4 +146,3 @@ export async function GET(
     );
   }
 }
-
