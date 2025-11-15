@@ -922,7 +922,37 @@ export async function updateLocation(
   // Handle name (required field)
   if (location.name !== undefined) body.name = location.name;
   
-  // Handle address: convert empty strings to null, omit if undefined
+  // Handle address fields: convert empty strings to null, omit if undefined
+  // Try multiple field name variations that Hapio might use
+  if (location.street1 !== undefined) {
+    const value = location.street1 === '' ? null : location.street1;
+    body.street1 = value;
+    body.street_1 = value; // Try snake_case
+    body.address_line_1 = value; // Try alternative format
+  }
+  if (location.street2 !== undefined) {
+    const value = location.street2 === '' ? null : location.street2;
+    body.street2 = value;
+    body.street_2 = value;
+    body.address_line_2 = value;
+  }
+  if (location.city !== undefined) {
+    body.city = location.city === '' ? null : location.city;
+  }
+  if (location.state !== undefined) {
+    body.state = location.state === '' ? null : location.state;
+  }
+  if (location.country !== undefined) {
+    body.country = location.country === '' ? null : location.country;
+  }
+  if (location.zip !== undefined) {
+    const value = location.zip === '' ? null : location.zip;
+    body.zip = value;
+    body.postal_code = value; // Try alternative format
+    body.zip_code = value;
+  }
+  
+  // Handle legacy address field for backwards compatibility
   if (location.address !== undefined) {
     body.address = location.address === '' ? null : location.address;
   }
@@ -950,6 +980,12 @@ export async function updateLocation(
     bodyKeys: Object.keys(body),
     bodyValues: Object.values(body),
     emptyStringNormalized: {
+      street1: location.street1 === '' ? 'converted to null' : 'unchanged',
+      street2: location.street2 === '' ? 'converted to null' : 'unchanged',
+      city: location.city === '' ? 'converted to null' : 'unchanged',
+      state: location.state === '' ? 'converted to null' : 'unchanged',
+      country: location.country === '' ? 'converted to null' : 'unchanged',
+      zip: location.zip === '' ? 'converted to null' : 'unchanged',
       address: location.address === '' ? 'converted to null' : 'unchanged',
       timezone: location.timezone === '' ? 'converted to null' : 'unchanged',
     },
