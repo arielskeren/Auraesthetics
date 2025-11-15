@@ -31,7 +31,7 @@ export default function HomeClient() {
           name: s.name,
           slug: s.slug,
           summary: s.summary || '',
-          description: s.description,
+          description: s.description || undefined,
           duration: s.duration_display || `${s.duration_minutes} min`,
           price: s.price || '',
           testPricing: s.test_pricing || false,

@@ -11,7 +11,7 @@ interface Service {
   name: string;
   slug: string;
   summary: string;
-  description?: string | null;
+  description?: string;
   duration: string;
   price: string;
   testPricing?: boolean;
@@ -41,7 +41,7 @@ export default function ServicesClient() {
           name: s.name,
           slug: s.slug,
           summary: (s.summary || '') as string,
-          description: s.description,
+          description: s.description || undefined,
           duration: s.duration_display || `${s.duration_minutes} min`,
           price: (s.price || '') as string,
           testPricing: s.test_pricing || false,
