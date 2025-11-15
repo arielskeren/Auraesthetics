@@ -1,15 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Users, MapPin, Settings, BookOpen, Clock, Layers } from 'lucide-react';
+import { Calendar, Users, Settings, BookOpen, Clock, Layers } from 'lucide-react';
 import HapioOverview from './_components/HapioOverview';
 import BookingsManager from './_components/BookingsManager';
-import ResourcesManager from './_components/ResourcesManager';
 import ServicesManager from './_components/ServicesManager';
 import SchedulesManager from './_components/SchedulesManager';
-import LocationsManager from './_components/LocationsManager';
+import ResourcesAndLocationsManager from './_components/ResourcesAndLocationsManager';
 
-type Tab = 'overview' | 'bookings' | 'resources' | 'services' | 'schedules' | 'locations';
+type Tab = 'overview' | 'bookings' | 'resources-locations' | 'services' | 'schedules';
 
 export default function HapioManagementClient() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -17,10 +16,9 @@ export default function HapioManagementClient() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: <Calendar className="w-4 h-4" /> },
     { id: 'bookings', label: 'Bookings', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'resources', label: 'Employees', icon: <Users className="w-4 h-4" /> },
+    { id: 'resources-locations', label: 'Employees & Locations', icon: <Users className="w-4 h-4" /> },
     { id: 'services', label: 'Services', icon: <Settings className="w-4 h-4" /> },
     { id: 'schedules', label: 'Schedules', icon: <Clock className="w-4 h-4" /> },
-    { id: 'locations', label: 'Locations', icon: <MapPin className="w-4 h-4" /> },
   ];
 
   return (
@@ -69,10 +67,9 @@ export default function HapioManagementClient() {
           <div className="p-6">
             {activeTab === 'overview' && <HapioOverview onNavigate={(tab) => setActiveTab(tab)} />}
             {activeTab === 'bookings' && <BookingsManager />}
-            {activeTab === 'resources' && <ResourcesManager />}
+            {activeTab === 'resources-locations' && <ResourcesAndLocationsManager />}
             {activeTab === 'services' && <ServicesManager />}
             {activeTab === 'schedules' && <SchedulesManager />}
-            {activeTab === 'locations' && <LocationsManager />}
           </div>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { Calendar, Users, Settings, TrendingUp } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 
-type Tab = 'bookings' | 'resources' | 'schedules';
+type Tab = 'bookings' | 'resources-locations' | 'schedules';
 
 interface HapioOverviewProps {
   onNavigate?: (tab: Tab) => void;
@@ -159,7 +159,7 @@ export default function HapioOverview({ onNavigate }: HapioOverviewProps) {
             View All Bookings
           </button>
           <button
-            onClick={() => onNavigate?.('resources')}
+            onClick={() => onNavigate?.('resources-locations')}
             className="px-4 py-2 bg-sage-light text-charcoal rounded-lg hover:bg-sage-light/80 transition-colors text-sm font-medium"
           >
             Manage Employees
