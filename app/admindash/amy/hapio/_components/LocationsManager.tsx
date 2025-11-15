@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2 } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
+import LocationEditModal from './LocationEditModal';
 
 export default function LocationsManager() {
   const [locations, setLocations] = useState<any[]>([]);
@@ -13,6 +14,8 @@ export default function LocationsManager() {
   const [pagination, setPagination] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [perPage] = useState(20);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<any>(null);
 
   useEffect(() => {
     loadLocations();
@@ -47,6 +50,41 @@ export default function LocationsManager() {
     setPage(newPage);
   };
 
+  const handleEdit = (location: any) => {
+    setSelectedLocation(location);
+    setShowEditModal(true);
+  };
+
+  const handleAdd = () => {
+    setSelectedLocation(null);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (locationId: string) => {
+    if (!confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/hapio/locations/${locationId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete location');
+      }
+
+      loadLocations();
+    } catch (err: any) {
+      setError(err);
+    }
+  };
+
+  const handleSave = () => {
+    loadLocations();
+  };
+
   if (loading && locations.length === 0) {
     return <LoadingState message="Loading locations..." />;
   }
@@ -55,7 +93,10 @@ export default function LocationsManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-charcoal">Locations</h2>
-        <button className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium">
+        <button
+          onClick={handleAdd}
+          className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+        >
           <Plus className="w-4 h-4" />
           Add Location
         </button>
@@ -93,12 +134,14 @@ export default function LocationsManager() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => handleEdit(location)}
                         className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
                         title="Edit"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
+                        onClick={() => handleDelete(location.id)}
                         className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Delete"
                       >
@@ -118,6 +161,17 @@ export default function LocationsManager() {
           </div>
         )}
       </div>
+
+      {showEditModal && (
+        <LocationEditModal
+          location={selectedLocation}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedLocation(null);
+          }}
+          onSave={handleSave}
+        />
+      )}
     </div>
   );
 }
