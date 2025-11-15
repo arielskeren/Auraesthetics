@@ -13,6 +13,7 @@ interface CacheEntry {
 const availabilityCache = new Map<CacheKey, CacheEntry>();
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const MAX_CACHE_TTL_MS = 60_000;
+// Outlook sync can be disabled by setting OUTLOOK_SYNC_ENABLED=false
 const OUTLOOK_SYNC_ENABLED = process.env.OUTLOOK_SYNC_ENABLED !== 'false';
 
 function resolveCacheTtl(): number {
@@ -218,6 +219,13 @@ export async function GET(request: NextRequest) {
         perPage,
         page,
       });
+      
+      // Log availability response for debugging
+      console.log('[Hapio] Availability response:', {
+        slotsCount: availability.slots?.length ?? 0,
+        pagination: availability.pagination,
+        firstSlot: availability.slots?.[0] ?? null,
+      });
     } catch (error: any) {
       console.error('[Hapio] Failed to get availability', error);
       const message = typeof error?.message === 'string' ? error.message : 'Failed to retrieve availability from Hapio';
@@ -258,6 +266,14 @@ export async function GET(request: NextRequest) {
             });
           })
         : availability.slots;
+
+    // Log filtering results
+    console.log('[Hapio] Filtering results:', {
+      originalSlotsCount: availability.slots.length,
+      filteredSlotsCount: filteredSlotEntities.length,
+      outlookBusyBlocks: outlookBusy.length,
+      outlookError: outlookError,
+    });
 
     const payload = {
       service: {

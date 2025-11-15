@@ -230,6 +230,15 @@ export async function getAvailability(
     { params: query }
   );
 
+  // Log raw response for debugging
+  console.log('[Hapio] Raw bookable-slots response:', {
+    hasData: !!response.data,
+    dataLength: Array.isArray(response.data) ? response.data.length : 'not an array',
+    dataType: typeof response.data,
+    firstItem: Array.isArray(response.data) && response.data.length > 0 ? response.data[0] : null,
+    meta: response.meta,
+  });
+
   const slots: HapioBookableSlot[] = (response.data ?? []).map((slot: any) => ({
     startsAt: slot.starts_at,
     endsAt: slot.ends_at,
@@ -373,6 +382,274 @@ export async function rescheduleBooking(
 
 export async function cancelBooking(bookingId: string): Promise<void> {
   await requestJson('delete', `bookings/${bookingId}`);
+}
+
+// ============================================================================
+// Hapio Management API Functions (for Admin Panel)
+// ============================================================================
+
+export interface HapioSchedule {
+  id: string;
+  resource_id: string;
+  day_of_week: number; // 0 = Sunday, 6 = Saturday
+  start_time: string; // HH:mm format
+  end_time: string; // HH:mm format
+  enabled: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface HapioResource {
+  id: string;
+  name: string;
+  location_id: string;
+  max_simultaneous_bookings: number;
+  enabled: boolean;
+  metadata?: Record<string, unknown> | null;
+  protected_metadata?: Record<string, unknown> | null;
+}
+
+export interface HapioLocation {
+  id: string;
+  name: string;
+  address?: string | null;
+  timezone?: string | null;
+  enabled: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface HapioService {
+  id: string;
+  name: string;
+  duration_minutes: number;
+  buffer_before_minutes?: number | null;
+  buffer_after_minutes?: number | null;
+  enabled: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface HapioBlock {
+  id: string;
+  resource_id: string | null;
+  location_id: string | null;
+  starts_at: string;
+  ends_at: string;
+  reason?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+// Get all resources for a location
+export async function getResources(locationId?: string): Promise<HapioResource[]> {
+  const query: Record<string, string> = {};
+  if (locationId) {
+    query.location_id = locationId;
+  }
+  
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'resources',
+    { params: query }
+  );
+  
+  return (response.data ?? []).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    location_id: r.location_id,
+    max_simultaneous_bookings: r.max_simultaneous_bookings,
+    enabled: Boolean(r.enabled),
+    metadata: r.metadata ?? null,
+    protected_metadata: r.protected_metadata ?? null,
+  }));
+}
+
+// Get all locations
+export async function getLocations(): Promise<HapioLocation[]> {
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'locations'
+  );
+  
+  return (response.data ?? []).map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    address: l.address ?? null,
+    timezone: l.timezone ?? null,
+    enabled: Boolean(l.enabled),
+    metadata: l.metadata ?? null,
+  }));
+}
+
+// Get all services
+export async function getServices(): Promise<HapioService[]> {
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'services'
+  );
+  
+  return (response.data ?? []).map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    duration_minutes: s.duration_minutes,
+    buffer_before_minutes: s.buffer_before_minutes ?? null,
+    buffer_after_minutes: s.buffer_after_minutes ?? null,
+    enabled: Boolean(s.enabled),
+    metadata: s.metadata ?? null,
+  }));
+}
+
+// Get schedules for a resource
+export async function getSchedules(resourceId: string): Promise<HapioSchedule[]> {
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    `resources/${resourceId}/schedules`
+  );
+  
+  return (response.data ?? []).map((s: any) => ({
+    id: s.id,
+    resource_id: s.resource_id,
+    day_of_week: s.day_of_week,
+    start_time: s.start_time,
+    end_time: s.end_time,
+    enabled: Boolean(s.enabled),
+    metadata: s.metadata ?? null,
+  }));
+}
+
+// Create a schedule
+export async function createSchedule(resourceId: string, schedule: {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  enabled?: boolean;
+  metadata?: Record<string, unknown>;
+}): Promise<HapioSchedule> {
+  const body: Record<string, unknown> = {
+    day_of_week: schedule.day_of_week,
+    start_time: schedule.start_time,
+    end_time: schedule.end_time,
+    enabled: schedule.enabled ?? true,
+  };
+  
+  if (schedule.metadata) {
+    body.metadata = schedule.metadata;
+  }
+  
+  const response = await requestJson<any>(
+    'post',
+    `resources/${resourceId}/schedules`,
+    body
+  );
+  
+  return {
+    id: response.id,
+    resource_id: response.resource_id,
+    day_of_week: response.day_of_week,
+    start_time: response.start_time,
+    end_time: response.end_time,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+// Update a schedule
+export async function updateSchedule(
+  resourceId: string,
+  scheduleId: string,
+  updates: Partial<Pick<HapioSchedule, 'start_time' | 'end_time' | 'enabled' | 'metadata'>>
+): Promise<HapioSchedule> {
+  const body: Record<string, unknown> = {};
+  
+  if (updates.start_time !== undefined) body.start_time = updates.start_time;
+  if (updates.end_time !== undefined) body.end_time = updates.end_time;
+  if (updates.enabled !== undefined) body.enabled = updates.enabled;
+  if (updates.metadata !== undefined) body.metadata = updates.metadata;
+  
+  const response = await requestJson<any>(
+    'patch',
+    `resources/${resourceId}/schedules/${scheduleId}`,
+    body
+  );
+  
+  return {
+    id: response.id,
+    resource_id: response.resource_id,
+    day_of_week: response.day_of_week,
+    start_time: response.start_time,
+    end_time: response.end_time,
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+}
+
+// Delete a schedule
+export async function deleteSchedule(resourceId: string, scheduleId: string): Promise<void> {
+  await requestJson('delete', `resources/${resourceId}/schedules/${scheduleId}`);
+}
+
+// Get blocks (unavailable times)
+export async function getBlocks(params?: {
+  resource_id?: string;
+  location_id?: string;
+  from?: string;
+  to?: string;
+}): Promise<HapioBlock[]> {
+  const query: Record<string, string> = {};
+  if (params?.resource_id) query.resource_id = params.resource_id;
+  if (params?.location_id) query.location_id = params.location_id;
+  if (params?.from) query.from = params.from;
+  if (params?.to) query.to = params.to;
+  
+  const response = await requestJson<HapioPaginatedResponse<any>>(
+    'get',
+    'blocks',
+    { params: query }
+  );
+  
+  return (response.data ?? []).map((b: any) => ({
+    id: b.id,
+    resource_id: b.resource_id ?? null,
+    location_id: b.location_id ?? null,
+    starts_at: b.starts_at,
+    ends_at: b.ends_at,
+    reason: b.reason ?? null,
+    metadata: b.metadata ?? null,
+  }));
+}
+
+// Create a block
+export async function createBlock(block: {
+  resource_id?: string | null;
+  location_id?: string | null;
+  starts_at: string;
+  ends_at: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<HapioBlock> {
+  const body: Record<string, unknown> = {
+    starts_at: block.starts_at,
+    ends_at: block.ends_at,
+  };
+  
+  if (block.resource_id) body.resource_id = block.resource_id;
+  if (block.location_id) body.location_id = block.location_id;
+  if (block.reason) body.reason = block.reason;
+  if (block.metadata) body.metadata = block.metadata;
+  
+  const response = await requestJson<any>('post', 'blocks', body);
+  
+  return {
+    id: response.id,
+    resource_id: response.resource_id ?? null,
+    location_id: response.location_id ?? null,
+    starts_at: response.starts_at,
+    ends_at: response.ends_at,
+    reason: response.reason ?? null,
+    metadata: response.metadata ?? null,
+  };
+}
+
+// Delete a block
+export async function deleteBlock(blockId: string): Promise<void> {
+  await requestJson('delete', `blocks/${blockId}`);
 }
 
 function normalizeBooking(payload: any): HapioBookingResponse {
