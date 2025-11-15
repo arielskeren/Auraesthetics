@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, X, Trash2, Edit2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Trash2, Edit2, Plus } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
@@ -29,6 +29,7 @@ export default function ScheduleBlocksCalendar({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
   const [formData, setFormData] = useState({
     startTime: '00:00',
     endTime: '23:59',
@@ -42,36 +43,16 @@ export default function ScheduleBlocksCalendar({
   }, [resourceId, currentDate]);
 
   useEffect(() => {
-    if (selectedDate && !editingBlock) {
-      const dateBlocks = getBlocksForDate(selectedDate);
-      if (dateBlocks.length > 0) {
-        const block = dateBlocks[0];
-        const start = new Date(block.starts_at);
-        const end = new Date(block.ends_at);
-        const startTime = start.toTimeString().slice(0, 5);
-        const endTime = end.toTimeString().slice(0, 5);
-        const isAllDay = startTime === '00:00' && endTime === '23:59';
-        const serviceIds = (block.metadata?.service_ids as string[]) || [];
-        
-        setFormData({
-          startTime,
-          endTime,
-          blockType: isAllDay ? 'closed' : 'open',
-          serviceIds,
-        });
-        setEditingBlock(block);
-      } else {
-        // New block - default to closed
-        setFormData({
-          startTime: '00:00',
-          endTime: '23:59',
-          blockType: 'closed',
-          serviceIds: [],
-        });
-        setEditingBlock(null);
-      }
+    if (selectedDate && !editingBlock && !isAddingNew) {
+      // Reset form when date changes and not editing/adding
+      setFormData({
+        startTime: '00:00',
+        endTime: '23:59',
+        blockType: 'closed',
+        serviceIds: [],
+      });
     }
-  }, [selectedDate, editingBlock]);
+  }, [selectedDate, editingBlock, isAddingNew]);
 
   const loadBlocks = async () => {
     try {
@@ -206,6 +187,13 @@ export default function ScheduleBlocksCalendar({
 
       await loadBlocks();
       setEditingBlock(null);
+      setIsAddingNew(false);
+      setFormData({
+        startTime: '00:00',
+        endTime: '23:59',
+        blockType: 'closed',
+        serviceIds: [],
+      });
     } catch (err: any) {
       setError(err);
     } finally {
@@ -231,6 +219,7 @@ export default function ScheduleBlocksCalendar({
       await loadBlocks();
       if (editingBlock?.id === blockId) {
         setEditingBlock(null);
+        setIsAddingNew(false);
         setFormData({
           startTime: '00:00',
           endTime: '23:59',
@@ -375,13 +364,12 @@ export default function ScheduleBlocksCalendar({
 
         {/* Right Side Panel - Shows blocks for selected day */}
         {selectedDate && (
-          <div className="flex-1 bg-white border border-sand rounded-lg p-6 min-w-[400px]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-charcoal">
+          <div className="flex-1 bg-white border border-sand rounded-lg p-4 min-w-[380px] max-w-[450px] max-h-[600px] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-charcoal">
                 {selectedDate.toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
+                  weekday: 'short', 
+                  month: 'short', 
                   day: 'numeric' 
                 })}
               </h3>
@@ -389,53 +377,50 @@ export default function ScheduleBlocksCalendar({
                 onClick={() => {
                   setSelectedDate(null);
                   setEditingBlock(null);
+                  setIsAddingNew(false);
                 }}
-                className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
+                className="p-1 hover:bg-sand/20 rounded transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {selectedDateBlocks.length > 0 ? (
-              <div className="space-y-4">
-                {selectedDateBlocks.map((block) => {
-                  const start = new Date(block.starts_at);
-                  const end = new Date(block.ends_at);
-                  const startTime = start.toTimeString().slice(0, 5);
-                  const endTime = end.toTimeString().slice(0, 5);
-                  const isAllDay = startTime === '00:00' && endTime === '23:59';
-                  const serviceIds = (block.metadata?.service_ids as string[]) || [];
-                  const isEditing = editingBlock?.id === block.id;
+            <div className="space-y-2">
+              {selectedDateBlocks.map((block) => {
+                const start = new Date(block.starts_at);
+                const end = new Date(block.ends_at);
+                const startTime = start.toTimeString().slice(0, 5);
+                const endTime = end.toTimeString().slice(0, 5);
+                const isAllDay = startTime === '00:00' && endTime === '23:59';
+                const serviceIds = (block.metadata?.service_ids as string[]) || [];
+                const isEditing = editingBlock?.id === block.id;
 
-                  return (
-                    <div
-                      key={block.id}
-                      className={`border rounded-lg p-4 ${
-                        isAllDay
-                          ? 'bg-red-50 border-red-200'
-                          : 'bg-yellow-50 border-yellow-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="font-semibold text-charcoal mb-1">
-                            {isAllDay ? 'Closed (entire day)' : 'Special hours'}
+                return (
+                  <div
+                    key={block.id}
+                    className={`border rounded-lg p-2.5 ${
+                      isAllDay
+                        ? 'bg-red-50 border-red-200'
+                        : 'bg-yellow-50 border-yellow-200'
+                    }`}
+                  >
+                    {!isEditing ? (
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-charcoal">
+                            {isAllDay ? 'Closed (all day)' : `${startTime} - ${endTime}`}
                           </div>
-                          {!isAllDay && (
-                            <div className="text-sm text-warm-gray">
-                              {startTime} - {endTime}
-                            </div>
-                          )}
                           {serviceIds.length > 0 && (
-                            <div className="text-xs text-warm-gray mt-1">
-                              {serviceIds.length} service{serviceIds.length !== 1 ? 's' : ''} selected
+                            <div className="text-xs text-warm-gray mt-0.5">
+                              {serviceIds.length} service{serviceIds.length !== 1 ? 's' : ''} blocked
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 ml-2">
                           <button
                             onClick={() => {
                               setEditingBlock(block);
+                              setIsAddingNew(false);
                               setFormData({
                                 startTime,
                                 endTime,
@@ -443,199 +428,223 @@ export default function ScheduleBlocksCalendar({
                                 serviceIds,
                               });
                             }}
-                            className="p-1.5 hover:bg-white/50 rounded transition-colors"
+                            className="p-1 hover:bg-white/50 rounded transition-colors"
                             disabled={loading}
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDelete(block.id)}
-                            className="p-1.5 hover:bg-white/50 rounded transition-colors text-red-600"
+                            className="p-1 hover:bg-white/50 rounded transition-colors text-red-600"
                             disabled={loading}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
+                    ) : (
+                      <div className="space-y-2.5">
 
-                      {isEditing && (
-                        <div className="mt-4 pt-4 border-t border-white/50 space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-charcoal mb-1">
-                              Block Type <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                              value={formData.blockType}
-                              onChange={(e) =>
-                                setFormData({ ...formData, blockType: e.target.value as 'closed' | 'open' })
-                              }
-                              className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                            >
-                              <option value="closed">Block entire day (unavailable all day)</option>
-                              <option value="open">Block specific hours (unavailable during selected time)</option>
-                            </select>
-                          </div>
-
-                          {formData.blockType === 'open' && (
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-charcoal mb-1">
-                                  Start Time <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="time"
-                                  value={formData.startTime}
-                                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-charcoal mb-1">
-                                  End Time <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="time"
-                                  value={formData.endTime}
-                                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {formData.blockType === 'open' && (
-                            <div>
-                              <label className="block text-sm font-medium text-charcoal mb-1">
-                                Available Services
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => setShowServiceModal(true)}
-                                className="w-full px-3 py-2 border border-sand rounded-lg text-sm text-left hover:bg-sand/20 transition-colors"
-                              >
-                                {formData.serviceIds.length > 0
-                                  ? `${formData.serviceIds.length} service${formData.serviceIds.length !== 1 ? 's' : ''} selected`
-                                  : 'All services (click to select specific services)'}
-                              </button>
-                              <p className="text-xs text-warm-gray mt-1">
-                                Select which services are blocked during these hours. Leave unselected for all services.
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-2 pt-2">
-                            <button
-                              onClick={handleSave}
-                              disabled={loading}
-                              className="flex-1 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                            >
-                              {loading ? 'Saving...' : 'Save Changes'}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingBlock(null);
-                                const block = selectedDateBlocks[0];
-                                if (block) {
-                                  const start = new Date(block.starts_at);
-                                  const end = new Date(block.ends_at);
-                                  setFormData({
-                                    startTime: start.toTimeString().slice(0, 5),
-                                    endTime: end.toTimeString().slice(0, 5),
-                                    blockType: getBlockType(block),
-                                    serviceIds: (block.metadata?.service_ids as string[]) || [],
-                                  });
-                                }
-                              }}
-                              className="px-4 py-2 text-sm border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
+                        <div>
+                          <label className="block text-xs font-medium text-charcoal mb-1">
+                            Block Type <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={formData.blockType}
+                            onChange={(e) =>
+                              setFormData({ ...formData, blockType: e.target.value as 'closed' | 'open' })
+                            }
+                            className="w-full px-2 py-1.5 border border-sand rounded text-xs focus:outline-none focus:ring-1 focus:ring-dark-sage"
+                          >
+                            <option value="closed">Block entire day</option>
+                            <option value="open">Block specific hours</option>
+                          </select>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-warm-gray">
-                  No schedule blocks for this day. Click below to add one.
-                </p>
-                <div className="border border-sand rounded-lg p-4 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-charcoal mb-1">
-                      Block Type <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.blockType}
-                      onChange={(e) =>
-                        setFormData({ ...formData, blockType: e.target.value as 'closed' | 'open' })
-                      }
-                      className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                    >
-                      <option value="closed">Block entire day (unavailable all day)</option>
-                      <option value="open">Block specific hours (unavailable during selected time)</option>
-                    </select>
+
+                        {formData.blockType === 'open' && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-charcoal mb-1">
+                                Start <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="time"
+                                value={formData.startTime}
+                                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                                className="w-full px-2 py-1.5 border border-sand rounded text-xs focus:outline-none focus:ring-1 focus:ring-dark-sage"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-charcoal mb-1">
+                                End <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="time"
+                                value={formData.endTime}
+                                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                                className="w-full px-2 py-1.5 border border-sand rounded text-xs focus:outline-none focus:ring-1 focus:ring-dark-sage"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {formData.blockType === 'open' && (
+                          <div>
+                            <label className="block text-xs font-medium text-charcoal mb-1">
+                              Block Services
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowServiceModal(true)}
+                              className="w-full px-2 py-1.5 border border-sand rounded text-xs text-left hover:bg-sand/20 transition-colors"
+                            >
+                              {formData.serviceIds.length > 0
+                                ? `${formData.serviceIds.length} service${formData.serviceIds.length !== 1 ? 's' : ''} blocked`
+                                : 'All services blocked (click to block specific services only)'}
+                            </button>
+                            <p className="text-xs text-warm-gray mt-0.5">
+                              Leave unselected to block all services during these hours.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={handleSave}
+                            disabled={loading}
+                            className="flex-1 px-3 py-1.5 bg-dark-sage text-charcoal rounded text-xs hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                          >
+                            {loading ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingBlock(null);
+                              setIsAddingNew(false);
+                            }}
+                            className="px-3 py-1.5 text-xs border border-sand text-charcoal rounded hover:bg-sand/20 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                );
+              })}
 
-                  {formData.blockType === 'open' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-charcoal mb-1">
-                          Start Time <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="time"
-                          value={formData.startTime}
-                          onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                          className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-charcoal mb-1">
-                          End Time <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="time"
-                          value={formData.endTime}
-                          onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                          className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                        />
-                      </div>
-                    </div>
-                  )}
+              {/* Add New Block Button */}
+              {!isAddingNew && (
+                <button
+                  onClick={() => {
+                    setIsAddingNew(true);
+                    setEditingBlock(null);
+                    setFormData({
+                      startTime: '00:00',
+                      endTime: '23:59',
+                      blockType: 'closed',
+                      serviceIds: [],
+                    });
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm text-warm-gray hover:border-dark-sage hover:text-charcoal transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Block
+                </button>
+              )}
 
-                  {formData.blockType === 'open' && (
+              {/* New Block Form */}
+              {isAddingNew && (
+                <div className="border-2 border-dashed border-dark-sage rounded-lg p-2.5 bg-sage-light/20">
+                  <div className="space-y-2.5">
                     <div>
-                      <label className="block text-sm font-medium text-charcoal mb-1">
-                        Available Services
+                      <label className="block text-xs font-medium text-charcoal mb-1">
+                        Block Type <span className="text-red-500">*</span>
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowServiceModal(true)}
-                        className="w-full px-3 py-2 border border-sand rounded-lg text-sm text-left hover:bg-sand/20 transition-colors"
+                      <select
+                        value={formData.blockType}
+                        onChange={(e) =>
+                          setFormData({ ...formData, blockType: e.target.value as 'closed' | 'open' })
+                        }
+                        className="w-full px-2 py-1.5 border border-sand rounded text-xs focus:outline-none focus:ring-1 focus:ring-dark-sage"
                       >
-                        {formData.serviceIds.length > 0
-                          ? `${formData.serviceIds.length} service${formData.serviceIds.length !== 1 ? 's' : ''} selected`
-                          : 'All services (click to select specific services)'}
-                      </button>
-                      <p className="text-xs text-warm-gray mt-1">
-                        Select which services are blocked during these hours. Leave unselected for all services.
-                      </p>
+                        <option value="closed">Block entire day</option>
+                        <option value="open">Block specific hours</option>
+                      </select>
                     </div>
-                  )}
 
-                  <button
-                    onClick={handleSave}
-                    disabled={loading || !locationId}
-                    className="w-full px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                  >
-                    {loading ? 'Creating...' : 'Create Block'}
-                  </button>
+                    {formData.blockType === 'open' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-charcoal mb-1">
+                            Start <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="time"
+                            value={formData.startTime}
+                            onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-sand rounded text-xs focus:outline-none focus:ring-1 focus:ring-dark-sage"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-charcoal mb-1">
+                            End <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="time"
+                            value={formData.endTime}
+                            onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-sand rounded text-xs focus:outline-none focus:ring-1 focus:ring-dark-sage"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {formData.blockType === 'open' && (
+                      <div>
+                        <label className="block text-xs font-medium text-charcoal mb-1">
+                          Block Services
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowServiceModal(true)}
+                          className="w-full px-2 py-1.5 border border-sand rounded text-xs text-left hover:bg-sand/20 transition-colors"
+                        >
+                          {formData.serviceIds.length > 0
+                            ? `${formData.serviceIds.length} service${formData.serviceIds.length !== 1 ? 's' : ''} blocked`
+                            : 'All services blocked (click to block specific services only)'}
+                        </button>
+                        <p className="text-xs text-warm-gray mt-0.5">
+                          Leave unselected to block all services during these hours.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={handleSave}
+                        disabled={loading || !locationId}
+                        className="flex-1 px-3 py-1.5 bg-dark-sage text-charcoal rounded text-xs hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                      >
+                        {loading ? 'Creating...' : 'Create Block'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsAddingNew(false);
+                          setFormData({
+                            startTime: '00:00',
+                            endTime: '23:59',
+                            blockType: 'closed',
+                            serviceIds: [],
+                          });
+                        }}
+                        className="px-3 py-1.5 text-xs border border-sand text-charcoal rounded hover:bg-sand/20 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
         )}
       </div>
