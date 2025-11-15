@@ -315,7 +315,8 @@ export default function ServicesManager() {
             <PaginationControls meta={pagination} onPageChange={handlePageChange} />
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {showEditModal && (
         <ServiceEditModal
