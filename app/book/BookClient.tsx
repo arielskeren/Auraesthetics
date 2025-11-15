@@ -46,6 +46,9 @@ export default function BookClient() {
           price: s.price || '',
           testPricing: s.test_pricing || false,
           image_url: s.image_url,
+          featured: s.featured || false,
+          best_seller: s.best_seller || false,
+          most_popular: s.most_popular || false,
         }));
         setServices(mappedServices);
       } catch (error) {

@@ -39,6 +39,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
     test_pricing: false,
     enabled: true,
     display_order: 0,
+    featured: false,
+    best_seller: false,
+    most_popular: false,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -69,6 +72,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
         test_pricing: service.test_pricing || false,
         enabled: service.enabled !== false,
         display_order: service.display_order || 0,
+        featured: service.featured || false,
+        best_seller: service.best_seller || false,
+        most_popular: service.most_popular || false,
       });
       setImageUrl(service.image_url || null);
     }
@@ -164,6 +170,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
         test_pricing: formData.test_pricing,
         enabled: formData.enabled,
         display_order: formData.display_order,
+        featured: formData.featured,
+        best_seller: formData.best_seller,
+        most_popular: formData.most_popular,
       };
 
       console.log('[Service Edit] Sending request:', { url, method, servicePayload });
@@ -553,10 +562,44 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
               type="number"
               min="0"
               value={formData.display_order}
-              onChange={(e) => setFormData({ ...formData, display_order: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              readOnly
+              className="w-full px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs cursor-not-allowed"
             />
-            <p className="text-xs text-warm-gray mt-1">Lower numbers appear first (0 = default)</p>
+            <p className="text-xs text-warm-gray mt-1">Auto-assigned. Use &quot;Reorder Services&quot; button to change order.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-charcoal mb-2">Service Badges</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.featured}
+                  onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+                  className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                />
+                <span className="text-sm text-charcoal">Featured</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.best_seller}
+                  onChange={(e) => setFormData({ ...formData, best_seller: e.target.checked })}
+                  className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                />
+                <span className="text-sm text-charcoal">Best Seller</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.most_popular}
+                  onChange={(e) => setFormData({ ...formData, most_popular: e.target.checked })}
+                  className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                />
+                <span className="text-sm text-charcoal">Most Popular</span>
+              </label>
+            </div>
+            <p className="text-xs text-warm-gray mt-1">Badges will appear on service cards on the website</p>
           </div>
 
           <div className="flex items-center gap-3 pt-4 border-t border-sand">

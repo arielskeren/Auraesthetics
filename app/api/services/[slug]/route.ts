@@ -31,6 +31,10 @@ export async function GET(
         image_filename,
         enabled,
         display_order,
+        starred,
+        featured,
+        best_seller,
+        most_popular,
         created_at,
         updated_at
       FROM services

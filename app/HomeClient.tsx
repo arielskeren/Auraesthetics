@@ -36,12 +36,13 @@ export default function HomeClient() {
           price: s.price || '',
           testPricing: s.test_pricing || false,
           image_url: s.image_url,
+          featured: s.featured || false,
+          best_seller: s.best_seller || false,
+          most_popular: s.most_popular || false,
         }));
-        // Filter featured services
-        const featured = mappedServices.filter((s: any) => 
-          ['aura-facial', 'hydrafacial', 'brow-lamination', 'lymphatic-drainage-facial', 'dermaplaning', 'biorepeel'].includes(s.slug)
-        ).slice(0, 6);
-        setFeaturedServices(featured);
+        // Filter starred services (up to 6)
+        const starred = mappedServices.filter((s: any) => s.starred).slice(0, 6);
+        setFeaturedServices(starred);
       } catch (error) {
         console.error('Error loading services:', error);
       } finally {

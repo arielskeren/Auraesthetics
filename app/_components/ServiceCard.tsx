@@ -10,10 +10,13 @@ interface ServiceCardProps {
   category: string;
   slug?: string;
   image_url?: string | null;
+  featured?: boolean;
+  best_seller?: boolean;
+  most_popular?: boolean;
   onClick?: () => void;
 }
 
-export default function ServiceCard({ name, summary, duration, price, category, slug, image_url, onClick }: ServiceCardProps) {
+export default function ServiceCard({ name, summary, duration, price, category, slug, image_url, featured, best_seller, most_popular, onClick }: ServiceCardProps) {
   // Create a unique gradient based on category - more distinct from background
   const gradients = {
     'Facials': 'from-dark-sage/60 via-taupe/40 to-sand',
@@ -43,29 +46,52 @@ export default function ServiceCard({ name, summary, duration, price, category, 
     >
       <div className="bg-white rounded-xl overflow-hidden shadow-sm sm:shadow-sm group-active:shadow-md sm:group-hover:shadow-lg transition-shadow duration-200 h-full flex flex-col">
         {/* Service image or gradient placeholder */}
-        {image_url ? (
-          <>
-            <div className="hidden sm:block h-48 flex-shrink-0 bg-gray-200 relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={image_url} 
-                alt={name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // If blob image fails to load, show gradient
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  if (target.parentElement) {
-                    target.parentElement.className = `h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`;
-                  }
-                }}
-              />
+        <div className="relative">
+          {image_url ? (
+            <>
+              <div className="hidden sm:block h-48 flex-shrink-0 bg-gray-200 relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={image_url} 
+                  alt={name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // If blob image fails to load, show gradient
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    if (target.parentElement) {
+                      target.parentElement.className = `h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`;
+                    }
+                  }}
+                />
+              </div>
+              <div className={`sm:hidden h-1.5 w-full bg-gradient-to-r ${gradient}`} />
+            </>
+          ) : (
+            <div className={`h-1.5 sm:h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
+          )}
+          
+          {/* Badges */}
+          {(featured || best_seller || most_popular) && (
+            <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+              {featured && (
+                <span className="px-2 py-1 bg-dark-sage text-charcoal text-xs font-semibold rounded shadow-sm">
+                  Featured
+                </span>
+              )}
+              {best_seller && (
+                <span className="px-2 py-1 bg-yellow-500 text-white text-xs font-semibold rounded shadow-sm">
+                  Best Seller
+                </span>
+              )}
+              {most_popular && (
+                <span className="px-2 py-1 bg-blue-500 text-white text-xs font-semibold rounded shadow-sm">
+                  Most Popular
+                </span>
+              )}
             </div>
-            <div className={`sm:hidden h-1.5 w-full bg-gradient-to-r ${gradient}`} />
-          </>
-        ) : (
-          <div className={`h-1.5 sm:h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
-        )}
+          )}
+        </div>
         
         {/* Content - flex to fill remaining space */}
         <div className="px-4 py-4 sm:p-6 flex flex-col flex-grow gap-3 sm:gap-4">

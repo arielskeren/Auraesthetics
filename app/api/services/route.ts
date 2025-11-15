@@ -31,11 +31,15 @@ export async function GET(request: NextRequest) {
           image_filename,
           enabled,
           display_order,
+          starred,
+          featured,
+          best_seller,
+          most_popular,
           created_at,
           updated_at
         FROM services
         WHERE enabled = true AND category = ${category} AND (category IS NULL OR category != 'Add-on')
-        ORDER BY display_order ASC, name ASC
+        ORDER BY display_order ASC, created_at ASC
       `;
     } else {
       query = sql`
@@ -54,11 +58,15 @@ export async function GET(request: NextRequest) {
           image_filename,
           enabled,
           display_order,
+          starred,
+          featured,
+          best_seller,
+          most_popular,
           created_at,
           updated_at
         FROM services
         WHERE enabled = true AND (category IS NULL OR category != 'Add-on')
-        ORDER BY display_order ASC, category ASC, name ASC
+        ORDER BY display_order ASC, created_at ASC
       `;
     }
 
