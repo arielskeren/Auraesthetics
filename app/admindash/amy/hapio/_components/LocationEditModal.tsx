@@ -153,6 +153,18 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
             </div>
           )}
 
+          {location?.id && (
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Location ID</label>
+              <input
+                type="text"
+                value={location.id}
+                readOnly
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs cursor-not-allowed"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">
               Name <span className="text-red-500">*</span>

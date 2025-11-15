@@ -79,8 +79,17 @@ export default function SchedulesManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-charcoal">Schedules</h2>
-        <div className="text-sm text-warm-gray">
-          Resource: {resourceId ? resourceId.slice(0, 8) + '...' : 'Loading...'}
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-warm-gray">Resource ID:</span>
+            <span className="font-mono text-xs text-charcoal">{resourceId || 'Loading...'}</span>
+          </div>
+          {locationId && (
+            <div className="flex items-center gap-2">
+              <span className="text-warm-gray">Location ID:</span>
+              <span className="font-mono text-xs text-charcoal">{locationId}</span>
+            </div>
+          )}
         </div>
       </div>
 

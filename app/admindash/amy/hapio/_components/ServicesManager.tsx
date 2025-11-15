@@ -6,6 +6,7 @@ import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import ServiceEditModal from './ServiceEditModal';
+import IdDisplay from './IdDisplay';
 
 export default function ServicesManager() {
   const [services, setServices] = useState<any[]>([]);
@@ -121,6 +122,7 @@ export default function ServicesManager() {
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Service ID</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Buffer</th>
@@ -131,6 +133,9 @@ export default function ServicesManager() {
             <tbody className="divide-y divide-sand">
               {services.map((service) => (
                 <tr key={service.id} className="hover:bg-sand/20">
+                  <td className="px-4 py-3">
+                    <IdDisplay id={service.id} label="Service ID" />
+                  </td>
                   <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
                   <td className="px-4 py-3 text-sm text-warm-gray">
                     {service.duration_minutes != null ? `${service.duration_minutes} min` : '—'}

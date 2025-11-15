@@ -109,6 +109,18 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <ErrorDisplay error={error} />}
 
+          {resource?.id && (
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Resource ID</label>
+              <input
+                type="text"
+                value={resource.id}
+                readOnly
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm bg-sand/20 font-mono text-xs cursor-not-allowed"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">
               Name <span className="text-red-500">*</span>

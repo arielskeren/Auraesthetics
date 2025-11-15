@@ -229,6 +229,19 @@ export default function RecurringScheduleBlocksEditor({
 
       // Create recurring schedule blocks for each enabled day
       for (const daySchedule of enabledSchedules) {
+        // Convert time from HH:mm to HH:mm:ss format (Hapio requires H:i:s)
+        const formatTime = (time: string): string => {
+          if (time.includes(':')) {
+            const parts = time.split(':');
+            return parts.length === 2 ? `${time}:00` : time;
+          }
+          return time;
+        };
+        
+        // Convert weekday from 0-6 (Sunday-Saturday) to 1-7 (Monday-Sunday)
+        // Hapio uses 1-7 where 1=Monday, 7=Sunday
+        const hapioWeekday = daySchedule.dayOfWeek === 0 ? 7 : daySchedule.dayOfWeek;
+        
         const blockResponse = await fetch(
           `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
           {
@@ -236,9 +249,9 @@ export default function RecurringScheduleBlocksEditor({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               recurring_schedule_id: recurringScheduleId,
-              weekday: daySchedule.dayOfWeek, // Hapio uses "weekday" not "day_of_week"
-              start_time: daySchedule.startTime,
-              end_time: daySchedule.endTime,
+              weekday: hapioWeekday, // Hapio uses 1-7 (Monday=1, Sunday=7)
+              start_time: formatTime(daySchedule.startTime), // Convert HH:mm to HH:mm:ss
+              end_time: formatTime(daySchedule.endTime), // Convert HH:mm to HH:mm:ss
               metadata: {
                 service_ids: daySchedule.serviceIds,
               },
@@ -263,6 +276,22 @@ export default function RecurringScheduleBlocksEditor({
 
   return (
     <div className="space-y-6">
+      {/* ID Display */}
+      <div className="bg-sage-light/30 border border-sand rounded-lg p-4">
+        <div className="flex items-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-warm-gray font-medium">Resource ID:</span>
+            <span className="font-mono text-xs text-charcoal">{resourceId}</span>
+          </div>
+          {locationId && (
+            <div className="flex items-center gap-2">
+              <span className="text-warm-gray font-medium">Location ID:</span>
+              <span className="font-mono text-xs text-charcoal">{locationId}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
         <div className="flex-1">

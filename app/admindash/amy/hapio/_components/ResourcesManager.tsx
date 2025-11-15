@@ -7,6 +7,7 @@ import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import ResourceEditModal from './ResourceEditModal';
 import ResourceScheduleModal from './ResourceScheduleModal';
+import IdDisplay from './IdDisplay';
 
 export default function ResourcesManager() {
   const [resources, setResources] = useState<any[]>([]);
@@ -140,6 +141,7 @@ export default function ResourcesManager() {
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Resource ID</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Location ID</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Max Simultaneous</th>
@@ -150,9 +152,12 @@ export default function ResourcesManager() {
             <tbody className="divide-y divide-sand">
               {resources.map((resource) => (
                 <tr key={resource.id} className="hover:bg-sand/20">
+                  <td className="px-4 py-3">
+                    <IdDisplay id={resource.id} label="Resource ID" />
+                  </td>
                   <td className="px-4 py-3 text-sm font-medium text-charcoal">{resource.name}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray font-mono">
-                    {resource.location_id ? `${resource.location_id.slice(0, 8)}...` : '—'}
+                  <td className="px-4 py-3">
+                    <IdDisplay id={resource.location_id} label="Location ID" />
                   </td>
                   <td className="px-4 py-3 text-sm text-warm-gray">{resource.max_simultaneous_bookings}</td>
                   <td className="px-4 py-3">
