@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
           created_at,
           updated_at
         FROM services
-        WHERE enabled = true AND category = ${category}
+        WHERE enabled = true AND category = ${category} AND (category IS NULL OR category != 'Add-on')
         ORDER BY display_order ASC, name ASC
       `;
     } else {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
           created_at,
           updated_at
         FROM services
-        WHERE enabled = true
+        WHERE enabled = true AND (category IS NULL OR category != 'Add-on')
         ORDER BY display_order ASC, category ASC, name ASC
       `;
     }

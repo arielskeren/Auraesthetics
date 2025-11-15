@@ -34,7 +34,7 @@ export async function GET(
         created_at,
         updated_at
       FROM services
-      WHERE slug = ${slug} AND enabled = true
+      WHERE slug = ${slug} AND enabled = true AND (category IS NULL OR category != 'Add-on')
       LIMIT 1
     ` as Array<any>;
 

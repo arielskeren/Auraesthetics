@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Copy, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -23,6 +23,7 @@ export default function ServicesManager() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterName, setFilterName] = useState<string>('');
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [viewingHapioServices, setViewingHapioServices] = useState(false);
@@ -108,9 +109,16 @@ export default function ServicesManager() {
     return groups;
   }, [filteredAndSortedServices]);
 
-  const handleCopyId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    // You could add a toast notification here
+  const toggleCategory = (category: string) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
   };
 
   const loadServices = async () => {
@@ -658,172 +666,171 @@ export default function ServicesManager() {
               <div className="divide-y divide-sand">
                 {Object.entries(groupedServices)
                   .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([category, categoryServices]) => (
-                    <div key={category} className="p-6">
-                      <h3 className="text-lg font-semibold text-charcoal mb-4 pb-2 border-b border-sand">
-                        {category || 'Uncategorized'}
-                        <span className="ml-2 text-sm font-normal text-warm-gray">
-                          ({categoryServices.length} {categoryServices.length === 1 ? 'service' : 'services'})
-                        </span>
-                      </h3>
-                      <table className="w-full">
-                        <thead className="bg-sage-light/30 border-b border-sand">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal w-12">#</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Image</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                            <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-sand">
-                          {categoryServices.map((service, index) => (
-                            <tr key={service.id} className="hover:bg-sand/20">
-                              <td className="px-4 py-3 text-sm text-warm-gray font-mono">
-                                {index + 1}
-                              </td>
-                              <td className="px-4 py-3">
-                                {service.image_url ? (
-                                  <>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                      src={service.image_url}
-                                      alt={service.name || 'Service image'}
-                                      className="w-16 h-16 object-cover rounded-lg border border-sand"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.style.display = 'none';
-                                      }}
-                                    />
-                                  </>
-                                ) : (
-                                  <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
-                                    No image
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-charcoal">{service.name || '—'}</span>
-                                  <button
-                                    onClick={() => handleCopyId(service.id)}
-                                    className="p-1 text-warm-gray hover:text-charcoal hover:bg-sand/30 rounded transition-colors"
-                                    title="Copy Service ID"
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-sm text-warm-gray">
-                                {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-warm-gray">
-                                {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                                  }`}
-                                >
-                                  {service.enabled ? 'Enabled' : 'Disabled'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleSync(service.id)}
-                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                    title="Sync to Hapio"
-                                  >
-                                    <RefreshCw className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleEdit(service)}
-                                    className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
-                                    title="Edit"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(service.id)}
-                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  .map(([category, categoryServices]) => {
+                    const isCollapsed = collapsedCategories.has(category);
+                    return (
+                      <div key={category} className="border-b border-sand last:border-b-0">
+                        <button
+                          onClick={() => toggleCategory(category)}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-sand/10 transition-colors"
+                        >
+                          <h3 className="text-lg font-semibold text-charcoal">
+                            {category || 'Uncategorized'}
+                            <span className="ml-2 text-sm font-normal text-warm-gray">
+                              ({categoryServices.length} {categoryServices.length === 1 ? 'service' : 'services'})
+                            </span>
+                          </h3>
+                          {isCollapsed ? (
+                            <ChevronRight className="w-5 h-5 text-warm-gray" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-warm-gray" />
+                          )}
+                        </button>
+                        {!isCollapsed && (
+                          <div className="px-3 py-3">
+                            <table className="w-full">
+                              <thead className="bg-sage-light/30 border-b border-sand">
+                                <tr>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal w-10">#</th>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Image</th>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Name</th>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Duration</th>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Price</th>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Status</th>
+                                  <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-sand">
+                                {categoryServices.map((service, index) => (
+                                  <tr key={service.id} className="hover:bg-sand/20">
+                                    <td className="px-3 py-2 text-center text-sm text-warm-gray font-mono">
+                                      {index + 1}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <div className="flex justify-center">
+                                        {service.image_url ? (
+                                          <>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                              src={service.image_url}
+                                              alt={service.name || 'Service image'}
+                                              className="w-14 h-14 object-cover rounded-lg border border-sand"
+                                              onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                target.style.display = 'none';
+                                              }}
+                                            />
+                                          </>
+                                        ) : (
+                                          <div className="w-14 h-14 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                                            No image
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                                    <td className="px-3 py-2 text-center text-sm text-warm-gray">
+                                      {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
+                                    </td>
+                                    <td className="px-3 py-2 text-center text-sm text-warm-gray">
+                                      {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      <span
+                                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                          service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                        }`}
+                                      >
+                                        {service.enabled ? 'Enabled' : 'Disabled'}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center justify-center gap-2">
+                                        <button
+                                          onClick={() => handleSync(service.id)}
+                                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                          title="Sync to Hapio"
+                                        >
+                                          <RefreshCw className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEdit(service)}
+                                          className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
+                                          title="Edit"
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(service.id)}
+                                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  );
+                  })}
               </div>
             ) : (
               // Sorted View (All Services)
               <table className="w-full">
                 <thead className="bg-sage-light/30 border-b border-sand">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal w-12">#</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Image</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Category</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal w-10">#</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Image</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Name</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Category</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Duration</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Price</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Status</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand">
                   {filteredAndSortedServices.map((service, index) => (
                     <tr key={service.id} className="hover:bg-sand/20">
-                      <td className="px-4 py-3 text-sm text-warm-gray font-mono">
+                      <td className="px-3 py-2 text-center text-sm text-warm-gray font-mono">
                         {index + 1}
                       </td>
-                      <td className="px-4 py-3">
-                        {service.image_url ? (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={service.image_url}
-                              alt={service.name || 'Service image'}
-                              className="w-16 h-16 object-cover rounded-lg border border-sand"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                              }}
-                            />
-                          </>
-                        ) : (
-                          <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
-                            No image
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-charcoal">{service.name || '—'}</span>
-                          <button
-                            onClick={() => handleCopyId(service.id)}
-                            className="p-1 text-warm-gray hover:text-charcoal hover:bg-sand/30 rounded transition-colors"
-                            title="Copy Service ID"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
+                      <td className="px-3 py-2">
+                        <div className="flex justify-center">
+                          {service.image_url ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={service.image_url}
+                                alt={service.name || 'Service image'}
+                                className="w-14 h-14 object-cover rounded-lg border border-sand"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                }}
+                              />
+                            </>
+                          ) : (
+                            <div className="w-14 h-14 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                              No image
+                            </div>
+                          )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-warm-gray">{service.category || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-warm-gray">
+                      <td className="px-3 py-2 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                      <td className="px-3 py-2 text-center text-sm text-warm-gray">{service.category || '—'}</td>
+                      <td className="px-3 py-2 text-center text-sm text-warm-gray">
                         {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
                       </td>
-                      <td className="px-4 py-3 text-sm text-warm-gray">
+                      <td className="px-3 py-2 text-center text-sm text-warm-gray">
                         {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 text-center">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${
                             service.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
@@ -832,8 +839,8 @@ export default function ServicesManager() {
                           {service.enabled ? 'Enabled' : 'Disabled'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleSync(service.id)}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"

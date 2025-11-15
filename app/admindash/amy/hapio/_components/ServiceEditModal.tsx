@@ -49,7 +49,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const categories = ['Facials', 'Advanced', 'Brows & Lashes', 'Waxing'];
+  const defaultCategories = ['Facials', 'Advanced', 'Brows & Lashes', 'Waxing', 'Add-on'];
+  const [customCategory, setCustomCategory] = useState('');
+  const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
 
   useEffect(() => {
     if (service) {
@@ -345,18 +347,79 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
 
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">Category</label>
-            <select
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-            >
-              <option value="">Select category</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-2">
+              <select
+                value={showCustomCategoryInput ? '' : formData.category}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setShowCustomCategoryInput(true);
+                    setCustomCategory('');
+                  } else {
+                    setFormData({ ...formData, category: e.target.value });
+                    setShowCustomCategoryInput(false);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              >
+                <option value="">Select category</option>
+                {defaultCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+                <option value="__custom__">+ Create new category</option>
+              </select>
+              {showCustomCategoryInput && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    onBlur={() => {
+                      if (customCategory.trim()) {
+                        setFormData({ ...formData, category: customCategory.trim() });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customCategory.trim()) {
+                        setFormData({ ...formData, category: customCategory.trim() });
+                        setShowCustomCategoryInput(false);
+                      }
+                    }}
+                    placeholder="Enter new category name"
+                    className="flex-1 px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customCategory.trim()) {
+                        setFormData({ ...formData, category: customCategory.trim() });
+                        setShowCustomCategoryInput(false);
+                      }
+                    }}
+                    className="px-3 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomCategoryInput(false);
+                      setCustomCategory('');
+                    }}
+                    className="px-3 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+            {formData.category === 'Add-on' && (
+              <p className="text-xs text-warm-gray mt-1">
+                Note: Add-on services will not appear on the public website but can be added to other services.
+              </p>
+            )}
           </div>
 
           <div>
