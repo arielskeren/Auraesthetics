@@ -189,7 +189,6 @@ export default function RecurringSchedulesEditor({
               console.warn('[RecurringSchedulesEditor] Error loading blocks:', blockErr);
             }
           }
-        }
       } else if (response.status === 404) {
         // 404 is expected if no schedules exist yet - silently ignore
         return;
