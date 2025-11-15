@@ -293,17 +293,36 @@ export default function RecurringScheduleEditModal({
   };
 
   const handleServiceSelection = (dayIndex: number, rangeIndex: number, serviceIds: string[]) => {
+    console.log('[RecurringScheduleEditModal] handleServiceSelection called:', {
+      dayIndex,
+      rangeIndex,
+      serviceIds,
+      serviceCount: serviceIds.length,
+    });
+    
     const newSchedules = [...schedules];
     const newTimeRanges = [...newSchedules[dayIndex].timeRanges];
+    // If serviceIds is empty, default to all services (user must explicitly deselect)
+    const finalServiceIds = serviceIds.length > 0 
+      ? serviceIds 
+      : (allServiceIds.length > 0 ? allServiceIds : []);
+    
     newTimeRanges[rangeIndex] = {
       ...newTimeRanges[rangeIndex],
-      serviceIds,
+      serviceIds: finalServiceIds,
     };
     newSchedules[dayIndex] = {
       ...newSchedules[dayIndex],
       timeRanges: newTimeRanges,
     };
     setSchedules(newSchedules);
+    
+    console.log('[RecurringScheduleEditModal] Updated schedules:', {
+      dayIndex,
+      rangeIndex,
+      finalServiceIds,
+      finalServiceCount: finalServiceIds.length,
+    });
   };
 
   const calculateEndDate = (): string | null => {
@@ -708,15 +727,14 @@ export default function RecurringScheduleEditModal({
                             <button
                               onClick={() => {
                                 setShowServiceModal(index * 1000 + rangeIndex); // Use composite index
-                                // Store day and range index for service selection
-                                (window as any).__serviceModalDayIndex = index;
-                                (window as any).__serviceModalRangeIndex = rangeIndex;
                               }}
                               className="w-full px-2 py-1 text-xs border border-sand text-charcoal rounded hover:bg-sand/20 transition-colors text-left"
                             >
                               {timeRange.serviceIds.length > 0
                                 ? `${timeRange.serviceIds.length} service${timeRange.serviceIds.length !== 1 ? 's' : ''} selected`
-                                : 'Select services (optional)'}
+                                : allServiceIds.length > 0
+                                ? `All ${allServiceIds.length} services (default)`
+                                : 'Select services'}
                             </button>
                           </div>
                         ))}
@@ -730,30 +748,33 @@ export default function RecurringScheduleEditModal({
 
 
           {/* Service Selection Modal */}
-          {showServiceModal !== null && (
-            <ServiceSelectionModal
-              selectedServiceIds={
-                (window as any).__serviceModalDayIndex !== undefined && (window as any).__serviceModalRangeIndex !== undefined
-                  ? schedules[(window as any).__serviceModalDayIndex]?.timeRanges[(window as any).__serviceModalRangeIndex]?.serviceIds || []
-                  : []
-              }
-              onClose={() => {
-                setShowServiceModal(null);
-                (window as any).__serviceModalDayIndex = undefined;
-                (window as any).__serviceModalRangeIndex = undefined;
-              }}
-              onSave={(serviceIds) => {
-                const dayIndex = (window as any).__serviceModalDayIndex;
-                const rangeIndex = (window as any).__serviceModalRangeIndex;
-                if (dayIndex !== undefined && rangeIndex !== undefined) {
+          {showServiceModal !== null && (() => {
+            const dayIndex = Math.floor(showServiceModal / 1000);
+            const rangeIndex = showServiceModal % 1000;
+            const currentServiceIds = schedules[dayIndex]?.timeRanges[rangeIndex]?.serviceIds || [];
+            // If empty, default to all services
+            const defaultServiceIds = currentServiceIds.length > 0 ? currentServiceIds : (allServiceIds.length > 0 ? allServiceIds : []);
+            
+            return (
+              <ServiceSelectionModal
+                key={`${dayIndex}-${rangeIndex}`}
+                selectedServiceIds={defaultServiceIds}
+                onClose={() => {
+                  setShowServiceModal(null);
+                }}
+                onSave={(serviceIds) => {
+                  console.log('[RecurringScheduleEditModal] Saving service selection:', {
+                    dayIndex,
+                    rangeIndex,
+                    serviceIds,
+                    serviceCount: serviceIds.length,
+                  });
                   handleServiceSelection(dayIndex, rangeIndex, serviceIds);
-                }
-                setShowServiceModal(null);
-                (window as any).__serviceModalDayIndex = undefined;
-                (window as any).__serviceModalRangeIndex = undefined;
-              }}
-            />
-          )}
+                  setShowServiceModal(null);
+                }}
+              />
+            );
+          })()}
         </div>
       </div>
     </div>

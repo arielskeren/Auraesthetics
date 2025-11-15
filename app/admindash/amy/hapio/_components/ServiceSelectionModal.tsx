@@ -71,7 +71,12 @@ export default function ServiceSelectionModal({
   };
 
   const handleSave = () => {
-    onSave(Array.from(selectedIds));
+    const serviceIdsArray = Array.from(selectedIds);
+    console.log('[ServiceSelectionModal] Saving services:', {
+      selectedCount: serviceIdsArray.length,
+      serviceIds: serviceIdsArray,
+    });
+    onSave(serviceIdsArray);
     onClose();
   };
 
@@ -168,10 +173,10 @@ export default function ServiceSelectionModal({
             <button
               type="button"
               onClick={handleSave}
-              disabled={loading || selectedIds.size === 0}
+              disabled={loading}
               className="flex-1 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save ({selectedIds.size} selected)
+              Save ({selectedIds.size > 0 ? selectedIds.size : 'All'} selected)
             </button>
           </div>
         </div>
