@@ -62,12 +62,14 @@ export default function RecurringScheduleEditModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
   const [success, setSuccess] = useState(false);
+  const [allServiceIds, setAllServiceIds] = useState<string[]>([]);
 
   useEffect(() => {
+    loadAllServices();
     if (scheduleId) {
       loadExistingSchedule();
     } else {
-      // Reset to defaults for new schedule
+      // Reset to defaults for new schedule - will be populated with all services after loadAllServices
       setSchedules(DAYS.map((day) => ({
         dayOfWeek: day.value,
         enabled: false,
@@ -80,6 +82,32 @@ export default function RecurringScheduleEditModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleId]);
+
+  const loadAllServices = async () => {
+    try {
+      const response = await fetch('/api/admin/hapio/services?per_page=100');
+      if (response.ok) {
+        const data = await response.json();
+        const serviceIds = (data.data || []).map((s: any) => s.id);
+        setAllServiceIds(serviceIds);
+        
+        // If this is a new schedule, populate all time ranges with all services
+        if (!scheduleId) {
+          setSchedules((prev) =>
+            prev.map((day) => ({
+              ...day,
+              timeRanges: day.timeRanges.map((range) => ({
+                ...range,
+                serviceIds: serviceIds.length > 0 ? [...serviceIds] : [],
+              })),
+            }))
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('[RecurringScheduleEditModal] Error loading services:', err);
+    }
+  };
 
   const loadExistingSchedule = async () => {
     if (!scheduleId) return;
@@ -137,7 +165,27 @@ export default function RecurringScheduleEditModal({
                   return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : time;
                 };
                 
-                const serviceIds = (block.metadata?.service_ids as string[]) || [];
+                let serviceIds = (block.metadata?.service_ids as string[]) || [];
+                
+                // If serviceIds is empty or if there are new services not in the list, default to all services
+                // This ensures new services are automatically included
+                if (serviceIds.length === 0 || allServiceIds.length > 0) {
+                  // Merge: keep existing serviceIds, but add any new services that weren't in the original list
+                  const existingSet = new Set(serviceIds);
+                  const allServicesSet = new Set(allServiceIds);
+                  
+                  // If empty, use all services. Otherwise, merge with new services
+                  if (serviceIds.length === 0) {
+                    serviceIds = [...allServiceIds];
+                  } else {
+                    // Add any new services that weren't in the original list
+                    allServiceIds.forEach((id) => {
+                      if (!existingSet.has(id)) {
+                        serviceIds.push(id);
+                      }
+                    });
+                  }
+                }
                 
                 // Add time range to the day
                 initializedSchedules[dayIndex].timeRanges.push({
@@ -150,6 +198,9 @@ export default function RecurringScheduleEditModal({
               }
             });
             
+            // After loading blocks, ensure allServiceIds is loaded and merge with any new services
+            // This needs to happen after allServiceIds is set, so we'll do it in a separate effect
+            // For now, we'll merge in loadExistingSchedule after allServiceIds is available
             setSchedules(initializedSchedules);
           }
         } catch (blockErr) {
@@ -160,6 +211,33 @@ export default function RecurringScheduleEditModal({
       console.warn('[RecurringScheduleEditModal] Error loading schedule:', err);
     }
   };
+
+  // Effect to merge new services into existing schedules when allServiceIds is loaded
+  useEffect(() => {
+    if (allServiceIds.length > 0 && scheduleId) {
+      setSchedules((prev) =>
+        prev.map((daySchedule) => ({
+          ...daySchedule,
+          timeRanges: daySchedule.timeRanges.map((timeRange) => {
+            if (timeRange.serviceIds.length === 0) {
+              // If empty, default to all services
+              return { ...timeRange, serviceIds: [...allServiceIds] };
+            } else {
+              // Merge: add any new services that weren't in the original list
+              const existingSet = new Set(timeRange.serviceIds);
+              const mergedIds = [...timeRange.serviceIds];
+              allServiceIds.forEach((id) => {
+                if (!existingSet.has(id)) {
+                  mergedIds.push(id);
+                }
+              });
+              return { ...timeRange, serviceIds: mergedIds };
+            }
+          }),
+        }))
+      );
+    }
+  }, [allServiceIds, scheduleId]);
 
   const handleTimeChange = (dayIndex: number, rangeIndex: number, field: 'startTime' | 'endTime', value: string) => {
     const newSchedules = [...schedules];
@@ -178,11 +256,12 @@ export default function RecurringScheduleEditModal({
   const handleAddTimeRange = (dayIndex: number) => {
     const newSchedules = [...schedules];
     const newTimeRanges = [...newSchedules[dayIndex].timeRanges];
+    // Default to all services for new time ranges
     newTimeRanges.push({
       id: `range-${Date.now()}-${dayIndex}`,
       startTime: '09:00',
       endTime: '17:00',
-      serviceIds: [],
+      serviceIds: allServiceIds.length > 0 ? [...allServiceIds] : [],
     });
     newSchedules[dayIndex] = {
       ...newSchedules[dayIndex],
