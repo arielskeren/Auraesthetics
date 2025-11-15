@@ -56,6 +56,7 @@ export default function RecurringScheduleBlocksEditor({
 
   useEffect(() => {
     loadExistingBlocks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId]);
 
   const loadExistingBlocks = async () => {
@@ -256,7 +257,7 @@ export default function RecurringScheduleBlocksEditor({
           <h4 className="font-semibold text-yellow-800 mb-1">Recurring Exceptions</h4>
           <p className="text-sm text-yellow-700">
             These schedules will override your regular recurring schedules. Use this for recurring exceptions like
-            "closed every Wednesday afternoon" or "special hours every first Monday of the month".
+            &quot;closed every Wednesday afternoon&quot; or &quot;special hours every first Monday of the month&quot;.
           </p>
         </div>
       </div>

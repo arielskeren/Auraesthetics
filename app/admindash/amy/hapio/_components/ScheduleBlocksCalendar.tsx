@@ -31,6 +31,7 @@ export default function ScheduleBlocksCalendar({
 
   useEffect(() => {
     loadBlocks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, currentDate]);
 
   const loadBlocks = async () => {

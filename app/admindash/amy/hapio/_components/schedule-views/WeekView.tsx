@@ -19,6 +19,7 @@ export default function WeekView({ resourceId, currentDate, onDateChange }: Week
 
   useEffect(() => {
     loadScheduleData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, currentDate]);
 
   const loadScheduleData = async () => {

@@ -19,6 +19,7 @@ export default function MonthView({ resourceId, currentDate, onDateChange }: Mon
 
   useEffect(() => {
     loadScheduleData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, currentDate]);
 
   const loadScheduleData = async () => {

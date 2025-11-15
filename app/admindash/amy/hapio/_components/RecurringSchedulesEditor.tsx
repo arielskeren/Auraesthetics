@@ -56,6 +56,7 @@ export default function RecurringSchedulesEditor({
 
   useEffect(() => {
     loadExistingSchedules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId]);
 
   const loadExistingSchedules = async () => {

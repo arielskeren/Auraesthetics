@@ -20,6 +20,7 @@ export default function ListView({ resourceId, currentDate, onDateChange }: List
 
   useEffect(() => {
     loadScheduleData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, dateRange]);
 
   const loadScheduleData = async () => {
