@@ -32,7 +32,7 @@ export default function ServicesManager() {
       params.append('page', String(page));
       params.append('per_page', String(perPage));
 
-      const response = await fetch(`/api/admin/hapio/services?${params.toString()}`);
+      const response = await fetch(`/api/admin/services?${params.toString()}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to load services');
@@ -73,7 +73,7 @@ export default function ServicesManager() {
     }
 
     try {
-      const response = await fetch(`/api/admin/hapio/services/${serviceId}`, {
+      const response = await fetch(`/api/admin/services/${serviceId}`, {
         method: 'DELETE',
       });
 
@@ -122,10 +122,12 @@ export default function ServicesManager() {
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Image</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Service ID</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Category</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Duration</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Buffer</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Price</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
               </tr>
@@ -134,17 +136,31 @@ export default function ServicesManager() {
               {services.map((service) => (
                 <tr key={service.id} className="hover:bg-sand/20">
                   <td className="px-4 py-3">
+                    {service.image_url ? (
+                      <img
+                        src={service.image_url}
+                        alt={service.name || 'Service image'}
+                        className="w-16 h-16 object-cover rounded-lg border border-sand"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                        No image
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <IdDisplay id={service.id} label="Service ID" />
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-warm-gray">{service.category || '—'}</td>
                   <td className="px-4 py-3 text-sm text-warm-gray">
-                    {service.duration_minutes != null ? `${service.duration_minutes} min` : '—'}
+                    {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
                   </td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">
-                    {service.buffer_before_minutes != null || service.buffer_after_minutes != null
-                      ? `${service.buffer_before_minutes || 0} / ${service.buffer_after_minutes || 0} min`
-                      : '—'}
-                  </td>
+                  <td className="px-4 py-3 text-sm text-warm-gray">{service.price || '—'}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${

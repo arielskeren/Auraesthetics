@@ -22,14 +22,39 @@ export default function BookClient() {
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // Import services dynamically - this will work at build time
+  // Load services from API
   const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Load services on mount
   useEffect(() => {
-    import('../_content/services.json').then((module) => {
-      setServices(module.default);
-    });
+    const loadServices = async () => {
+      try {
+        const response = await fetch('/api/services');
+        if (!response.ok) {
+          throw new Error('Failed to load services');
+        }
+        const data = await response.json();
+        // Map API response to match ServiceCard interface
+        const mappedServices = data.map((s: any) => ({
+          category: s.category,
+          name: s.name,
+          slug: s.slug,
+          summary: s.summary,
+          description: s.description,
+          duration: s.duration_display || `${s.duration_minutes} min`,
+          price: s.price || '',
+          testPricing: s.test_pricing || false,
+          image_url: s.image_url,
+        }));
+        setServices(mappedServices);
+      } catch (error) {
+        console.error('Error loading services:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadServices();
   }, []);
 
   const categories = ['All', 'Facials', 'Advanced', 'Brows & Lashes', 'Waxing'];

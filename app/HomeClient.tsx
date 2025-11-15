@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -9,16 +9,47 @@ import Section from './_components/Section';
 import ServiceCard from './_components/ServiceCard';
 import BookingModal from './_components/BookingModal';
 import EmailCaptureModal from './_components/EmailCaptureModal';
-import services from './_content/services.json';
 
 export default function HomeClient() {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [featuredServices, setFeaturedServices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  const featuredServices = services.filter(s => 
-    ['aura-facial', 'hydrafacial', 'brow-lamination', 'lymphatic-drainage-facial', 'dermaplaning', 'biorepeel'].includes(s.slug)
-  ).slice(0, 6);
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const response = await fetch('/api/services');
+        if (!response.ok) {
+          throw new Error('Failed to load services');
+        }
+        const data = await response.json();
+        // Map API response to match ServiceCard interface
+        const mappedServices = data.map((s: any) => ({
+          category: s.category,
+          name: s.name,
+          slug: s.slug,
+          summary: s.summary,
+          description: s.description,
+          duration: s.duration_display || `${s.duration_minutes} min`,
+          price: s.price || '',
+          testPricing: s.test_pricing || false,
+          image_url: s.image_url,
+        }));
+        // Filter featured services
+        const featured = mappedServices.filter((s: any) => 
+          ['aura-facial', 'hydrafacial', 'brow-lamination', 'lymphatic-drainage-facial', 'dermaplaning', 'biorepeel'].includes(s.slug)
+        ).slice(0, 6);
+        setFeaturedServices(featured);
+      } catch (error) {
+        console.error('Error loading services:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadServices();
+  }, []);
 
   const handleServiceClick = (service: any) => {
     setSelectedService(service);

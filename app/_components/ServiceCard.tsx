@@ -10,10 +10,11 @@ interface ServiceCardProps {
   price: string;
   category: string;
   slug?: string;
+  image_url?: string | null;
   onClick?: () => void;
 }
 
-export default function ServiceCard({ name, summary, duration, price, category, slug, onClick }: ServiceCardProps) {
+export default function ServiceCard({ name, summary, duration, price, category, slug, image_url, onClick }: ServiceCardProps) {
   // Create a unique gradient based on category - more distinct from background
   const gradients = {
     'Facials': 'from-dark-sage/60 via-taupe/40 to-sand',
@@ -23,7 +24,8 @@ export default function ServiceCard({ name, summary, duration, price, category, 
   };
 
   const gradient = gradients[category as keyof typeof gradients] || gradients['Facials'];
-  const photoPaths = slug ? getServicePhotoPaths(slug) : [];
+  // Use image_url from API if available, otherwise fall back to local photo paths
+  const photoPaths = image_url ? [image_url] : (slug ? getServicePhotoPaths(slug) : []);
 
   return (
     <motion.div

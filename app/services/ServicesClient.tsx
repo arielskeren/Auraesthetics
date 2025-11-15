@@ -1,29 +1,61 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Section from '../_components/Section';
 import ServiceCard from '../_components/ServiceCard';
 import BookingModal from '../_components/BookingModal';
-import services from '../_content/services.json';
 
 interface Service {
-  category: string;
+  category: string | null;
   name: string;
   slug: string;
-  summary: string;
-  description?: string;
+  summary: string | null;
+  description?: string | null;
   duration: string;
-  price: string;
+  price: string | null;
   testPricing?: boolean;
+  image_url?: string | null;
 }
 
 export default function ServicesClient() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const categories = ['All', 'Facials', 'Advanced', 'Brows & Lashes', 'Waxing'];
+  
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const response = await fetch('/api/services');
+        if (!response.ok) {
+          throw new Error('Failed to load services');
+        }
+        const data = await response.json();
+        // Map API response to match ServiceCard interface
+        const mappedServices = data.map((s: any) => ({
+          category: s.category,
+          name: s.name,
+          slug: s.slug,
+          summary: s.summary,
+          description: s.description,
+          duration: s.duration_display || `${s.duration_minutes} min`,
+          price: s.price || '',
+          testPricing: s.test_pricing || false,
+          image_url: s.image_url,
+        }));
+        setServices(mappedServices);
+      } catch (error) {
+        console.error('Error loading services:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadServices();
+  }, []);
   
   const filteredServices = activeCategory === 'All' 
     ? services 
@@ -146,14 +178,17 @@ export default function ServicesClient() {
 
       {/* Services Grid */}
       <Section background="ivory" className="!pt-8">
-        <motion.div
-          key={activeCategory}
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-        >
-          {filteredServices.map((service, index) => (
+        {loading ? (
+          <div className="text-center py-12 text-warm-gray">Loading services...</div>
+        ) : (
+          <motion.div
+            key={activeCategory}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
+            {filteredServices.map((service, index) => (
             <motion.div
               key={service.slug}
               initial={{ opacity: 0, y: 20 }}
@@ -169,7 +204,8 @@ export default function ServicesClient() {
               </div>
             </motion.div>
           ))}
-        </motion.div>
+          </motion.div>
+        )}
       </Section>
 
       {/* Booking Modal */}
