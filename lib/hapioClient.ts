@@ -1807,6 +1807,9 @@ export interface HapioRecurringSchedule {
 
 export interface HapioRecurringSchedulePayload {
   name?: string | null;
+  location_id?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -1865,6 +1868,9 @@ export async function createRecurringSchedule(
   const parentPath = buildScheduleParentPath(parentType, parentId);
   const body: Record<string, unknown> = {};
   if (schedule.name !== undefined) body.name = schedule.name;
+  if (schedule.location_id !== undefined) body.location_id = schedule.location_id;
+  if (schedule.start_date !== undefined) body.start_date = schedule.start_date;
+  if (schedule.end_date !== undefined) body.end_date = schedule.end_date;
   if (schedule.metadata !== undefined) body.metadata = schedule.metadata;
 
   const response = await requestJson<any>('post', `${parentPath}/recurring-schedules`, body);

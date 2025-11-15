@@ -190,6 +190,10 @@ export default function RecurringScheduleBlocksEditor({
 
       const endDateValue = calculateEndDate();
 
+      if (!locationId) {
+        throw new Error('Location ID is required. Please ensure a location exists.');
+      }
+
       // First, create a recurring schedule (parent) for the exceptions
       const scheduleResponse = await fetch(
         `/api/admin/hapio/resources/${resourceId}/recurring-schedules`,
@@ -198,9 +202,10 @@ export default function RecurringScheduleBlocksEditor({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: `Recurring exceptions from ${startDate}`,
+            location_id: locationId,
+            start_date: startDate,
+            end_date: endDateValue,
             metadata: {
-              start_date: startDate,
-              end_date: endDateValue,
               is_exception: true,
             },
           }),

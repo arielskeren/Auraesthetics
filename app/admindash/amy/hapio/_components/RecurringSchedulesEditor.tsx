@@ -190,6 +190,10 @@ export default function RecurringSchedulesEditor({
 
       const endDateValue = calculateEndDate();
 
+      if (!locationId) {
+        throw new Error('Location ID is required. Please ensure a location exists.');
+      }
+
       // Create recurring schedule first (parent)
       const scheduleResponse = await fetch(
         `/api/admin/hapio/resources/${resourceId}/recurring-schedules`,
@@ -198,10 +202,10 @@ export default function RecurringSchedulesEditor({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: `Schedule from ${startDate}`,
-            metadata: {
-              start_date: startDate,
-              end_date: endDateValue,
-            },
+            location_id: locationId,
+            start_date: startDate,
+            end_date: endDateValue,
+            metadata: {},
           }),
         }
       );
