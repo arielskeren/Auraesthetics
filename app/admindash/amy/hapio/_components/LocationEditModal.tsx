@@ -20,8 +20,14 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
   const [success, setSuccess] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
+    // Don't update form if we're closing - prevents clearing fields right before modal closes
+    if (isClosing) {
+      return;
+    }
+    
     if (location) {
       console.log('[Location Edit Modal] Location prop updated:', location);
       setFormData({
@@ -30,8 +36,8 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         timezone: location.timezone || 'UTC',
         enabled: location.enabled !== false,
       });
-    } else {
-      // Reset form for new location
+    } else if (!loading && !success) {
+      // Only reset form for new location if we're not in the middle of saving
       setFormData({
         name: '',
         address: '',
@@ -39,7 +45,7 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         enabled: true,
       });
     }
-  }, [location]);
+  }, [location, loading, success, isClosing]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,19 +74,36 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       // Verify the response contains the updated location
       const responseData = await response.json();
       console.log('[Location Edit] Save response:', responseData);
+      
+      // Update form data with the response to show the saved values
+      if (responseData.location) {
+        const savedLocation = responseData.location;
+        console.log('[Location Edit] Updating form with saved location:', savedLocation);
+        setFormData({
+          name: savedLocation.name || '',
+          address: savedLocation.address || '',
+          timezone: savedLocation.timezone || 'UTC',
+          enabled: savedLocation.enabled !== false,
+        });
+      }
 
       // Show success message
       setSuccess(true);
       
       // Wait a moment to show success message
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       // Refresh the list - this will update the parent's state
       await onSave();
       
-      // Small delay to ensure state updates propagate
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Small delay to ensure state updates propagate before closing
+      await new Promise(resolve => setTimeout(resolve, 300));
       
+      // Mark as closing to prevent form reset
+      setIsClosing(true);
+      
+      // Close the modal - this will set location to null, but we've already updated the form
+      // and isClosing prevents the useEffect from clearing it
       onClose();
     } catch (err: any) {
       setError(err);
