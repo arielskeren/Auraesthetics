@@ -720,6 +720,7 @@ export default function ScheduleBlocksCalendar({
                   </div>
                 </div>
               )}
+            </div>
           </div>
         )}
       </div>
