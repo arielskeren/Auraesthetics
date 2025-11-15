@@ -781,7 +781,7 @@ export async function listLocations(params?: {
       id: l.id,
       name: l.name,
       address: l.address ?? null,
-      timezone: l.timezone ?? null,
+      timezone: l.time_zone ?? l.timezone ?? null, // Map time_zone to timezone
       enabled: Boolean(l.enabled),
       metadata: l.metadata ?? null,
     })),
@@ -794,7 +794,7 @@ export async function getLocation(id: string): Promise<HapioLocation> {
     id: response.id,
     name: response.name,
     address: response.address ?? null,
-    timezone: response.timezone ?? null,
+    timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
   };
@@ -811,8 +811,13 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
   }
   
   // Handle timezone: convert empty strings to null, omit if undefined
+  // Hapio API uses time_zone (snake_case) in responses, but may accept timezone (camelCase) in requests
+  // Try both formats to ensure compatibility
   if (location.timezone !== undefined) {
-    body.timezone = location.timezone === '' ? null : location.timezone;
+    const timezoneValue = location.timezone === '' ? null : location.timezone;
+    body.time_zone = timezoneValue; // Hapio expects time_zone in requests
+    // Also include timezone for backwards compatibility
+    body.timezone = timezoneValue;
   }
   
   if (location.enabled !== undefined) body.enabled = location.enabled;
@@ -829,10 +834,11 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
 
   const response = await requestJson<any>('post', 'locations', body);
   
-  console.log('[Hapio Client] Location created:', {
+  console.log('[Hapio Client] Location created (raw):', {
     id: response.id,
     name: response.name,
     address: response.address,
+    time_zone: response.time_zone,
     timezone: response.timezone,
     enabled: response.enabled,
   });
@@ -841,7 +847,7 @@ export async function createLocation(location: HapioLocationPayload): Promise<Ha
     id: response.id,
     name: response.name,
     address: response.address ?? null,
-    timezone: response.timezone ?? null,
+    timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
   };
@@ -862,8 +868,13 @@ export async function updateLocation(
   }
   
   // Handle timezone: convert empty strings to null, omit if undefined
+  // Hapio API uses time_zone (snake_case) in responses, but may accept timezone (camelCase) in requests
+  // Try both formats to ensure compatibility
   if (location.timezone !== undefined) {
-    body.timezone = location.timezone === '' ? null : location.timezone;
+    const timezoneValue = location.timezone === '' ? null : location.timezone;
+    body.time_zone = timezoneValue; // Hapio expects time_zone in requests
+    // Also include timezone for backwards compatibility
+    body.timezone = timezoneValue;
   }
   
   // Handle enabled
@@ -886,38 +897,52 @@ export async function updateLocation(
 
   const response = await requestJson<any>('patch', `locations/${id}`, body);
   
+  // Hapio returns time_zone (snake_case) but we use timezone (camelCase)
+  // Map the response fields correctly
+  const mappedResponse = {
+    id: response.id,
+    name: response.name,
+    address: response.address ?? null, // Hapio may not support address field
+    timezone: response.time_zone ?? response.timezone ?? null, // Support both formats
+    enabled: Boolean(response.enabled),
+    metadata: response.metadata ?? null,
+  };
+  
   // Compare request vs response to detect mismatches
   const requestResponseComparison = {
     address: {
       requested: body.address,
-      received: response.address,
-      match: body.address === response.address,
+      received: mappedResponse.address,
+      match: body.address === mappedResponse.address,
     },
     timezone: {
       requested: body.timezone,
-      received: response.timezone,
-      match: body.timezone === response.timezone,
+      received: mappedResponse.timezone,
+      match: body.timezone === mappedResponse.timezone,
     },
     name: {
       requested: body.name,
-      received: response.name,
-      match: body.name === response.name,
+      received: mappedResponse.name,
+      match: body.name === mappedResponse.name,
     },
     enabled: {
       requested: body.enabled,
-      received: response.enabled,
-      match: body.enabled === response.enabled,
+      received: mappedResponse.enabled,
+      match: body.enabled === mappedResponse.enabled,
     },
   };
   
-  console.log('[Hapio Client] Location update response:', {
+  console.log('[Hapio Client] Location update response (raw):', {
     id: response.id,
     name: response.name,
     address: response.address,
+    time_zone: response.time_zone,
     timezone: response.timezone,
     enabled: response.enabled,
     fullResponse: response,
   });
+  
+  console.log('[Hapio Client] Location update response (mapped):', mappedResponse);
   
   console.log('[Hapio Client] Request vs Response comparison:', requestResponseComparison);
   
@@ -928,16 +953,10 @@ export async function updateLocation(
   
   if (mismatches.length > 0) {
     console.warn('[Hapio Client] Field mismatches detected:', mismatches);
+    console.warn('[Hapio Client] Note: Hapio may not support the address field, or timezone may be stored as time_zone');
   }
   
-  return {
-    id: response.id,
-    name: response.name,
-    address: response.address ?? null,
-    timezone: response.timezone ?? null,
-    enabled: Boolean(response.enabled),
-    metadata: response.metadata ?? null,
-  };
+  return mappedResponse;
 }
 
 export async function replaceLocation(
@@ -954,8 +973,13 @@ export async function replaceLocation(
   }
   
   // Handle timezone: convert empty strings to null, omit if undefined
+  // Hapio API uses time_zone (snake_case) in responses, but may accept timezone (camelCase) in requests
+  // Try both formats to ensure compatibility
   if (location.timezone !== undefined) {
-    body.timezone = location.timezone === '' ? null : location.timezone;
+    const timezoneValue = location.timezone === '' ? null : location.timezone;
+    body.time_zone = timezoneValue; // Hapio expects time_zone in requests
+    // Also include timezone for backwards compatibility
+    body.timezone = timezoneValue;
   }
   
   if (location.enabled !== undefined) body.enabled = location.enabled;
@@ -973,10 +997,11 @@ export async function replaceLocation(
 
   const response = await requestJson<any>('put', `locations/${id}`, body);
   
-  console.log('[Hapio Client] Location replaced:', {
+  console.log('[Hapio Client] Location replaced (raw):', {
     id: response.id,
     name: response.name,
     address: response.address,
+    time_zone: response.time_zone,
     timezone: response.timezone,
     enabled: response.enabled,
   });
@@ -985,7 +1010,7 @@ export async function replaceLocation(
     id: response.id,
     name: response.name,
     address: response.address ?? null,
-    timezone: response.timezone ?? null,
+    timezone: response.time_zone ?? response.timezone ?? null, // Map time_zone to timezone
     enabled: Boolean(response.enabled),
     metadata: response.metadata ?? null,
   };
