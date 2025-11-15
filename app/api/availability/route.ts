@@ -70,63 +70,22 @@ function parseDate(value: string | null): Date | null {
  * Format date for Hapio API: Y-m-d\TH:i:sP format
  * Example: 2025-11-15T03:17:09+00:00 (no milliseconds, timezone offset instead of Z)
  * Hapio expects format: Y-m-d\TH:i:sP where P is timezone offset like +00:00 or -05:00
+ * 
+ * We format dates in UTC with +00:00 offset since JavaScript Date objects are UTC-based internally.
  */
 function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
-  // Format date components in the specified timezone
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const year = parts.find(p => p.type === 'year')?.value ?? '0000';
-  const month = parts.find(p => p.type === 'month')?.value ?? '01';
-  const day = parts.find(p => p.type === 'day')?.value ?? '01';
-  const hour = parts.find(p => p.type === 'hour')?.value ?? '00';
-  const minute = parts.find(p => p.type === 'minute')?.value ?? '00';
-  const second = parts.find(p => p.type === 'second')?.value ?? '00';
-
-  // Calculate timezone offset for the specified timezone at this date
-  // We need to find the UTC offset for the timezone at this specific date/time
-  // Use Intl.DateTimeFormat with timeZoneName to get offset info, or calculate it
-  const utcTime = date.getTime();
+  // Get UTC components (Date objects are stored in UTC internally)
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hour = String(date.getUTCHours()).padStart(2, '0');
+  const minute = String(date.getUTCMinutes()).padStart(2, '0');
+  const second = String(date.getUTCSeconds()).padStart(2, '0');
   
-  // Create a date string in the target timezone and parse it back to get offset
-  // Format: get what the time would be in UTC if we interpret the TZ string as local
-  const tzFormatter = new Intl.DateTimeFormat('en', {
-    timeZone,
-    timeZoneName: 'longOffset',
-  });
+  // Use +00:00 for UTC offset (no milliseconds, no Z suffix)
+  const offset = '+00:00';
   
-  // Simpler: calculate offset by comparing UTC time to timezone time
-  // Get the date/time string in the target timezone
-  const dateInTz = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-  const dateInTargetTz = new Date(date.toLocaleString('en-US', { timeZone }));
-  
-  // This approach is flawed. Let's use a better method:
-  // Get the offset by formatting the date with timezone and comparing to UTC
-  const utcString = date.toISOString(); // e.g., "2025-11-15T03:17:09.572Z"
-  const utcDateOnly = new Date(utcString.substring(0, 19) + 'Z');
-  
-  // Format in target timezone and get the difference
-  // Actually, the simplest: use the date's getTimezoneOffset but for the target TZ
-  // Since we can't directly get TZ offset, let's format as UTC with +00:00 for now
-  // and let Hapio handle timezone conversion, OR calculate properly
-  
-  // Better approach: use the fact that we can get offset by creating a date in that TZ
-  // For now, if timeZone is UTC, use +00:00
-  // Otherwise, we need to calculate - this is complex without a library
-  // Let's use a workaround: format as UTC (+00:00) since dates are stored in UTC
-  // Hapio should accept UTC dates
-  const offset = timeZone === 'UTC' ? '+00:00' : '+00:00'; // Default to UTC for now
-  
-  // Format: YYYY-MM-DDTHH:mm:ss+HH:mm (no milliseconds)
+  // Format: YYYY-MM-DDTHH:mm:ss+HH:mm
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
 }
 
