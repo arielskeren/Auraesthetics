@@ -20,6 +20,7 @@ export default function ServicesManager() {
   const [viewingHapioServices, setViewingHapioServices] = useState(false);
   const [hapioServices, setHapioServices] = useState<any[]>([]);
   const [loadingHapio, setLoadingHapio] = useState(false);
+  const [syncingAll, setSyncingAll] = useState(false);
 
   useEffect(() => {
     loadServices();
@@ -137,11 +138,61 @@ export default function ServicesManager() {
     }
   };
 
+  const handleSyncAll = async () => {
+    if (!confirm('This will sync all services from Neon DB to Hapio. Services that already have a Hapio ID will be updated, others will be created. Continue?')) {
+      return;
+    }
+
+    try {
+      setSyncingAll(true);
+      setError(null);
+
+      const response = await fetch('/api/admin/services/sync-all', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync all services to Hapio');
+      }
+
+      const data = await response.json();
+      
+      // Show detailed results
+      const message = `${data.message}\n\nDetails:\n- Created: ${data.results.created}\n- Updated: ${data.results.updated}\n- Failed: ${data.results.failed}`;
+      
+      if (data.results.errors.length > 0) {
+        const errorDetails = data.results.errors.map((e: any) => `  • ${e.serviceName}: ${e.error}`).join('\n');
+        alert(`${message}\n\nErrors:\n${errorDetails}`);
+      } else {
+        alert(message);
+      }
+
+      // Refresh services to show updated hapio_service_id values
+      await loadServices();
+    } catch (err: any) {
+      setError(err);
+      alert(`Failed to sync all services: ${err.message}`);
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-charcoal">Services</h2>
         <div className="flex items-center gap-2">
+          {!viewingHapioServices && (
+            <button
+              onClick={handleSyncAll}
+              disabled={syncingAll}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncingAll ? 'animate-spin' : ''}`} />
+              {syncingAll ? 'Syncing All...' : 'Sync All to Hapio'}
+            </button>
+          )}
           <button
             onClick={viewingHapioServices ? () => setViewingHapioServices(false) : loadHapioServices}
             className="flex items-center gap-2 px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors text-sm font-medium"

@@ -175,21 +175,21 @@ All prices should be numeric (e.g., 150.00, 165.00) not strings.
 - [X] Navigate to `/services` (public page)
 - [X] **Verify**: Services load correctly
 - [X] **Verify**: Prices display as "from $150" format (formatted for display)
-- [ ] **Verify**: No errors in browser console
-- [ ] **Verify**: Service cards display correctly
+- [X] **Verify**: No errors in browser console
+- [X] **Verify**: Service cards display correctly
 
 ### Test 9: Service Booking Flow
-- [ ] Navigate to `/book` or click a service on `/services`
-- [ ] Click on a service to open booking modal
-- [ ] **Verify**: Service details display correctly
-- [ ] **Verify**: Price shows as "from $150" format
+- [X] Navigate to `/book` or click a service on `/services`
+- [X] Click on a service to open booking modal
+- [X] **Verify**: Service details display correctly
+- [X] **Verify**: Price shows as "from $150" format
 - [ ] **Verify**: Booking flow works (if applicable)
 
 ### Test 10: Home Page Featured Services
-- [ ] Navigate to `/` (home page)
-- [ ] **Verify**: Featured services load correctly
-- [ ] **Verify**: Prices display correctly
-- [ ] **Verify**: Service cards display correctly
+- [X] Navigate to `/` (home page)
+- [X] **Verify**: Featured services load correctly
+- [X] **Verify**: Prices display correctly
+- [X] **Verify**: Service cards display correctly
 
 ### Test 11: Error Handling
 - [ ] Try to sync a service with invalid data (e.g., missing name)
