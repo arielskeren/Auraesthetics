@@ -223,9 +223,9 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
   const currentImageUrl = imagePreview || imageUrl;
 
   return (
-    <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
-        <div className="sticky top-0 bg-white border-b border-sand px-6 py-4 flex items-center justify-between">
+    <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-sand px-6 py-4 flex items-center justify-between z-10 flex-shrink-0">
           <h2 className="text-xl font-bold text-charcoal">
             {service ? 'Edit Service' : 'Create Service'}
           </h2>
@@ -237,7 +237,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
           {error && <ErrorDisplay error={error} />}
           {success && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
@@ -262,7 +262,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
             <label className="block text-sm font-medium text-charcoal mb-2">Service Image</label>
             <div className="flex items-start gap-4">
               {currentImageUrl && (
-                <div className="relative">
+                <div className="relative flex-shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={currentImageUrl}
@@ -274,7 +274,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
                       type="button"
                       onClick={handleImageDelete}
                       disabled={uploadingImage}
-                      className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors transform translate-x-1/2 -translate-y-1/2"
                       title="Delete image"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -284,7 +284,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
                     <button
                       type="button"
                       onClick={handleImageRemove}
-                      className="absolute -top-2 -right-2 p-1 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors"
+                      className="absolute top-0 right-0 p-1 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors transform translate-x-1/2 -translate-y-1/2"
                       title="Remove new image"
                     >
                       <X className="w-3 h-3" />
