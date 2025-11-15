@@ -66,8 +66,16 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
       console.log('[Service Edit] Save successful:', responseData);
 
       setSuccess(true);
+      
+      // Wait a moment to show success message
       await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Refresh the list before closing
       await onSave();
+      
+      // Small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       onClose();
     } catch (err: any) {
       setError(err);

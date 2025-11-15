@@ -43,11 +43,20 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
         : '/api/admin/hapio/resources';
       const method = resource ? 'PATCH' : 'POST';
 
-      // Ensure location_id is included even if empty (for validation)
-      const payload = {
-        ...formData,
-        location_id: formData.location_id || undefined, // Send undefined instead of empty string
+      // Build payload - always include location_id if provided
+      const payload: any = {
+        name: formData.name,
+        max_simultaneous_bookings: formData.max_simultaneous_bookings,
+        enabled: formData.enabled,
       };
+      
+      // Location is required - validate it's selected
+      if (!formData.location_id || formData.location_id.trim() === '') {
+        throw new Error('Please select a location');
+      }
+      
+      // Always include location_id when it's provided
+      payload.location_id = formData.location_id;
 
       console.log('[Employee Edit] Sending request:', { url, method, payload });
 
@@ -68,8 +77,12 @@ export default function ResourceEditModal({ resource, locations = [], onClose, o
       const responseData = await response.json();
       console.log('[Employee Edit] Save successful:', responseData);
 
-      // Wait for save callback to complete before closing
+      // Refresh the list before closing
       await onSave();
+      
+      // Small delay to ensure state updates propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       onClose();
     } catch (err: any) {
       setError(err);

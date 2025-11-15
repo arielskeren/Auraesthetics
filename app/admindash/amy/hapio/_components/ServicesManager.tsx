@@ -38,6 +38,11 @@ export default function ServicesManager() {
       }
 
       const data = await response.json();
+      console.log('[Services Manager] Loaded services:', {
+        count: data.data?.length || 0,
+        firstService: data.data?.[0],
+        allServices: data.data,
+      });
       setServices(data.data || []);
       setPagination(data.meta ? { ...data.meta, links: data.links } : null);
     } catch (err: any) {
@@ -83,10 +88,13 @@ export default function ServicesManager() {
   };
 
   const handleSave = async () => {
+    // Force refresh - reload from page 1 to ensure we get fresh data
     if (page !== 1) {
       setPage(1);
+    } else {
+      // If already on page 1, still reload to get fresh data
+      await loadServices();
     }
-    await loadServices();
   };
 
   if (loading && services.length === 0) {
@@ -123,10 +131,14 @@ export default function ServicesManager() {
             <tbody className="divide-y divide-sand">
               {services.map((service) => (
                 <tr key={service.id} className="hover:bg-sand/20">
-                  <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">{service.duration_minutes} min</td>
+                  <td className="px-4 py-3 text-sm font-medium text-charcoal">{service.name || '—'}</td>
                   <td className="px-4 py-3 text-sm text-warm-gray">
-                    {service.buffer_before_minutes || 0} / {service.buffer_after_minutes || 0} min
+                    {service.duration_minutes != null ? `${service.duration_minutes} min` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-warm-gray">
+                    {service.buffer_before_minutes != null || service.buffer_after_minutes != null
+                      ? `${service.buffer_before_minutes || 0} / ${service.buffer_after_minutes || 0} min`
+                      : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <span

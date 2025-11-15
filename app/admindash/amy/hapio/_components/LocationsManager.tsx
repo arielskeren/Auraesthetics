@@ -38,6 +38,10 @@ export default function LocationsManager() {
       }
 
       const data = await response.json();
+      console.log('[Locations Manager] Loaded locations:', {
+        count: data.data?.length || 0,
+        firstLocation: data.data?.[0],
+      });
       setLocations(data.data || []);
       setPagination(data.meta ? { ...data.meta, links: data.links } : null);
     } catch (err: any) {

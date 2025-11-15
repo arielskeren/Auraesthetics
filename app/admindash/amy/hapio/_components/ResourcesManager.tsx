@@ -55,6 +55,10 @@ export default function ResourcesManager() {
       }
 
       const data = await response.json();
+      console.log('[Resources Manager] Loaded resources:', {
+        count: data.data?.length || 0,
+        firstResource: data.data?.[0],
+      });
       setResources(data.data || []);
       setPagination(data.meta ? { ...data.meta, links: data.links } : null);
     } catch (err: any) {

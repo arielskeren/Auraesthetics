@@ -63,11 +63,15 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       // Show success message
       setSuccess(true);
       
-      // Wait a moment to show success, then refresh and close
+      // Wait a moment to show success message
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Wait for save callback to complete before closing
+      // Refresh the list before closing
       await onSave();
+      
+      // Small delay to ensure state updates propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       onClose();
     } catch (err: any) {
       setError(err);

@@ -116,25 +116,34 @@ export interface HapioBookingUpdatePayload {
 }
 
 let client: AxiosInstance | null = null;
+let lastToken: string | null = null;
 
 function getClient(): AxiosInstance {
-  if (client) {
-    return client;
-  }
-
   // Check token only when creating the client (lazy validation)
   const token = getHapioApiToken();
   const baseURL = HAPIO_BASE_URL.endsWith('/') ? HAPIO_BASE_URL : `${HAPIO_BASE_URL}/`;
 
-  client = axios.create({
-    baseURL,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    timeout: 30_000,
-  });
+  // Recreate client if token changed (for testing new tokens)
+  if (!client || lastToken !== token) {
+    console.log('[Hapio Client] Creating new axios client', {
+      hasToken: !!token,
+      tokenLength: token?.length || 0,
+      tokenChanged: lastToken !== token,
+      baseURL,
+    });
+
+    client = axios.create({
+      baseURL,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      timeout: 30_000,
+    });
+
+    lastToken = token;
+  }
 
   return client;
 }
@@ -945,12 +954,29 @@ export async function updateResource(
 ): Promise<HapioResource> {
   const body: Record<string, unknown> = {};
   if (resource.name !== undefined) body.name = resource.name;
-  if (resource.location_id !== undefined) body.location_id = resource.location_id;
+  if (resource.location_id !== undefined) {
+    // Only include location_id if it's a non-empty string
+    if (resource.location_id && typeof resource.location_id === 'string' && resource.location_id.trim() !== '') {
+      body.location_id = resource.location_id;
+    } else if (resource.location_id === null || resource.location_id === '') {
+      // Explicitly set to null if empty string or null
+      body.location_id = null;
+    }
+  }
   if (resource.max_simultaneous_bookings !== undefined)
     body.max_simultaneous_bookings = resource.max_simultaneous_bookings;
   if (resource.enabled !== undefined) body.enabled = resource.enabled;
   if (resource.metadata !== undefined) body.metadata = resource.metadata;
   if (resource.protected_metadata !== undefined) body.protected_metadata = resource.protected_metadata;
+
+  console.log('[Hapio] Updating resource with body:', {
+    resourceId: id,
+    ...body,
+    location_id: body.location_id,
+    location_id_type: typeof body.location_id,
+    location_id_length: body.location_id ? String(body.location_id).length : 0,
+    bodyKeys: Object.keys(body),
+  });
 
   const response = await requestJson<any>('patch', `resources/${id}`, body);
   return {
@@ -1124,18 +1150,30 @@ export async function listServices(params?: {
     { params: query }
   );
 
-  return {
+  console.log('[Hapio] Raw services response:', {
+    dataCount: response.data?.length || 0,
+    firstServiceRaw: response.data?.[0],
+    allServicesRaw: response.data,
+  });
+
+  const mapped = {
     ...response,
     data: response.data.map((s: any) => ({
       id: s.id,
       name: s.name,
-      duration_minutes: s.duration_minutes,
+      duration_minutes: s.duration_minutes ?? null,
       buffer_before_minutes: s.buffer_before_minutes ?? null,
       buffer_after_minutes: s.buffer_after_minutes ?? null,
       enabled: Boolean(s.enabled),
       metadata: s.metadata ?? null,
     })),
   };
+
+  console.log('[Hapio] Mapped services:', {
+    firstServiceMapped: mapped.data?.[0],
+  });
+
+  return mapped;
 }
 
 export async function getService(id: string): Promise<HapioService> {
