@@ -13,64 +13,126 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category');
 
-    let query;
-    if (category) {
-      query = sql`
-        SELECT 
-          id,
-          slug,
-          name,
-          category,
-          summary,
-          description,
-          duration_minutes,
-          duration_display,
-          price,
-          test_pricing,
-          image_url,
-          image_filename,
-          enabled,
-          display_order,
-          starred,
-          featured,
-          best_seller,
-          most_popular,
-          created_at,
-          updated_at
-        FROM services
-        WHERE enabled = true AND category = ${category} AND (category IS NULL OR category != 'Add-on')
-        ORDER BY display_order ASC, created_at ASC
-      `;
-    } else {
-      query = sql`
-        SELECT 
-          id,
-          slug,
-          name,
-          category,
-          summary,
-          description,
-          duration_minutes,
-          duration_display,
-          price,
-          test_pricing,
-          image_url,
-          image_filename,
-          enabled,
-          display_order,
-          starred,
-          featured,
-          best_seller,
-          most_popular,
-          created_at,
-          updated_at
-        FROM services
-        WHERE enabled = true AND (category IS NULL OR category != 'Add-on')
-        ORDER BY display_order ASC, created_at ASC
-      `;
+    // Try with new columns first, fallback if they don't exist
+    let services: any[];
+    try {
+      if (category) {
+        services = await sql`
+          SELECT 
+            id,
+            slug,
+            name,
+            category,
+            summary,
+            description,
+            duration_minutes,
+            duration_display,
+            price,
+            test_pricing,
+            image_url,
+            image_filename,
+            enabled,
+            display_order,
+            starred,
+            featured,
+            best_seller,
+            most_popular,
+            created_at,
+            updated_at
+          FROM services
+          WHERE enabled = true AND category = ${category} AND (category IS NULL OR category != 'Add-on')
+          ORDER BY display_order ASC, created_at ASC
+        ` as Array<any>;
+      } else {
+        services = await sql`
+          SELECT 
+            id,
+            slug,
+            name,
+            category,
+            summary,
+            description,
+            duration_minutes,
+            duration_display,
+            price,
+            test_pricing,
+            image_url,
+            image_filename,
+            enabled,
+            display_order,
+            starred,
+            featured,
+            best_seller,
+            most_popular,
+            created_at,
+            updated_at
+          FROM services
+          WHERE enabled = true AND (category IS NULL OR category != 'Add-on')
+          ORDER BY display_order ASC, created_at ASC
+        ` as Array<any>;
+      }
+    } catch (error: any) {
+      // If columns don't exist, query without them and add defaults
+      if (error.message?.includes('column') && (error.message?.includes('starred') || error.message?.includes('featured'))) {
+        if (category) {
+          services = await sql`
+            SELECT 
+              id,
+              slug,
+              name,
+              category,
+              summary,
+              description,
+              duration_minutes,
+              duration_display,
+              price,
+              test_pricing,
+              image_url,
+              image_filename,
+              enabled,
+              display_order,
+              created_at,
+              updated_at
+            FROM services
+            WHERE enabled = true AND category = ${category} AND (category IS NULL OR category != 'Add-on')
+            ORDER BY display_order ASC, created_at ASC
+          ` as Array<any>;
+        } else {
+          services = await sql`
+            SELECT 
+              id,
+              slug,
+              name,
+              category,
+              summary,
+              description,
+              duration_minutes,
+              duration_display,
+              price,
+              test_pricing,
+              image_url,
+              image_filename,
+              enabled,
+              display_order,
+              created_at,
+              updated_at
+            FROM services
+            WHERE enabled = true AND (category IS NULL OR category != 'Add-on')
+            ORDER BY display_order ASC, created_at ASC
+          ` as Array<any>;
+        }
+        // Add default values for missing columns
+        services = services.map((s) => ({
+          ...s,
+          starred: false,
+          featured: false,
+          best_seller: false,
+          most_popular: false,
+        }));
+      } else {
+        throw error;
+      }
     }
-
-    const services = await query as Array<any>;
 
     // Format price for display (add "from $" prefix if price exists)
     const formattedServices = services.map((s: any) => ({

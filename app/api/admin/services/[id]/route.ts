@@ -14,35 +14,80 @@ export async function GET(
     const sql = getSqlClient();
     const { id } = params;
 
-    const services = await sql`
-      SELECT 
-        id,
-        slug,
-        name,
-        category,
-        summary,
-        description,
-        duration_minutes,
-        duration_display,
-        price,
-        buffer_before_minutes,
-        buffer_after_minutes,
-        test_pricing,
-        image_url,
-        image_filename,
-        enabled,
-        display_order,
-        COALESCE(starred, false) as starred,
-        COALESCE(featured, false) as featured,
-        COALESCE(best_seller, false) as best_seller,
-        COALESCE(most_popular, false) as most_popular,
-        hapio_service_id,
-        created_at,
-        updated_at
-      FROM services
-      WHERE id = ${id}
-      LIMIT 1
-    ` as Array<any>;
+    // Try with new columns first, fallback if they don't exist
+    let services: any[];
+    try {
+      services = await sql`
+        SELECT 
+          id,
+          slug,
+          name,
+          category,
+          summary,
+          description,
+          duration_minutes,
+          duration_display,
+          price,
+          buffer_before_minutes,
+          buffer_after_minutes,
+          test_pricing,
+          image_url,
+          image_filename,
+          enabled,
+          display_order,
+          starred,
+          featured,
+          best_seller,
+          most_popular,
+          hapio_service_id,
+          created_at,
+          updated_at
+        FROM services
+        WHERE id = ${id}
+        LIMIT 1
+      ` as Array<any>;
+    } catch (error: any) {
+      // If columns don't exist, query without them and add defaults
+      if (error.message?.includes('column') && (error.message?.includes('starred') || error.message?.includes('featured'))) {
+        services = await sql`
+          SELECT 
+            id,
+            slug,
+            name,
+            category,
+            summary,
+            description,
+            duration_minutes,
+            duration_display,
+            price,
+            buffer_before_minutes,
+            buffer_after_minutes,
+            test_pricing,
+            image_url,
+            image_filename,
+            enabled,
+            display_order,
+            hapio_service_id,
+            created_at,
+            updated_at
+          FROM services
+          WHERE id = ${id}
+          LIMIT 1
+        ` as Array<any>;
+        // Add default values for missing columns
+        if (services.length > 0) {
+          services[0] = {
+            ...services[0],
+            starred: false,
+            featured: false,
+            best_seller: false,
+            most_popular: false,
+          };
+        }
+      } else {
+        throw error;
+      }
+    }
 
     if (services.length === 0) {
       return NextResponse.json(
