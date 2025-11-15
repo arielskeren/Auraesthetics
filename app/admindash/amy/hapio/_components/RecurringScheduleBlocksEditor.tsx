@@ -5,6 +5,7 @@ import { Save, Clock, Calendar, AlertCircle } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { detectOverlaps, validateSchedule } from '@/lib/scheduleUtils';
+import { getHapioWeekdayString, getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
 
 interface RecurringScheduleBlocksEditorProps {
   resourceId: string;
@@ -238,9 +239,8 @@ export default function RecurringScheduleBlocksEditor({
           return time;
         };
         
-        // Convert weekday from 0-6 (Sunday-Saturday) to 1-7 (Monday-Sunday)
-        // Hapio uses 1-7 where 1=Monday, 7=Sunday
-        const hapioWeekday = daySchedule.dayOfWeek === 0 ? 7 : daySchedule.dayOfWeek;
+        // Hapio expects weekday as a string enum: "monday", "tuesday", etc.
+        const hapioWeekday = getHapioWeekdayString(daySchedule.dayOfWeek);
         
         const blockResponse = await fetch(
           `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
@@ -249,7 +249,7 @@ export default function RecurringScheduleBlocksEditor({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               recurring_schedule_id: recurringScheduleId,
-              weekday: hapioWeekday, // Hapio uses 1-7 (Monday=1, Sunday=7)
+              weekday: hapioWeekday, // String format: "monday", "tuesday", etc.
               start_time: formatTime(daySchedule.startTime), // Convert HH:mm to HH:mm:ss
               end_time: formatTime(daySchedule.endTime), // Convert HH:mm to HH:mm:ss
               metadata: {

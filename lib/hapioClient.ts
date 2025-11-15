@@ -1968,7 +1968,7 @@ export async function deleteRecurringSchedule(
 export interface HapioRecurringScheduleBlock {
   id: string;
   recurring_schedule_id: string;
-  weekday?: number | null; // 0 = Sunday, 6 = Saturday (Hapio uses "weekday" not "day_of_week")
+  weekday?: string | number | null; // String enum: "monday", "tuesday", etc. (or number for backwards compatibility)
   day_of_week?: number | null; // Alias for weekday (for backwards compatibility)
   start_time?: string | null; // HH:mm format
   end_time?: string | null; // HH:mm format
@@ -1979,7 +1979,7 @@ export interface HapioRecurringScheduleBlock {
 
 export interface HapioRecurringScheduleBlockPayload {
   recurring_schedule_id: string;
-  weekday?: number | null; // Hapio API uses "weekday"
+  weekday?: string | number | null; // String enum: "monday", "tuesday", etc. (or number for backwards compatibility)
   day_of_week?: number | null; // Alias - will be converted to weekday
   start_time?: string | null;
   end_time?: string | null;

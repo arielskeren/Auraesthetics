@@ -5,6 +5,7 @@ import { X, Save, Clock, Calendar } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { detectOverlaps, validateSchedule } from '@/lib/scheduleUtils';
+import { getHapioWeekdayString, getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
 
 interface RecurringScheduleEditModalProps {
   resourceId: string;
@@ -114,13 +115,9 @@ export default function RecurringScheduleEditModal({
             const newSchedules = [...schedules];
             
             blocks.forEach((block: any) => {
+              // Hapio returns weekday as a string ("monday", "tuesday", etc.) or legacy number
               const hapioWeekday = block.weekday ?? block.day_of_week;
-              let dayOfWeek: number;
-              if (hapioWeekday === 7) {
-                dayOfWeek = 0;
-              } else {
-                dayOfWeek = hapioWeekday;
-              }
+              const dayOfWeek = getWeekdayFromHapioString(hapioWeekday);
               
               const dayIndex = DAYS.findIndex(day => day.value === dayOfWeek);
               if (dayIndex !== -1) {
@@ -330,14 +327,12 @@ export default function RecurringScheduleEditModal({
           return time;
         };
         
-        // Hapio expects weekday as 1-7 where 1=Monday, 7=Sunday
-        // Convert from our format (0-6, Sunday-Saturday) to Hapio format (1-7, Monday-Sunday)
-        // Sunday (0) -> 7, Monday (1) -> 1, Tuesday (2) -> 2, ..., Saturday (6) -> 6
-        const hapioWeekday = daySchedule.dayOfWeek === 0 ? 7 : daySchedule.dayOfWeek;
+        // Hapio expects weekday as a string enum: "monday", "tuesday", etc.
+        const hapioWeekday = getHapioWeekdayString(daySchedule.dayOfWeek);
         
         const blockPayload = {
           recurring_schedule_id: recurringScheduleId,
-          weekday: Number(hapioWeekday), // Ensure it's a number
+          weekday: hapioWeekday, // String format: "monday", "tuesday", etc.
           start_time: formatTime(daySchedule.startTime),
           end_time: formatTime(daySchedule.endTime),
           metadata: {
@@ -348,7 +343,7 @@ export default function RecurringScheduleEditModal({
         console.log('[RecurringScheduleEditModal] Creating block:', {
           day: DAYS[daySchedule.dayOfWeek].label,
           dayOfWeek: daySchedule.dayOfWeek,
-          hapioWeekday,
+          hapioWeekdayString: hapioWeekday,
           payload: blockPayload,
         });
 
