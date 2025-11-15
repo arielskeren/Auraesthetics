@@ -11,7 +11,9 @@ export interface Service {
   description: string | null;
   duration_minutes: number;
   duration_display: string | null;
-  price: string | null;
+  price: number | null;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
   test_pricing: boolean;
   image_url: string | null;
   image_filename: string | null;
@@ -29,7 +31,9 @@ export interface ServiceCreateInput {
   description?: string | null;
   duration_minutes: number;
   duration_display?: string | null;
-  price?: string | null;
+  price?: number | null;
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
   test_pricing?: boolean;
   enabled?: boolean;
   display_order?: number;
@@ -43,7 +47,9 @@ export interface ServiceUpdateInput {
   description?: string | null;
   duration_minutes?: number;
   duration_display?: string | null;
-  price?: string | null;
+  price?: number | null;
+  buffer_before_minutes?: number;
+  buffer_after_minutes?: number;
   test_pricing?: boolean;
   enabled?: boolean;
   display_order?: number;
