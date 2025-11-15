@@ -7,7 +7,7 @@ type CacheKey = string;
 
 interface CacheEntry {
   expiresAt: number;
-  value: NextResponse;
+  value: Response;
 }
 
 const availabilityCache = new Map<CacheKey, CacheEntry>();
@@ -36,13 +36,15 @@ function getFromCache(key: CacheKey): NextResponse | null {
     availabilityCache.delete(key);
     return null;
   }
-  return entry.value;
+  // Clone the cached Response and return as NextResponse
+  // Since NextResponse extends Response, we can safely cast
+  return entry.value.clone() as NextResponse;
 }
 
-function setCache(key: CacheKey, value: NextResponse, ttlMs: number) {
+function setCache(key: CacheKey, value: Response, ttlMs: number) {
   availabilityCache.set(key, {
     expiresAt: Date.now() + ttlMs,
-    value,
+    value: value.clone(),
   });
 }
 

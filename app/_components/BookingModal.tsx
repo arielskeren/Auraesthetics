@@ -398,7 +398,6 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                       <Button
                         onClick={handleStartPayment}
                         className="w-full"
-                        disabled={!selectedSlot || lockStatus === 'loading'}
                         variant={
                           !selectedSlot || lockStatus === 'loading' ? 'disabled' : 'primary'
                         }
