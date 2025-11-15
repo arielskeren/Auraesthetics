@@ -146,21 +146,38 @@ async function sendRequest<T = any>(
 ): Promise<AxiosResponse<T>> {
   const axiosClient = getClient();
 
-  if (method === 'get' || method === 'delete') {
-    return method === 'get'
-      ? axiosClient.get<T>(path, dataOrConfig)
-      : axiosClient.delete<T>(path, dataOrConfig);
-  }
+  try {
+    if (method === 'get' || method === 'delete') {
+      return method === 'get'
+        ? await axiosClient.get<T>(path, dataOrConfig)
+        : await axiosClient.delete<T>(path, dataOrConfig);
+    }
 
-  if (method === 'post') {
-    return axiosClient.post<T>(path, dataOrConfig, maybeConfig);
-  }
+    if (method === 'post') {
+      return await axiosClient.post<T>(path, dataOrConfig, maybeConfig);
+    }
 
-  if (method === 'put') {
-    return axiosClient.put<T>(path, dataOrConfig, maybeConfig);
-  }
+    if (method === 'put') {
+      return await axiosClient.put<T>(path, dataOrConfig, maybeConfig);
+    }
 
-  return axiosClient.patch<T>(path, dataOrConfig, maybeConfig);
+    return await axiosClient.patch<T>(path, dataOrConfig, maybeConfig);
+  } catch (error: any) {
+    // Enhance axios errors with more context
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+      const message = typeof data === 'object' && data?.message
+        ? data.message
+        : `Hapio API error (${status})`;
+      const enhancedError = new Error(message);
+      (enhancedError as any).status = status;
+      (enhancedError as any).response = error.response;
+      throw enhancedError;
+    }
+    // Re-throw network errors or other non-axios errors
+    throw error;
+  }
 }
 
 async function requestJson<T>(

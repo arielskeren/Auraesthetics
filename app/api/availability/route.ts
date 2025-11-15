@@ -180,16 +180,30 @@ export async function GET(request: NextRequest) {
       return cloned;
     }
 
-    const availability = await getAvailability({
-      serviceId,
-      from: fromIso,
-      to: toIso,
-      locationId,
-      perPage,
-      page,
-    });
+    let availability;
+    try {
+      availability = await getAvailability({
+        serviceId,
+        from: fromIso,
+        to: toIso,
+        locationId,
+        perPage,
+        page,
+      });
+    } catch (error: any) {
+      console.error('[Hapio] Failed to get availability', error);
+      const message = typeof error?.message === 'string' ? error.message : 'Failed to retrieve availability from Hapio';
+      return NextResponse.json(
+        {
+          error: message,
+          details: error?.response?.data || error?.response || null,
+        },
+        { status: 500 }
+      );
+    }
 
     let outlookBusy: { start: string; end: string }[] = [];
+    let outlookError: string | null = null;
     if (OUTLOOK_SYNC_ENABLED) {
       try {
         outlookBusy = await getOutlookBusySlots({
@@ -197,17 +211,24 @@ export async function GET(request: NextRequest) {
           to: toIso,
           timeZone: timezone,
         });
-      } catch (error) {
+        // Filter out any blocks with missing start/end times
+        outlookBusy = outlookBusy.filter((block) => block.start && block.end);
+      } catch (error: any) {
+        outlookError = error?.message || 'Failed to retrieve Outlook busy slots';
         console.error('[Outlook] Failed to retrieve busy slots', error);
+        // Continue without Outlook filtering - availability will still work
       }
     }
 
+    // Filter out slots that overlap with Outlook busy times
     const filteredSlotEntities =
-      outlookBusy.length > 0
-        ? availability.slots.filter(
-            (slot) =>
-              outlookBusy.every((block) => !intervalsOverlap(slot.startsAt, slot.endsAt, block.start, block.end))
-          )
+      outlookBusy.length > 0 && !outlookError
+        ? availability.slots.filter((slot) => {
+            return outlookBusy.every((block) => {
+              if (!block.start || !block.end) return true; // Skip invalid blocks
+              return !intervalsOverlap(slot.startsAt, slot.endsAt, block.start, block.end);
+            });
+          })
         : availability.slots;
 
     const payload = {
@@ -239,6 +260,7 @@ export async function GET(request: NextRequest) {
         outlook: {
           enabled: OUTLOOK_SYNC_ENABLED,
           busyBlocks: outlookBusy.length,
+          error: outlookError,
         },
         cache: {
           ttlMs: cacheTtl,
