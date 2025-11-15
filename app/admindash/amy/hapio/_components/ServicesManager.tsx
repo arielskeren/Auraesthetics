@@ -137,15 +137,18 @@ export default function ServicesManager() {
                 <tr key={service.id} className="hover:bg-sand/20">
                   <td className="px-4 py-3">
                     {service.image_url ? (
-                      <img
-                        src={service.image_url}
-                        alt={service.name || 'Service image'}
-                        className="w-16 h-16 object-cover rounded-lg border border-sand"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                        }}
-                      />
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={service.image_url}
+                          alt={service.name || 'Service image'}
+                          className="w-16 h-16 object-cover rounded-lg border border-sand"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </>
                     ) : (
                       <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
                         No image

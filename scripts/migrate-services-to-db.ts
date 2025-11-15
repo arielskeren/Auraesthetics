@@ -3,6 +3,12 @@
  * Parses duration strings (e.g., "75 min") to integers
  */
 
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load environment variables from .env.local
+config({ path: resolve(process.cwd(), '.env.local') });
+
 import { getSqlClient } from '../app/_utils/db';
 import servicesData from '../app/_content/services.json';
 

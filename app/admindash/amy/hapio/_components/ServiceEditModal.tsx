@@ -257,6 +257,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
             <div className="flex items-start gap-4">
               {currentImageUrl && (
                 <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={currentImageUrl}
                     alt="Service preview"
@@ -387,7 +388,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
                 className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
                 placeholder="75 min"
               />
-              <p className="text-xs text-warm-gray mt-1">e.g., "75 min"</p>
+              <p className="text-xs text-warm-gray mt-1">e.g., &quot;75 min&quot;</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-charcoal mb-1">
@@ -420,7 +421,7 @@ export default function ServiceEditModal({ service, onClose, onSave }: ServiceEd
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
               placeholder="from $150"
             />
-            <p className="text-xs text-warm-gray mt-1">e.g., "from $150"</p>
+            <p className="text-xs text-warm-gray mt-1">e.g., &quot;from $150&quot;</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
