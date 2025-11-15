@@ -23,11 +23,20 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
 
   useEffect(() => {
     if (location) {
+      console.log('[Location Edit Modal] Location prop updated:', location);
       setFormData({
         name: location.name || '',
         address: location.address || '',
         timezone: location.timezone || 'UTC',
         enabled: location.enabled !== false,
+      });
+    } else {
+      // Reset form for new location
+      setFormData({
+        name: '',
+        address: '',
+        timezone: 'UTC',
+        enabled: true,
       });
     }
   }, [location]);
@@ -66,11 +75,11 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       // Wait a moment to show success message
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Refresh the list before closing
+      // Refresh the list - this will update the parent's state
       await onSave();
       
       // Small delay to ensure state updates propagate
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       onClose();
     } catch (err: any) {

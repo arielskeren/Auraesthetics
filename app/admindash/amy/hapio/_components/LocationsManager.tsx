@@ -31,6 +31,7 @@ export default function LocationsManager() {
       params.append('page', String(page));
       params.append('per_page', String(perPage));
 
+      console.log('[Locations Manager] Fetching locations...', { page, perPage });
       const response = await fetch(`/api/admin/hapio/locations?${params.toString()}`);
       if (!response.ok) {
         const errorData = await response.json();
@@ -41,9 +42,15 @@ export default function LocationsManager() {
       console.log('[Locations Manager] Loaded locations:', {
         count: data.data?.length || 0,
         firstLocation: data.data?.[0],
+        allLocations: data.data,
       });
-      setLocations(data.data || []);
+      
+      // Force a new array reference to ensure React detects the change
+      const newLocations = [...(data.data || [])];
+      setLocations(newLocations);
       setPagination(data.meta ? { ...data.meta, links: data.links } : null);
+      
+      console.log('[Locations Manager] State updated with', newLocations.length, 'locations');
     } catch (err: any) {
       setError(err);
     } finally {
@@ -87,11 +94,14 @@ export default function LocationsManager() {
   };
 
   const handleSave = async () => {
-    // Force refresh by resetting to page 1 if we're not already there
-    if (page !== 1) {
-      setPage(1);
-    }
+    // Force refresh - always reload to get fresh data
+    // This will update the locations state, which will cause the modal to re-render with fresh data
     await loadLocations();
+    
+    // Note: We don't need to manually update selectedLocation here because:
+    // 1. The modal's useEffect depends on the location prop
+    // 2. When we reload, if the location is still selected, it will get fresh data from the updated locations array
+    // 3. However, we should clear the selection after save so the modal closes properly
   };
 
   if (loading && locations.length === 0) {
@@ -173,7 +183,7 @@ export default function LocationsManager() {
 
       {showEditModal && (
         <LocationEditModal
-          location={selectedLocation}
+          location={selectedLocation ? locations.find(loc => loc.id === selectedLocation.id) || selectedLocation : null}
           onClose={() => {
             setShowEditModal(false);
             setSelectedLocation(null);
