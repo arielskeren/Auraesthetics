@@ -24,9 +24,11 @@ export default function ScheduleBlocksCalendar({
 }: ScheduleBlocksCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [availability, setAvailability] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -39,6 +41,7 @@ export default function ScheduleBlocksCalendar({
 
   useEffect(() => {
     loadBlocks();
+    loadAvailability();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, currentDate]);
 
@@ -84,6 +87,33 @@ export default function ScheduleBlocksCalendar({
       setError(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAvailability = async () => {
+    try {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const fromDate = new Date(year, month, 1);
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(year, month + 1, 0);
+      toDate.setHours(23, 59, 59, 999);
+      
+      const from = formatDateForHapioUTC(fromDate);
+      const to = formatDateForHapioUTC(toDate);
+
+      const response = await fetch(
+        `/api/admin/hapio/resources/${resourceId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvailability(data.availabilityByDate || {});
+      }
+      // Silently fail if availability can't be loaded - it's not critical
+    } catch (err: any) {
+      // Silently fail - availability is optional
+      console.warn('[ScheduleBlocksCalendar] Failed to load availability:', err);
     }
   };
 
@@ -318,39 +348,84 @@ export default function ScheduleBlocksCalendar({
               const dateBlocks = getBlocksForDate(date);
               const isPast = isPastDate(date);
               const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+              const dateStr = date.toISOString().split('T')[0];
+              const availableTimes = availability[dateStr] || [];
+              const hasAvailability = availableTimes.length > 0;
 
               let blockType: 'closed' | 'open' | null = null;
               if (dateBlocks.length > 0) {
                 blockType = getBlockType(dateBlocks[0]);
               }
 
+              // Format available times for display (e.g., "9:00 AM - 5:00 PM")
+              const formatTime = (timeStr: string) => {
+                const [hours, minutes] = timeStr.split(':');
+                const hour = parseInt(hours, 10);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour % 12 || 12;
+                return `${displayHour}:${minutes} ${ampm}`;
+              };
+
+              const availabilityText = hasAvailability
+                ? availableTimes.length === 1
+                  ? `Available at ${formatTime(availableTimes[0])}`
+                  : `Available ${formatTime(availableTimes[0])} - ${formatTime(availableTimes[availableTimes.length - 1])}`
+                : '';
+
               return (
-                <button
+                <div
                   key={date.toISOString()}
-                  onClick={() => handleDateClick(date)}
-                  disabled={isPast}
-                  className={`aspect-square border rounded-lg text-xs transition-colors ${
-                    isPast
-                      ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                      : isSelected
-                      ? 'ring-2 ring-dark-sage ring-offset-1'
-                      : 'hover:bg-sand/20 cursor-pointer'
-                  } ${
-                    blockType === 'closed'
-                      ? 'bg-red-100 border-red-300 text-red-900'
-                      : blockType === 'open'
-                      ? 'bg-yellow-100 border-yellow-300 text-yellow-900'
-                      : 'bg-white border-sand text-charcoal'
-                  }`}
+                  className="relative"
+                  onMouseEnter={() => !isPast && setHoveredDate(date)}
+                  onMouseLeave={() => setHoveredDate(null)}
                 >
-                  <div className="text-center font-medium">{date.getDate()}</div>
-                </button>
+                  <button
+                    onClick={() => handleDateClick(date)}
+                    disabled={isPast}
+                    className={`aspect-square border rounded-lg text-xs transition-colors w-full ${
+                      isPast
+                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                        : isSelected
+                        ? 'ring-2 ring-dark-sage ring-offset-1'
+                        : 'hover:bg-sand/20 cursor-pointer'
+                    } ${
+                      blockType === 'closed'
+                        ? 'bg-red-100 border-red-300 text-red-900'
+                        : blockType === 'open'
+                        ? 'bg-yellow-100 border-yellow-300 text-yellow-900'
+                        : hasAvailability
+                        ? 'bg-green-50 border-green-300 text-green-900'
+                        : 'bg-white border-sand text-charcoal'
+                    }`}
+                  >
+                    <div className="text-center font-medium">{date.getDate()}</div>
+                    {hasAvailability && !blockType && (
+                      <div className="absolute bottom-0.5 left-0 right-0 flex justify-center">
+                        <div className="w-1 h-1 bg-green-600 rounded-full" />
+                      </div>
+                    )}
+                  </button>
+                  
+                  {/* Hover Tooltip */}
+                  {hoveredDate && hoveredDate.toDateString() === date.toDateString() && hasAvailability && !isPast && (
+                    <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-charcoal text-white text-xs rounded shadow-lg whitespace-nowrap">
+                      {availabilityText}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                        <div className="w-2 h-2 bg-charcoal rotate-45" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
 
           {/* Legend */}
-          <div className="mt-3 flex items-center gap-3 text-xs">
+          <div className="mt-3 flex items-center gap-3 text-xs flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-green-50 border border-green-300 rounded" />
+              <span className="text-warm-gray">Available</span>
+            </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 bg-red-100 border border-red-300 rounded" />
               <span className="text-warm-gray">Closed</span>
