@@ -446,13 +446,18 @@ export default function RecurringScheduleEditModal({
         
         // Create a block for each time range
         for (const timeRange of daySchedule.timeRanges) {
+          // Ensure serviceIds is always an array (default to all services if empty)
+          const finalServiceIds = timeRange.serviceIds.length > 0 
+            ? timeRange.serviceIds 
+            : (allServiceIds.length > 0 ? allServiceIds : []);
+          
           const blockPayload = {
             recurring_schedule_id: recurringScheduleId,
             weekday: hapioWeekday, // String format: "monday", "tuesday", etc.
             start_time: formatTime(timeRange.startTime), // Convert HH:mm to HH:mm:ss
             end_time: formatTime(timeRange.endTime), // Convert HH:mm to HH:mm:ss
             metadata: {
-              service_ids: timeRange.serviceIds,
+              service_ids: finalServiceIds,
             },
           };
           
@@ -460,6 +465,8 @@ export default function RecurringScheduleEditModal({
             day: DAYS[daySchedule.dayOfWeek].label,
             dayOfWeek: daySchedule.dayOfWeek,
             hapioWeekdayString: hapioWeekday,
+            serviceIds: finalServiceIds,
+            serviceCount: finalServiceIds.length,
             payload: blockPayload,
           });
 
