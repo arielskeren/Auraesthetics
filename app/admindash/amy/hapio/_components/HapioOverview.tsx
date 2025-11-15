@@ -5,7 +5,13 @@ import { Calendar, Users, Settings, TrendingUp } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 
-export default function HapioOverview() {
+type Tab = 'bookings' | 'resources' | 'schedules';
+
+interface HapioOverviewProps {
+  onNavigate?: (tab: Tab) => void;
+}
+
+export default function HapioOverview({ onNavigate }: HapioOverviewProps) {
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -146,13 +152,22 @@ export default function HapioOverview() {
       <div className="bg-white border border-sand rounded-lg p-6">
         <h2 className="text-xl font-semibold text-charcoal mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium">
+          <button
+            onClick={() => onNavigate?.('bookings')}
+            className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+          >
             View All Bookings
           </button>
-          <button className="px-4 py-2 bg-sage-light text-charcoal rounded-lg hover:bg-sage-light/80 transition-colors text-sm font-medium">
+          <button
+            onClick={() => onNavigate?.('resources')}
+            className="px-4 py-2 bg-sage-light text-charcoal rounded-lg hover:bg-sage-light/80 transition-colors text-sm font-medium"
+          >
             Manage Resources
           </button>
-          <button className="px-4 py-2 bg-sage-light text-charcoal rounded-lg hover:bg-sage-light/80 transition-colors text-sm font-medium">
+          <button
+            onClick={() => onNavigate?.('schedules')}
+            className="px-4 py-2 bg-sage-light text-charcoal rounded-lg hover:bg-sage-light/80 transition-colors text-sm font-medium"
+          >
             Configure Schedules
           </button>
         </div>

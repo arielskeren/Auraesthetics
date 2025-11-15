@@ -57,7 +57,7 @@ export default function HapioManagementClient() {
 
           {/* Content */}
           <div className="p-6">
-            {activeTab === 'overview' && <HapioOverview />}
+            {activeTab === 'overview' && <HapioOverview onNavigate={(tab) => setActiveTab(tab)} />}
             {activeTab === 'bookings' && <BookingsManager />}
             {activeTab === 'resources' && <ResourcesManager />}
             {activeTab === 'services' && <ServicesManager />}

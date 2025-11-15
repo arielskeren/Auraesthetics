@@ -19,6 +19,7 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (location) {
@@ -35,6 +36,7 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(false);
 
     try {
       const url = location
@@ -53,6 +55,12 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         throw new Error(errorData.error || 'Failed to save location');
       }
 
+      // Show success message
+      setSuccess(true);
+      
+      // Wait a moment to show success, then refresh and close
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Wait for save callback to complete before closing
       await onSave();
       onClose();
@@ -80,6 +88,11 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <ErrorDisplay error={error} />}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
+              Location saved successfully!
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">

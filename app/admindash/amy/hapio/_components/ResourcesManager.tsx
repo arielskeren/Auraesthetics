@@ -147,7 +147,9 @@ export default function ResourcesManager() {
               {resources.map((resource) => (
                 <tr key={resource.id} className="hover:bg-sand/20">
                   <td className="px-4 py-3 text-sm font-medium text-charcoal">{resource.name}</td>
-                  <td className="px-4 py-3 text-sm text-warm-gray font-mono">{resource.location_id.slice(0, 8)}...</td>
+                  <td className="px-4 py-3 text-sm text-warm-gray font-mono">
+                    {resource.location_id ? `${resource.location_id.slice(0, 8)}...` : '—'}
+                  </td>
                   <td className="px-4 py-3 text-sm text-warm-gray">{resource.max_simultaneous_bookings}</td>
                   <td className="px-4 py-3">
                     <span

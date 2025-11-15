@@ -2,16 +2,21 @@
 
 import { useState } from 'react';
 import { Plus, Calendar } from 'lucide-react';
+import ScheduleBlockEditModal from './ScheduleBlockEditModal';
 
 export default function SchedulesManager() {
   const [parentType, setParentType] = useState<'project' | 'location' | 'resource'>('resource');
   const [parentId, setParentId] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-charcoal">Schedules</h2>
-        <button className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+        >
           <Plus className="w-4 h-4" />
           Add Schedule Block
         </button>
@@ -51,6 +56,16 @@ export default function SchedulesManager() {
         <p>Schedule management interface coming soon</p>
         <p className="text-sm mt-2">Select a parent type and ID to view schedule blocks</p>
       </div>
+
+      {showAddModal && (
+        <ScheduleBlockEditModal
+          onClose={() => setShowAddModal(false)}
+          onSave={async () => {
+            setShowAddModal(false);
+            // Could reload schedule data here if needed
+          }}
+        />
+      )}
     </div>
   );
 }
