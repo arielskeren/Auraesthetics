@@ -46,6 +46,8 @@ export async function GET(
               blocksResponse.data.forEach((block: any) => {
                 allBlocks.push({
                   ...block,
+                  // Ensure recurring_schedule_id is set (it should already be in the block, but ensure it's there)
+                  recurring_schedule_id: block.recurring_schedule_id || schedule.id,
                   parent_schedule: {
                     id: schedule.id,
                     start_date: schedule.start_date,

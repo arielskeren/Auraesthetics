@@ -102,14 +102,17 @@ export default function RecurringScheduleBlocksEditor({
       return;
     }
 
-    if (!block.recurring_schedule_id) {
+    // Get recurring_schedule_id from block or parent_schedule
+    const recurringScheduleId = block.recurring_schedule_id || block.parent_schedule?.id;
+    
+    if (!recurringScheduleId) {
       setError(new Error('Cannot delete: missing recurring_schedule_id'));
       return;
     }
 
     try {
       const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks/${block.id}?recurring_schedule_id=${block.recurring_schedule_id}`,
+        `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks/${block.id}?recurring_schedule_id=${recurringScheduleId}`,
         {
           method: 'DELETE',
         }
