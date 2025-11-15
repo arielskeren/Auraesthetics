@@ -3,10 +3,15 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 const DEFAULT_BASE_URL = 'https://eu-central-1.hapio.net/v1';
 
 const HAPIO_BASE_URL = process.env.HAPIO_BASE_URL ?? DEFAULT_BASE_URL;
-const HAPIO_API_TOKEN = process.env.HAPIO_API_TOKEN;
 
-if (!HAPIO_API_TOKEN) {
-  throw new Error('HAPIO_API_TOKEN is not configured.');
+// Lazy check: only validate token when actually making requests (not at module load time)
+// This allows the module to be imported during build without requiring env vars
+function getHapioApiToken(): string {
+  const token = process.env.HAPIO_API_TOKEN;
+  if (!token) {
+    throw new Error('HAPIO_API_TOKEN is not configured.');
+  }
+  return token;
 }
 
 type HapioHttpMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
@@ -116,12 +121,14 @@ function getClient(): AxiosInstance {
     return client;
   }
 
+  // Check token only when creating the client (lazy validation)
+  const token = getHapioApiToken();
   const baseURL = HAPIO_BASE_URL.endsWith('/') ? HAPIO_BASE_URL : `${HAPIO_BASE_URL}/`;
 
   client = axios.create({
     baseURL,
     headers: {
-      Authorization: `Bearer ${HAPIO_API_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
