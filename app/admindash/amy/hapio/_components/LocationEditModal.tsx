@@ -23,8 +23,8 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
   const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
-    // Don't update form if we're closing - prevents clearing fields right before modal closes
-    if (isClosing) {
+    // Don't update form if we're closing or loading - prevents clearing fields during save
+    if (isClosing || loading) {
       return;
     }
     
@@ -36,8 +36,8 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
         timezone: location.timezone || 'UTC',
         enabled: location.enabled !== false,
       });
-    } else if (!loading && !success) {
-      // Only reset form for new location if we're not in the middle of saving
+    } else if (!success) {
+      // Only reset form for new location if we're not showing success
       setFormData({
         name: '',
         address: '',
@@ -49,9 +49,16 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Preserve the current form data before starting the save
+    const dataToSave = { ...formData };
+    
     setLoading(true);
     setError(null);
     setSuccess(false);
+    
+    // Keep the form data visible - don't let useEffect clear it
+    setIsClosing(false);
 
     try {
       const url = location
@@ -62,7 +69,7 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(dataToSave),
       });
 
       if (!response.ok) {

@@ -185,8 +185,12 @@ export default function LocationsManager() {
         <LocationEditModal
           location={selectedLocation ? locations.find(loc => loc.id === selectedLocation.id) || selectedLocation : null}
           onClose={() => {
+            // Don't clear selectedLocation immediately - let the modal handle cleanup
             setShowEditModal(false);
-            setSelectedLocation(null);
+            // Clear selection after a small delay to allow modal to close gracefully
+            setTimeout(() => {
+              setSelectedLocation(null);
+            }, 100);
           }}
           onSave={handleSave}
         />
