@@ -1366,7 +1366,7 @@ export async function associateResourceService(
   serviceId: string
 ): Promise<HapioResourceServiceAssociation> {
   const response = await requestJson<any>(
-    'post',
+    'put',
     `resources/${resourceId}/services/${serviceId}`
   );
   return {
