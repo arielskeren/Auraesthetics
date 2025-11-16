@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
+import { computeFiveDayWindow, suggestSlots } from '@/lib/scheduling/suggestions';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -29,6 +30,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   );
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [requestedDate, setRequestedDate] = useState<string>(''); // YYYY-MM-DD
+  const [requestedTime, setRequestedTime] = useState<string>(''); // HH:MM
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [deferredSlot, setDeferredSlot] = useState<AvailabilitySlot | null>(null);
@@ -36,6 +39,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(null);
   const [lockStatus, setLockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [lockError, setLockError] = useState<string | null>(null);
+  const [collapseTimes, setCollapseTimes] = useState<boolean>(false);
 
   const userTimezone = useMemo(() => {
     try {
@@ -45,61 +49,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     }
   }, []);
 
-  useEffect(() => {
-    if (!isOpen || !service?.slug) {
-      return;
-    }
-
-    // Extract slug after guard check to narrow type from string | undefined to string
-    const serviceSlug = service.slug;
-
-    const abortController = new AbortController();
-
-    async function loadAvailability() {
-      setAvailabilityStatus('loading');
-      setAvailabilityError(null);
-      setSelectedSlot(null);
-      setDeferredSlot(null);
-      setPendingBooking(null);
-      setLockError(null);
-      setAvailabilityTimezone(null);
-
-      try {
-        const params = new URLSearchParams({
-          slug: serviceSlug,
-          days: '14',
-          timezone: userTimezone,
-        });
-        const response = await fetch(`/api/availability?${params.toString()}`, {
-          method: 'GET',
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          throw new Error(errorBody?.error ?? 'Failed to load availability');
-        }
-
-        const json = (await response.json()) as AvailabilityApiResponse;
-        setSlots(json.availability ?? []);
-        setAvailabilityTimezone(json.meta?.timezone ?? null);
-        setAvailabilityStatus('success');
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          return;
-        }
-        console.error('Failed to fetch Hapio availability', error);
-        setAvailabilityStatus('error');
-        setAvailabilityError(error?.message ?? 'Unable to load availability');
-      }
-    }
-
-    void loadAvailability();
-
-    return () => {
-      abortController.abort();
-    };
-  }, [isOpen, service?.slug, userTimezone, reloadToken]);
+  // Do not prefetch availability. Fetch only after user selects date+time and searches.
 
   useEffect(() => {
     if (!isOpen) {
@@ -117,6 +67,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     }
 
     setDeferredSlot(selectedSlot);
+    setCollapseTimes(true);
   }, [selectedSlot]);
 
   useEffect(() => {
@@ -137,6 +88,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       return [];
     }
 
+    // Group by day for display
     const dateFormatter = new Intl.DateTimeFormat(undefined, {
       weekday: 'short',
       month: 'short',
@@ -174,6 +126,114 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   }, [slots]);
 
   const hasAvailability = groupedAvailability.length > 0;
+
+  // Compute a 5‑day window (chosen day centered with two working days before and after)
+  const fiveDayWindow = useMemo(() => {
+    if (!requestedDate) return [];
+    const keys = computeFiveDayWindow(requestedDate);
+    const fmtDay = new Intl.DateTimeFormat(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    return keys.map((k) => {
+      const d = new Date(k + 'T00:00:00');
+      return { key: k, label: fmtDay.format(d) };
+    });
+  }, [requestedDate]);
+
+  const suggestedSlots = useMemo(() => {
+    if (!requestedDate || !requestedTime) return [];
+    const simple = slots.map((s) => ({ start: s.start, end: s.end }));
+    return suggestSlots(simple, requestedDate, requestedTime);
+  }, [slots, requestedDate, requestedTime]);
+
+  const handleSearchAvailability = async () => {
+    if (!service?.slug) return;
+    // Require date and time before searching
+    if (!requestedDate || !requestedTime) {
+      setAvailabilityStatus('error');
+      setAvailabilityError('Please select a date and time to search.');
+      return;
+    }
+
+    const abortController = new AbortController();
+    setAvailabilityStatus('loading');
+    setAvailabilityError(null);
+    setSelectedSlot(null);
+    setDeferredSlot(null);
+    setPendingBooking(null);
+    setLockError(null);
+    setAvailabilityTimezone(null);
+
+    try {
+      // Build a window covering the chosen day ± two working days (Mon–Fri).
+      const [hour, minute] = requestedTime.split(':').map((v) => Number(v));
+      const chosen = new Date(`${requestedDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
+
+      const isWorkingDay = (d: Date) => {
+        const day = d.getDay(); // 0 Sun ... 6 Sat
+        return day !== 0 && day !== 6;
+      };
+      const prevWorkingDays: Date[] = [];
+      const nextWorkingDays: Date[] = [];
+
+      // Walk backwards to collect two prior working days
+      {
+        const cursor = new Date(chosen);
+        for (let i = 0; i < 10 && prevWorkingDays.length < 2; i++) {
+          cursor.setDate(cursor.getDate() - 1);
+          if (isWorkingDay(cursor)) {
+            prevWorkingDays.push(new Date(cursor));
+          }
+        }
+      }
+      // Walk forwards to collect two next working days
+      {
+        const cursor = new Date(chosen);
+        for (let i = 0; i < 10 && nextWorkingDays.length < 2; i++) {
+          cursor.setDate(cursor.getDate() + 1);
+          if (isWorkingDay(cursor)) {
+            nextWorkingDays.push(new Date(cursor));
+          }
+        }
+      }
+
+      const allDays = [...prevWorkingDays.reverse(), new Date(chosen), ...nextWorkingDays];
+      const windowStart = new Date(allDays[0]);
+      windowStart.setHours(0, 0, 0, 0);
+      const windowEnd = new Date(allDays[allDays.length - 1]);
+      windowEnd.setHours(23, 59, 59, 0);
+
+      const params = new URLSearchParams({
+        slug: service.slug,
+        from: windowStart.toISOString(),
+        to: windowEnd.toISOString(),
+        timezone: userTimezone,
+      });
+      const response = await fetch(`/api/availability?${params.toString()}`, {
+        method: 'GET',
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.error ?? 'Failed to load availability');
+      }
+
+      const json = (await response.json()) as AvailabilityApiResponse;
+      setSlots(json.availability ?? []);
+      setAvailabilityTimezone(json.meta?.timezone ?? null);
+      setAvailabilityStatus('success');
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        return;
+      }
+      console.error('Failed to fetch Hapio availability', error);
+      setAvailabilityStatus('error');
+      setAvailabilityError(error?.message ?? 'Unable to load availability');
+    }
+  };
 
   const handleStartPayment = async () => {
     if (!service?.slug || !selectedSlot) {
@@ -300,6 +360,37 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                         </h4>
                       </div>
 
+                      {/* Step 1: Date + Time picker (no prefetch) */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                        <div className="flex flex-col">
+                          <label className="text-xs text-warm-gray mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={requestedDate}
+                            onChange={(e) => setRequestedDate(e.target.value)}
+                            className="border border-sand rounded-md px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <label className="text-xs text-warm-gray mb-1">Preferred time</label>
+                          <input
+                            type="time"
+                            value={requestedTime}
+                            onChange={(e) => setRequestedTime(e.target.value)}
+                            className="border border-sand rounded-md px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            onClick={handleSearchAvailability}
+                            className="w-full"
+                            variant="primary"
+                          >
+                            Find times
+                          </Button>
+                        </div>
+                      </div>
+
                       {availabilityStatus === 'loading' && (
                         <div className="flex items-center gap-2 text-sm text-warm-gray">
                           <Loader2 className="w-4 h-4 animate-spin text-dark-sage" />
@@ -316,7 +407,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                             type="button"
                             className="inline-flex items-center gap-2 text-dark-sage font-medium underline underline-offset-4 hover:text-sage-dark"
                             onClick={() => {
-                              setAvailabilityStatus('loading');
+                              setAvailabilityStatus('idle');
                               setAvailabilityError(null);
                               setSlots([]);
                               setSelectedSlot(null);
@@ -331,14 +422,91 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                       )}
 
                       {availabilityStatus === 'success' && !hasAvailability && (
-                        <p className="text-sm text-warm-gray">
-                          We’re refreshing Amy’s calendar—please check back shortly or message us if
-                          you need a specific time.
-                        </p>
+                        <p className="text-sm text-warm-gray">No availability for the selected date.</p>
                       )}
 
-                      {availabilityStatus === 'success' && hasAvailability && (
+                      {availabilityStatus === 'success' && hasAvailability && !collapseTimes && (
                         <div className="space-y-4">
+                          {/* Suggested times */}
+                          {suggestedSlots.length > 0 && (
+                            <div className="border border-sand rounded-lg p-3">
+                              <div className="text-sm font-medium text-charcoal mb-2">
+                                Suggested times
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {suggestedSlots.map((slot) => {
+                                  const start = new Date(slot.start);
+                                  const end = new Date(slot.end);
+                                  const fullSlot = slots.find(
+                                    (s) => s.start === slot.start && s.end === slot.end
+                                  ) || null;
+                                  const startLabel = new Intl.DateTimeFormat(undefined, {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  }).format(start);
+                                  const endLabel = new Intl.DateTimeFormat(undefined, {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  }).format(end);
+                                  const isSelected =
+                                    selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
+                                  return (
+                                    <button
+                                      key={`sugg-${slot.start}-${slot.end}`}
+                                      type="button"
+                                      onClick={() => setSelectedSlot(isSelected ? null : fullSlot)}
+                                      className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                                        isSelected
+                                          ? 'bg-dark-sage text-charcoal border-dark-sage'
+                                          : 'border-sand text-warm-gray hover:border-dark-sage hover:text-charcoal'
+                                      }`}
+                                    >
+                                      {startLabel} – {endLabel}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Five‑day grid */}
+                          {fiveDayWindow.length === 5 && (
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                              {fiveDayWindow.map((day) => {
+                                const dayGroup = groupedAvailability.find((g) => g.key === day.key);
+                                return (
+                                  <div key={`grid-${day.key}`} className="border border-sand rounded-lg p-3">
+                                    <div className="text-sm font-medium text-charcoal mb-2">{day.label}</div>
+                                    {dayGroup ? (
+                                      <div className="flex flex-col gap-2">
+                                        {dayGroup.slots.map(({ slot, startLabel, endLabel }) => {
+                                          const isSelected =
+                                            selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
+                                          return (
+                                            <button
+                                              key={`grid-slot-${slot.start}-${slot.end}`}
+                                              type="button"
+                                              onClick={() => setSelectedSlot(isSelected ? null : slot)}
+                                              className={`w-full text-left px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                                                isSelected
+                                                  ? 'bg-dark-sage text-charcoal border-dark-sage'
+                                                  : 'border-sand text-warm-gray hover:border-dark-sage hover:text-charcoal'
+                                              }`}
+                                            >
+                                              {startLabel} – {endLabel}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-warm-gray">No availability</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           {groupedAvailability.map((day) => (
                             <div key={day.key} className="border border-sand rounded-lg p-3">
                               <div className="text-sm font-medium text-charcoal mb-2">
@@ -368,6 +536,36 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                               </div>
                             </div>
                           ))}
+                        </div>
+                      )}
+                      {availabilityStatus === 'success' && hasAvailability && collapseTimes && selectedSlot && (
+                        <div className="space-y-3">
+                          <div className="border border-sand rounded-lg p-3 bg-white">
+                            <div className="text-sm font-medium text-charcoal mb-1">Selected time</div>
+                            <div className="text-sm text-warm-gray">
+                              {new Date(selectedSlot.start).toLocaleString(undefined, {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}{' '}
+                              –{' '}
+                              {new Date(selectedSlot.end).toLocaleTimeString(undefined, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
+                            </div>
+                          </div>
+                          <div>
+                            <Button
+                              onClick={() => setCollapseTimes(false)}
+                              variant="secondary"
+                              className="w-full"
+                            >
+                              Change booking time
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -251,17 +251,12 @@ function ModernPaymentSection({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            serviceId: deriveServiceSlug(service),
-            serviceName: service.name,
-            amount: baseAmount,
-            discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
-            paymentType,
-            depositPercent: 50,
-            clientName: trimmedContact.name,
-            clientEmail: trimmedContact.email,
-            clientPhone: trimmedContact.phone,
-            clientNotes: trimmedContact.notes,
-            hapioBookingId: pendingBooking.hapioBookingId,
+            serviceSlug: service.slug ?? deriveServiceSlug(service),
+            slotStart: pendingBooking.startsAt,
+            slotEnd: pendingBooking.endsAt,
+            timezone: pendingBooking.timezone,
+            email: trimmedContact.email,
+            bookingId: pendingBooking.hapioBookingId,
           }),
         });
 
@@ -271,7 +266,7 @@ function ModernPaymentSection({
         }
 
         const intentJson = await intentResponse.json();
-        const { clientSecret, paymentIntentId, amount: amountCharged } = intentJson;
+        const { clientSecret, paymentIntentId } = intentJson;
 
         const cardElement = elements.getElement(CardElement);
         if (!cardElement) {
@@ -297,7 +292,7 @@ function ModernPaymentSection({
           onSuccess({
             paymentIntentId,
             paymentType,
-            amountPaid: typeof amountCharged === 'number' ? amountCharged : amountDueToday,
+            amountPaid: amountDueToday,
             discountCode: discountValidation?.valid ? discountCode.toUpperCase() : undefined,
             contact: trimmedContact,
           });
@@ -665,10 +660,30 @@ export default function CustomPaymentModal({
     return service?.image_url || null;
   }, [service?.image_url]);
 
-  const handlePaymentSuccess = useCallback((payload: PaymentSuccessPayload) => {
+  const handlePaymentSuccess = useCallback(async (payload: PaymentSuccessPayload) => {
     setPaymentSuccess(payload);
     setContactPrefill(payload.contact);
-  }, []);
+    try {
+      if (pendingBooking?.hapioBookingId) {
+        const resp = await fetch('/api/bookings/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentIntentId: payload.paymentIntentId,
+            bookingId: pendingBooking.hapioBookingId,
+          }),
+        });
+        if (!resp.ok) {
+          // Non-blocking: show console error, UI already shows success
+          // eslint-disable-next-line no-console
+          console.error('Finalize booking failed', await resp.json().catch(() => ({})));
+        }
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Finalize booking error', e);
+    }
+  }, [pendingBooking?.hapioBookingId]);
 
   const handleClose = useCallback(() => {
     setPaymentSuccess(null);
