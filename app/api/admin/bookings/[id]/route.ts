@@ -3,6 +3,7 @@ import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking } from '@/lib/outlookBookingSync';
+import { sendBrevoEmail } from '@/lib/brevoClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
@@ -221,6 +222,30 @@ export async function POST(
         WHERE id = ${bookingId}
       `;
 
+      // Record event
+      await sql`
+        INSERT INTO booking_events (booking_id, type, data)
+        VALUES (${bookingId}, ${'cancelled'}, ${JSON.stringify({ refundProcessed, refundId })}::jsonb)
+      `;
+
+      // Send cancellation email (best-effort)
+      if (bookingData.client_email) {
+        try {
+          await sendBrevoEmail({
+            to: [{ email: bookingData.client_email, name: bookingData.client_name || undefined }],
+            subject: 'Your appointment has been cancelled',
+            htmlContent: `<p>Your appointment for <strong>${bookingData.service_name || 'your service'}</strong> on ${bookingData.booking_date || ''} has been cancelled.</p>`,
+            tags: ['booking_cancelled'],
+          });
+          await sql`
+            INSERT INTO booking_events (booking_id, type, data)
+            VALUES (${bookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_cancelled' })}::jsonb)
+          `;
+        } catch (e) {
+          console.error('[Brevo] cancel email failed', e);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         message: refundProcessed 
@@ -255,6 +280,9 @@ export async function POST(
       }
 
       try {
+        const requestedPercent = typeof body?.percentage === 'number' ? body.percentage : null;
+        const requestedAmountCents = typeof body?.amountCents === 'number' ? body.amountCents : null;
+
         // Retrieve payment intent
         const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
         
@@ -265,10 +293,19 @@ export async function POST(
           );
         }
 
+        // Determine refund amount
+        const totalCents = Math.round((Number(bookingData.final_amount) || 0) * 100);
+        let refundCents = totalCents;
+        if (requestedAmountCents && requestedAmountCents > 0 && requestedAmountCents <= totalCents) {
+          refundCents = requestedAmountCents;
+        } else if (requestedPercent && requestedPercent > 0 && requestedPercent <= 100) {
+          refundCents = Math.round((requestedPercent / 100) * totalCents);
+        }
+
         // Create refund
         const refund = await stripe.refunds.create({
           payment_intent: bookingData.payment_intent_id,
-          amount: Math.round((Number(bookingData.final_amount) || 0) * 100), // Convert to cents
+          amount: refundCents,
           reason: 'requested_by_customer',
         });
 
@@ -288,9 +325,38 @@ export async function POST(
               '{refundedAt}',
               ${JSON.stringify(new Date().toISOString())}::jsonb
             ),
+            metadata = jsonb_set(
+              metadata,
+              '{refundAmountCents}',
+              ${JSON.stringify(refundCents)}::jsonb
+            ),
             updated_at = NOW()
           WHERE id = ${bookingId}
         `;
+
+        // Record event
+        await sql`
+          INSERT INTO booking_events (booking_id, type, data)
+          VALUES (${bookingId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents })}::jsonb)
+        `;
+
+        // Send refund email (best-effort)
+        if (bookingData.client_email) {
+          try {
+            await sendBrevoEmail({
+              to: [{ email: bookingData.client_email, name: bookingData.client_name || undefined }],
+              subject: 'Your refund has been issued',
+              htmlContent: `<p>A refund for <strong>$${(refundCents / 100).toFixed(2)}</strong> has been issued for your appointment ${bookingData.service_name ? `(${bookingData.service_name})` : ''}.</p>`,
+              tags: ['booking_refunded'],
+            });
+            await sql`
+              INSERT INTO booking_events (booking_id, type, data)
+              VALUES (${bookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_refunded' })}::jsonb)
+            `;
+          } catch (e) {
+            console.error('[Brevo] refund email failed', e);
+          }
+        }
 
         return NextResponse.json({
           success: true,

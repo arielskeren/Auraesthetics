@@ -7,8 +7,6 @@ import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
 import { computeFiveDayWindow } from '@/lib/scheduling/suggestions';
-import DateWheel from './wheels/DateWheel';
-import TimeWheel from './wheels/TimeWheel';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -27,7 +25,6 @@ interface BookingModalProps {
 export default function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   useBodyScrollLock(isOpen);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
     'idle'
   );
@@ -36,6 +33,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const [requestedDate, setRequestedDate] = useState<string>(''); // YYYY-MM-DD
   const [requestedTime, setRequestedTime] = useState<string>(''); // HH:MM
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+  const [daySlots, setDaySlots] = useState<AvailabilitySlot[]>([]);
+  const [timeValidationError, setTimeValidationError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [deferredSlot, setDeferredSlot] = useState<AvailabilitySlot | null>(null);
   const [availabilityTimezone, setAvailabilityTimezone] = useState<string | null>(null);
@@ -85,6 +84,82 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     setPendingBooking(null);
     setLockError(null);
   }, [service?.slug, reloadToken]);
+
+  // Seed default requested date to today when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const today = `${yyyy}-${mm}-${dd}`;
+    setRequestedDate(today);
+  }, [isOpen]);
+
+  // Fetch availability for the selected day to populate time picklist and default time
+  useEffect(() => {
+    const loadDayAvailability = async () => {
+      if (!service?.slug || !requestedDate) {
+        setDaySlots([]);
+        return;
+      }
+      const startOfDay = new Date(`${requestedDate}T00:00:00`);
+      const endOfDay = new Date(`${requestedDate}T23:59:59`);
+      try {
+        const params = new URLSearchParams({
+          slug: service.slug,
+          from: startOfDay.toISOString(),
+          to: endOfDay.toISOString(),
+          timezone: userTimezone,
+        });
+        const resp = await fetch(`/api/availability?${params.toString()}`, { method: 'GET' });
+        if (!resp.ok) throw new Error('Failed to load daily availability');
+        const json = (await resp.json()) as AvailabilityApiResponse;
+        const avail = json.availability ?? [];
+        setDaySlots(avail);
+        // Default time: first available (future if today)
+        const now = new Date();
+        const firstValid = avail.find((s) => {
+          const start = new Date(s.start);
+          const isToday =
+            start.getFullYear() === now.getFullYear() &&
+            start.getMonth() === now.getMonth() &&
+            start.getDate() === now.getDate();
+          return !isToday || start.getTime() >= now.getTime();
+        });
+        if (firstValid) {
+          const d = new Date(firstValid.start);
+          const hh = String(d.getHours()).padStart(2, '0');
+          const mi = String(d.getMinutes()).padStart(2, '0');
+          setRequestedTime(`${hh}:${mi}`);
+          setTimeValidationError(null);
+        } else {
+          setRequestedTime('');
+          setTimeValidationError(null);
+        }
+      } catch (e) {
+        console.error('Daily availability load failed', e);
+        setDaySlots([]);
+      }
+    };
+    loadDayAvailability();
+  }, [requestedDate, service?.slug, userTimezone]);
+
+  // Validate that selected date+time is not in the past
+  useEffect(() => {
+    if (!requestedDate || !requestedTime) {
+      setTimeValidationError(null);
+      return;
+    }
+    const [hh, mm] = requestedTime.split(':').map((v) => Number(v));
+    const chosen = new Date(`${requestedDate}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`);
+    const now = new Date();
+    if (chosen.getTime() < now.getTime()) {
+      setTimeValidationError('Please select a time in the future.');
+    } else {
+      setTimeValidationError(null);
+    }
+  }, [requestedDate, requestedTime]);
 
   const groupedAvailability = useMemo(() => {
     if (slots.length === 0) {
@@ -150,9 +225,9 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const handleSearchAvailability = async () => {
     if (!service?.slug) return;
     // Require date and time before searching
-    if (!requestedDate || !requestedTime) {
+    if (!requestedDate || !requestedTime || timeValidationError) {
       setAvailabilityStatus('error');
-      setAvailabilityError('Please select a date and time to search.');
+      setAvailabilityError(timeValidationError || 'Please select a date and time to search.');
       return;
     }
 
@@ -359,29 +434,86 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                         </h4>
                       </div>
 
-                      {/* Step 1: Date + Time wheel pickers (no prefetch) */}
+                      {/* Step 1: Date + Time picklists (no prefetch) */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Date</label>
-                          <DateWheel
+                          <select
+                            className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                             value={requestedDate}
-                            onChange={setRequestedDate}
-                            days={120}
-                            className="border border-sand rounded-lg bg-white"
-                          />
+                            onChange={(e) => setRequestedDate(e.target.value)}
+                          >
+                            {Array.from({ length: 120 }).map((_, idx) => {
+                              const d = new Date();
+                              d.setDate(d.getDate() + idx);
+                              const yyyy = String(d.getFullYear());
+                              const mm = String(d.getMonth() + 1).padStart(2, '0');
+                              const dd = String(d.getDate()).padStart(2, '0');
+                              const value = `${yyyy}-${mm}-${dd}`;
+                              const label = new Intl.DateTimeFormat(undefined, {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                              }).format(d);
+                              return (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              );
+                            })}
+                          </select>
                         </div>
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Preferred time</label>
-                          <button
-                            type="button"
-                            onClick={() => setShowTimePicker(true)}
-                            className="h-11 px-3 text-left border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                          <select
+                            className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                            value={requestedTime}
+                            onChange={(e) => setRequestedTime(e.target.value)}
                           >
-                            {requestedTime ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(`1970-01-01T${requestedTime}:00`)) : 'Select time'}
-                          </button>
+                            <option value="" disabled>
+                              {daySlots.length === 0 ? 'No times' : 'Select time'}
+                            </option>
+                            {daySlots
+                              .map((s) => new Date(s.start))
+                              .sort((a, b) => a.getTime() - b.getTime())
+                              .map((d) => {
+                                const now = new Date();
+                                const isPast =
+                                  d.getFullYear() === now.getFullYear() &&
+                                  d.getMonth() === now.getMonth() &&
+                                  d.getDate() === now.getDate() &&
+                                  d.getTime() < now.getTime();
+                                const hh = String(d.getHours()).padStart(2, '0');
+                                const mi = String(d.getMinutes()).padStart(2, '0');
+                                const value = `${hh}:${mi}`;
+                                const label = new Intl.DateTimeFormat(undefined, {
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                }).format(d);
+                                return (
+                                  <option key={value + d.toISOString()} value={value} disabled={isPast}>
+                                    {label}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                          {timeValidationError && (
+                            <span className="mt-1 text-xs text-red-600">{timeValidationError}</span>
+                          )}
                         </div>
                         <div className="flex items-center">
-                          <Button onClick={handleSearchAvailability} className="w-full" variant="primary">
+                          <Button
+                            onClick={handleSearchAvailability}
+                            className="w-full"
+                            variant={timeValidationError || !requestedDate || !requestedTime ? 'disabled' : 'primary'}
+                            tooltip={
+                              timeValidationError
+                                ? timeValidationError
+                                : !requestedDate || !requestedTime
+                                ? 'Choose a date and time'
+                                : undefined
+                            }
+                          >
                             Find times
                           </Button>
                         </div>
@@ -495,28 +627,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                     </div>
                   </div>
 
-                  {/* Time wheel overlay */}
-                  {showTimePicker && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30">
-                      <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-md">
-                        <div className="mb-3 text-sm font-medium text-charcoal">Select time</div>
-                        <TimeWheel
-                          value={requestedTime}
-                          onChange={setRequestedTime}
-                          stepMinutes={15}
-                          startHour={9}
-                          endHour={19}
-                          includeEnd
-                          className="border border-sand rounded-lg bg-white"
-                        />
-                        <div className="mt-4 flex gap-2">
-                          <Button className="flex-1" variant="secondary" onClick={() => setShowTimePicker(false)}>
-                            Done
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Time wheel overlay removed; using picklists above */}
                   {/* Booking CTA */}
                   <div className="mb-6">
                     <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">

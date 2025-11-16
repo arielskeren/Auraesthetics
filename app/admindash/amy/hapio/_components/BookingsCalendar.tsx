@@ -459,11 +459,6 @@ export default function BookingsCalendar() {
                     }`}
                   >
                     <div className="text-center font-medium">{date.getDate()}</div>
-                    {dateBookings.length > 0 && (
-                      <div className="absolute bottom-0.5 left-0 right-0 text-[10px] text-charcoal/70">
-                        {dateBookings.length} booking{dateBookings.length !== 1 ? 's' : ''}
-                      </div>
-                    )}
                   </button>
 
                   {/* Tooltip */}
@@ -720,10 +715,22 @@ export default function BookingsCalendar() {
                                 {booking.service?.name || (booking.serviceId && services[booking.serviceId]?.name) || 'Service'}
                               </div>
                               {(() => {
-                                const customerName = booking.metadata?.customer_name || booking.metadata?.customerName;
-                                return customerName ? (
-                                  <div className="text-xs opacity-90 mt-0.5">
-                                    {String(customerName)}
+                                const customerName =
+                                  booking.metadata?.customer_name ||
+                                  booking.metadata?.customerName ||
+                                  booking.customer?.name;
+                                const phone =
+                                  booking.customer?.phone ||
+                                  booking.metadata?.customer_phone ||
+                                  booking.metadata?.phone;
+                                const hasNotes =
+                                  !!booking.metadata?.notes ||
+                                  !!booking.metadata?.customer_notes;
+                                return (customerName || phone || hasNotes) ? (
+                                  <div className="text-[11px] opacity-90 mt-0.5">
+                                    {customerName ? String(customerName) : ''}
+                                    {phone ? ` • ${String(phone)}` : ''}
+                                    {hasNotes ? ' • has notes' : ''}
                                   </div>
                                 ) : null;
                               })()}

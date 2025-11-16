@@ -59,6 +59,26 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       
       if (data.success) {
         setClientHistory(data.clientHistory || []);
+        // If customer_id present, fetch full history via customers endpoint
+        if (data.booking?.customer_id) {
+          try {
+            const h = await fetch(`/api/customers/${data.booking.customer_id}/history`);
+            const hj = await h.json();
+            if (hj?.success && Array.isArray(hj.history)) {
+              // map to ClientHistory shape
+              const mapped = hj.history.slice(0, 5).map((item: any) => ({
+                id: item.bookingId,
+                service_name: item.serviceName,
+                booking_date: item.bookingDate,
+                payment_type: null,
+                payment_status: item.paymentStatus,
+                final_amount: (item.amountPaidCents || 0) / 100,
+                created_at: item.bookingDate || '',
+              }));
+              setClientHistory(mapped);
+            }
+          } catch {}
+        }
       }
     } catch (error) {
       console.error('Error fetching booking details:', error);
@@ -117,8 +137,23 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
   const handleRefund = async () => {
     if (!booking) return;
-    
-    if (!confirm('Are you sure you want to refund this booking? This will ONLY process the refund and will NOT cancel the booking. This action cannot be undone.')) return;
+    const choice = prompt(
+      'Refund amount:\n- Enter one of: 15,25,50,75,100 (percent)\n- Or enter a custom amount in dollars (e.g., 42.50)\n- Leave empty to refund full amount'
+    );
+    let percentage: number | null = null;
+    let amountCents: number | null = null;
+    if (choice && choice.trim().length > 0) {
+      const trimmed = choice.trim();
+      const pct = Number(trimmed);
+      if (!Number.isNaN(pct) && [15, 25, 50, 75, 100].includes(pct)) {
+        percentage = pct;
+      } else {
+        const amt = Number(trimmed);
+        if (!Number.isNaN(amt) && amt >= 0) {
+          amountCents = Math.round(amt * 100);
+        }
+      }
+    }
     
     try {
       setActionLoading('refund');
@@ -127,7 +162,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       const response = await fetch(`/api/admin/bookings/${booking.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refund' }),
+        body: JSON.stringify({ action: 'refund', percentage, amountCents }),
       });
       
       const data = await response.json();
@@ -308,6 +343,12 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
               <div>
                 <label className="text-sm text-warm-gray">Created At</label>
                 <p className="font-medium text-charcoal">{formatDate(booking.created_at)}</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm text-warm-gray">Notes</label>
+                <p className="font-medium text-charcoal whitespace-pre-wrap">
+                  {booking.metadata?.notes || booking.metadata?.customer_notes || 'None'}
+                </p>
               </div>
             </div>
           </div>
