@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
-import { computeFiveDayWindow, suggestSlots } from '@/lib/scheduling/suggestions';
+import { computeFiveDayWindow } from '@/lib/scheduling/suggestions';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -142,11 +142,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     });
   }, [requestedDate]);
 
-  const suggestedSlots = useMemo(() => {
-    if (!requestedDate || !requestedTime) return [];
-    const simple = slots.map((s) => ({ start: s.start, end: s.end }));
-    return suggestSlots(simple, requestedDate, requestedTime);
-  }, [slots, requestedDate, requestedTime]);
+  // No suggested slots section; show only daily breakdown grid
 
   const handleSearchAvailability = async () => {
     if (!service?.slug) return;
@@ -427,56 +423,14 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
                       {availabilityStatus === 'success' && hasAvailability && !collapseTimes && (
                         <div className="space-y-4">
-                          {/* Suggested times */}
-                          {suggestedSlots.length > 0 && (
-                            <div className="border border-sand rounded-lg p-3">
-                              <div className="text-sm font-medium text-charcoal mb-2">
-                                Suggested times
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {suggestedSlots.map((slot) => {
-                                  const start = new Date(slot.start);
-                                  const end = new Date(slot.end);
-                                  const fullSlot = slots.find(
-                                    (s) => s.start === slot.start && s.end === slot.end
-                                  ) || null;
-                                  const startLabel = new Intl.DateTimeFormat(undefined, {
-                                    hour: 'numeric',
-                                    minute: '2-digit',
-                                  }).format(start);
-                                  const endLabel = new Intl.DateTimeFormat(undefined, {
-                                    hour: 'numeric',
-                                    minute: '2-digit',
-                                  }).format(end);
-                                  const isSelected =
-                                    selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
-                                  return (
-                                    <button
-                                      key={`sugg-${slot.start}-${slot.end}`}
-                                      type="button"
-                                      onClick={() => setSelectedSlot(isSelected ? null : fullSlot)}
-                                      className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
-                                        isSelected
-                                          ? 'bg-dark-sage text-charcoal border-dark-sage'
-                                          : 'border-sand text-warm-gray hover:border-dark-sage hover:text-charcoal'
-                                      }`}
-                                    >
-                                      {startLabel} – {endLabel}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
                           {/* Five‑day grid */}
                           {fiveDayWindow.length === 5 && (
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                               {fiveDayWindow.map((day) => {
                                 const dayGroup = groupedAvailability.find((g) => g.key === day.key);
                                 return (
-                                  <div key={`grid-${day.key}`} className="border border-sand rounded-lg p-3">
-                                    <div className="text-sm font-medium text-charcoal mb-2">{day.label}</div>
+                                  <div key={`grid-${day.key}`} className="border border-dark-sage/40 bg-sand/20 rounded-lg p-3">
+                                    <div className="text-sm font-semibold text-charcoal mb-2">{day.label}</div>
                                     {dayGroup ? (
                                       <div className="flex flex-col gap-2">
                                         {dayGroup.slots.map(({ slot, startLabel, endLabel }) => {
@@ -487,10 +441,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                                               key={`grid-slot-${slot.start}-${slot.end}`}
                                               type="button"
                                               onClick={() => setSelectedSlot(isSelected ? null : slot)}
-                                              className={`w-full text-left px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${
+                                              className={`w-full text-left px-3 py-2 rounded-md border text-xs font-semibold transition-colors shadow-sm ${
                                                 isSelected
                                                   ? 'bg-dark-sage text-charcoal border-dark-sage'
-                                                  : 'border-sand text-warm-gray hover:border-dark-sage hover:text-charcoal'
+                                                  : 'bg-white/90 border-dark-sage/30 text-charcoal hover:bg-dark-sage/10 hover:border-dark-sage/60'
                                               }`}
                                             >
                                               {startLabel} – {endLabel}
@@ -499,43 +453,13 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                                         })}
                                       </div>
                                     ) : (
-                                      <div className="text-xs text-warm-gray">No availability</div>
+                                      <div className="text-xs text-warm-gray italic">No availability</div>
                                     )}
                                   </div>
                                 );
                               })}
                             </div>
                           )}
-
-                          {groupedAvailability.map((day) => (
-                            <div key={day.key} className="border border-sand rounded-lg p-3">
-                              <div className="text-sm font-medium text-charcoal mb-2">
-                                {day.label}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {day.slots.map(({ slot, startLabel, endLabel }) => {
-                                  const isSelected =
-                                    selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
-                                  return (
-                                    <button
-                                      key={`${slot.start}-${slot.end}`}
-                                      type="button"
-                                      onClick={() =>
-                                        setSelectedSlot(isSelected ? null : slot)
-                                      }
-                                      className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
-                                        isSelected
-                                          ? 'bg-dark-sage text-charcoal border-dark-sage'
-                                          : 'border-sand text-warm-gray hover:border-dark-sage hover:text-charcoal'
-                                      }`}
-                                    >
-                                      {startLabel} – {endLabel}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
                         </div>
                       )}
                       {availabilityStatus === 'success' && hasAvailability && collapseTimes && selectedSlot && (
