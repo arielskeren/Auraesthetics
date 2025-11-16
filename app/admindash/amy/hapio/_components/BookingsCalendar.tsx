@@ -47,6 +47,9 @@ export default function BookingsCalendar() {
   const [services, setServices] = useState<Record<string, { id: string; name: string }>>({});
   const [resources, setResources] = useState<Record<string, { id: string; name: string }>>({});
   const [scheduleBlocks, setScheduleBlocks] = useState<Array<{ starts_at: string; ends_at: string; metadata?: Record<string, unknown> | null }>>([]);
+  // Simple client-side caches keyed by resourceId + month
+  const bookingsCacheRef = useRef<Map<string, Booking[]>>(new Map());
+  const availabilityCacheRef = useRef<Map<string, Record<string, Array<{ start: string; end: string }>>>>(new Map());
 
   useEffect(() => {
     loadFirstResourceAndLocation();
@@ -151,17 +154,21 @@ export default function BookingsCalendar() {
       if (resourceId) params.append('resource_id', resourceId);
       if (locationId) params.append('location_id', locationId);
       params.append('per_page', '100'); // Hapio API limit is 100
-
-      const response = await fetch(`/api/admin/hapio/bookings?${params.toString()}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load bookings');
+      const monthKey = `${resourceId || 'none'}|${from.split('T')[0]}`;
+      if (bookingsCacheRef.current.has(monthKey)) {
+        setBookings(bookingsCacheRef.current.get(monthKey)!);
+      } else {
+        const response = await fetch(`/api/admin/hapio/bookings?${params.toString()}`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to load bookings');
+        }
+        const data = await response.json();
+        // Filter out canceled bookings for status calculation
+        const activeBookings = (data.data || []).filter((b: Booking) => !b.isCanceled);
+        bookingsCacheRef.current.set(monthKey, activeBookings);
+        setBookings(activeBookings);
       }
-
-      const data = await response.json();
-      // Filter out canceled bookings for status calculation
-      const activeBookings = (data.data || []).filter((b: Booking) => !b.isCanceled);
-      setBookings(activeBookings);
     } catch (err: any) {
       setError(err);
     } finally {
@@ -183,13 +190,18 @@ export default function BookingsCalendar() {
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setAvailability(data.availabilityByDate || {});
+      const monthKey = `${resourceId}|${from.split('T')[0]}|${to.split('T')[0]}`;
+      if (availabilityCacheRef.current.has(monthKey)) {
+        setAvailability(availabilityCacheRef.current.get(monthKey)!);
+      } else {
+        const response = await fetch(
+          `/api/admin/hapio/resources/${resourceId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          availabilityCacheRef.current.set(monthKey, data.availabilityByDate || {});
+          setAvailability(data.availabilityByDate || {});
+        }
       }
     } catch (err) {
       console.warn('[BookingsCalendar] Error loading availability:', err);

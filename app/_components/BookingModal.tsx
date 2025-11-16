@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, Loader2, RefreshCcw, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
@@ -96,54 +96,44 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     setRequestedDate(today);
   }, [isOpen]);
 
-  // Fetch availability for the selected day to populate time picklist and default time
+  // Local session cache for availability window responses
+  const availabilityCacheRef = useRef<Map<string, AvailabilityApiResponse>>(new Map());
+
+  // Recompute daySlots when requestedDate changes using already-fetched window slots
   useEffect(() => {
-    const loadDayAvailability = async () => {
-      if (!service?.slug || !requestedDate) {
-        setDaySlots([]);
-        return;
-      }
-      const startOfDay = new Date(`${requestedDate}T00:00:00`);
-      const endOfDay = new Date(`${requestedDate}T23:59:59`);
-      try {
-        const params = new URLSearchParams({
-          slug: service.slug,
-          from: startOfDay.toISOString(),
-          to: endOfDay.toISOString(),
-          timezone: userTimezone,
-        });
-        const resp = await fetch(`/api/availability?${params.toString()}`, { method: 'GET' });
-        if (!resp.ok) throw new Error('Failed to load daily availability');
-        const json = (await resp.json()) as AvailabilityApiResponse;
-        const avail = json.availability ?? [];
-        setDaySlots(avail);
-        // Default time: first available (future if today)
-        const now = new Date();
-        const firstValid = avail.find((s) => {
-          const start = new Date(s.start);
-          const isToday =
-            start.getFullYear() === now.getFullYear() &&
-            start.getMonth() === now.getMonth() &&
-            start.getDate() === now.getDate();
-          return !isToday || start.getTime() >= now.getTime();
-        });
-        if (firstValid) {
-          const d = new Date(firstValid.start);
-          const hh = String(d.getHours()).padStart(2, '0');
-          const mi = String(d.getMinutes()).padStart(2, '0');
-          setRequestedTime(`${hh}:${mi}`);
-          setTimeValidationError(null);
-        } else {
-          setRequestedTime('');
-          setTimeValidationError(null);
-        }
-      } catch (e) {
-        console.error('Daily availability load failed', e);
-        setDaySlots([]);
-      }
-    };
-    loadDayAvailability();
-  }, [requestedDate, service?.slug, userTimezone]);
+    if (!requestedDate || slots.length === 0) {
+      // If we haven't fetched window availability yet, clear
+      setDaySlots([]);
+      return;
+    }
+    const dayStart = new Date(`${requestedDate}T00:00:00`);
+    const dayEnd = new Date(`${requestedDate}T23:59:59`);
+    const dayAvail = slots.filter((s) => {
+      const sStart = new Date(s.start);
+      return sStart >= dayStart && sStart <= dayEnd;
+    });
+    setDaySlots(dayAvail);
+    // If no explicit time chosen, default to first valid time of the day
+    const now = new Date();
+    const firstValid = dayAvail.find((s) => {
+      const start = new Date(s.start);
+      const isToday =
+        start.getFullYear() === now.getFullYear() &&
+        start.getMonth() === now.getMonth() &&
+        start.getDate() === now.getDate();
+      return !isToday || start.getTime() >= now.getTime();
+    });
+    if (firstValid) {
+      const d = new Date(firstValid.start);
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      setRequestedTime((prev) => prev || `${hh}:${mi}`);
+      setTimeValidationError(null);
+    } else {
+      setRequestedTime('');
+      setTimeValidationError(null);
+    }
+  }, [requestedDate, slots]);
 
   // Validate that selected date+time is not in the past
   useEffect(() => {
@@ -285,20 +275,37 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
         to: windowEnd.toISOString(),
         timezone: userTimezone,
       });
-      const response = await fetch(`/api/availability?${params.toString()}`, {
-        method: 'GET',
-        signal: abortController.signal,
-      });
+      const cacheKey = `${service.slug}|${windowStart.toISOString()}|${windowEnd.toISOString()}|${userTimezone}`;
+      let json: AvailabilityApiResponse | null = null;
+      if (availabilityCacheRef.current.has(cacheKey)) {
+        json = availabilityCacheRef.current.get(cacheKey)!;
+      } else {
+        const response = await fetch(`/api/availability?${params.toString()}`, {
+          method: 'GET',
+          signal: abortController.signal,
+        });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody?.error ?? 'Failed to load availability');
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody?.error ?? 'Failed to load availability');
+        }
+
+        json = (await response.json()) as AvailabilityApiResponse;
+        availabilityCacheRef.current.set(cacheKey, json);
       }
-
-      const json = (await response.json()) as AvailabilityApiResponse;
-      setSlots(json.availability ?? []);
-      setAvailabilityTimezone(json.meta?.timezone ?? null);
+      setSlots(json?.availability ?? []);
+      setAvailabilityTimezone(json?.meta?.timezone ?? null);
       setAvailabilityStatus('success');
+      // Derive daySlots for the requestedDate from the window results
+      if (requestedDate) {
+        const dayStart = new Date(`${requestedDate}T00:00:00`);
+        const dayEnd = new Date(`${requestedDate}T23:59:59`);
+        const dayAvail = (json?.availability ?? []).filter((s) => {
+          const sStart = new Date(s.start);
+          return sStart >= dayStart && sStart <= dayEnd;
+        });
+        setDaySlots(dayAvail);
+      }
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         return;

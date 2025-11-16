@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listRecurringSchedules, listRecurringScheduleBlocks } from '@/lib/hapioClient';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
 import { getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
+import crypto from 'crypto';
+
+type CacheEntry<T> = { expiresAt: number; value: T };
+const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const schedulesCache = new Map<string, CacheEntry<any>>();
+const scheduleBlocksCache = new Map<string, CacheEntry<any>>();
+const monthAvailabilityCache = new Map<string, CacheEntry<{ availabilityByDate: Record<string, Array<{ start: string; end: string }>>; recurringBlocksByDate: Record<string, Array<{ start: string; end: string; isAllDay: boolean }>> }>>();
+
+function getTtlMs(): number {
+  const v = Number(process.env.ADMIN_AVAILABILITY_TTL_MS);
+  return Number.isFinite(v) && v > 0 ? Math.min(v, 60 * 60 * 1000) : DEFAULT_TTL_MS;
+}
+
+function cacheGet<T>(map: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = map.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    map.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function cacheSet<T>(map: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number) {
+  map.set(key, { expiresAt: Date.now() + ttlMs, value });
+}
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +45,35 @@ export async function GET(
       );
     }
 
+    const ttlMs = getTtlMs();
+    const monthKey = `${params.id}|${from}|${to}`;
+    const cachedMonth = cacheGet(monthAvailabilityCache, monthKey);
+    if (cachedMonth) {
+      const etag = crypto
+        .createHash('sha1')
+        .update(JSON.stringify(cachedMonth))
+        .digest('hex');
+      const ifNoneMatch = request.headers.get('if-none-match');
+      if (ifNoneMatch && etag === ifNoneMatch) {
+        return new NextResponse(null, {
+          status: 304,
+          headers: {
+            ETag: etag,
+            'Cache-Control': `private, max-age=${Math.floor(ttlMs / 1000)}`,
+            'X-Admin-Availability-Cache': 'hit',
+          },
+        });
+      }
+      const resp = NextResponse.json(cachedMonth, {
+        headers: {
+          ETag: etag,
+          'Cache-Control': `private, max-age=${Math.floor(ttlMs / 1000)}`,
+          'X-Admin-Availability-Cache': 'hit',
+        },
+      });
+      return resp;
+    }
+
     // Parse date range and normalize to start/end of day
     const fromDate = new Date(from);
     fromDate.setHours(0, 0, 0, 0);
@@ -26,12 +81,19 @@ export async function GET(
     toDate.setHours(23, 59, 59, 999);
 
     // Fetch recurring schedules
-    const recurringSchedulesResponse = await listRecurringSchedules('resource', params.id, {
-      per_page: 100,
-    }).catch((err) => {
-      console.error('[Availability API] Failed to fetch recurring schedules:', err);
-      return { data: [], meta: { total: 0 } };
-    });
+    const schedulesKey = `schedules|${params.id}`;
+    let recurringSchedulesResponse =
+      cacheGet(schedulesCache, schedulesKey) ||
+      (await listRecurringSchedules('resource', params.id, {
+        per_page: 100,
+      }).catch((err) => {
+        console.error('[Availability API] Failed to fetch recurring schedules:', err);
+        return { data: [], meta: { total: 0 } };
+      }));
+    // Cache schedules list
+    if (!cacheGet(schedulesCache, schedulesKey)) {
+      cacheSet(schedulesCache, schedulesKey, recurringSchedulesResponse, ttlMs);
+    }
 
     console.log('[Availability API] Recurring schedules:', {
       count: recurringSchedulesResponse.data?.length || 0,
@@ -68,10 +130,16 @@ export async function GET(
 
         // Fetch blocks for this schedule (these define working hours/availability)
         try {
-          const blocksResponse = await listRecurringScheduleBlocks('resource', params.id, {
-            recurring_schedule_id: schedule.id,
-            per_page: 100,
-          }).catch(() => ({ data: [], meta: { total: 0 } }));
+          const blocksKey = `blocks|${params.id}|${schedule.id}`;
+          const blocksResponse =
+            cacheGet(scheduleBlocksCache, blocksKey) ||
+            (await listRecurringScheduleBlocks('resource', params.id, {
+              recurring_schedule_id: schedule.id,
+              per_page: 100,
+            }).catch(() => ({ data: [], meta: { total: 0 } })));
+          if (!cacheGet(scheduleBlocksCache, blocksKey)) {
+            cacheSet(scheduleBlocksCache, blocksKey, blocksResponse, ttlMs);
+          }
 
           if (blocksResponse.data && Array.isArray(blocksResponse.data)) {
             blocksResponse.data.forEach((block: any) => {
@@ -156,10 +224,16 @@ export async function GET(
         if (scheduleStart && scheduleStart > toDate) continue;
 
         try {
-          const blocksResponse = await listRecurringScheduleBlocks('resource', params.id, {
-            recurring_schedule_id: schedule.id,
-            per_page: 100,
-          }).catch(() => ({ data: [], meta: { total: 0 } }));
+          const blocksKey = `blocks|${params.id}|${schedule.id}`;
+          const blocksResponse =
+            cacheGet(scheduleBlocksCache, blocksKey) ||
+            (await listRecurringScheduleBlocks('resource', params.id, {
+              recurring_schedule_id: schedule.id,
+              per_page: 100,
+            }).catch(() => ({ data: [], meta: { total: 0 } })));
+          if (!cacheGet(scheduleBlocksCache, blocksKey)) {
+            cacheSet(scheduleBlocksCache, blocksKey, blocksResponse, ttlMs);
+          }
 
           if (blocksResponse.data && Array.isArray(blocksResponse.data)) {
             blocksResponse.data.forEach((block: any) => {
@@ -217,9 +291,18 @@ export async function GET(
       sampleDates: Object.keys(availabilityByDate).slice(0, 5),
     });
 
-    return NextResponse.json({ 
+    const payload = {
       availabilityByDate,
       recurringBlocksByDate,
+    };
+    const etag = crypto.createHash('sha1').update(JSON.stringify(payload)).digest('hex');
+    cacheSet(monthAvailabilityCache, monthKey, payload, ttlMs);
+    return NextResponse.json(payload, {
+      headers: {
+        ETag: etag,
+        'Cache-Control': `private, max-age=${Math.floor(ttlMs / 1000)}`,
+        'X-Admin-Availability-Cache': 'miss',
+      },
     });
   } catch (error: any) {
     console.error('[Hapio] Failed to fetch availability', error);

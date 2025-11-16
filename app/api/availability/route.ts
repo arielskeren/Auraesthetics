@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { getAvailability } from '@/lib/hapioClient';
 import { getHapioServiceConfig } from '@/lib/hapioServiceCatalog';
 import { getOutlookBusySlots } from '@/lib/outlookClient';
@@ -16,6 +17,9 @@ const DEFAULT_CACHE_TTL_MS = 30_000;
 const MAX_CACHE_TTL_MS = 60_000;
 // Outlook sync can be disabled by setting OUTLOOK_SYNC_ENABLED=false
 const OUTLOOK_SYNC_ENABLED = process.env.OUTLOOK_SYNC_ENABLED !== 'false';
+
+// Track in-flight requests to coalesce identical concurrent fetches
+const inflightRequests = new Map<CacheKey, Promise<NextResponse>>();
 
 function resolveCacheTtl(): number {
   const envValue = process.env.HAPIO_AVAILABILITY_CACHE_TTL_MS;
@@ -282,10 +286,35 @@ export async function GET(request: NextRequest) {
     });
 
     const cacheTtl = resolveCacheTtl();
+    // If we have a cached response, return it (and support If-None-Match)
     const cachedResponse = getFromCache(cacheKey);
     if (cachedResponse) {
+      const etag = cachedResponse.headers.get('ETag');
+      const ifNoneMatch = request.headers.get('if-none-match');
+      const isNotModified = etag && ifNoneMatch && ifNoneMatch === etag;
       const cloned = cachedResponse.clone();
       cloned.headers.set('x-hapio-cache', 'hit');
+      cloned.headers.set('x-inflight-coalesced', '0');
+      if (isNotModified) {
+        return new NextResponse(null, {
+          status: 304,
+          headers: {
+            ETag: etag as string,
+            'X-Hapio-Cache': 'hit',
+            'x-hapio-cache': 'hit',
+            'x-inflight-coalesced': '0',
+          },
+        });
+      }
+      return cloned;
+    }
+
+    // Coalesce identical in-flight requests
+    if (inflightRequests.has(cacheKey)) {
+      const resp = await inflightRequests.get(cacheKey)!;
+      const cloned = resp.clone();
+      cloned.headers.set('x-hapio-cache', 'miss');
+      cloned.headers.set('x-inflight-coalesced', '1');
       return cloned;
     }
 
@@ -294,12 +323,12 @@ export async function GET(request: NextRequest) {
     const staticConfig = slug ? getHapioServiceConfig(slug) : null;
     const staticServiceId = staticConfig?.serviceId ?? null;
     let firstError: any = null;
-    try {
+    const fetchAvailability = async () => {
       availability = await getAvailability({
-        serviceId: resolvedServiceId,
+        serviceId: resolvedServiceId as string,
         from: fromIso,
         to: toIso,
-        locationId: resolvedLocationId,
+        locationId: resolvedLocationId as string,
         resourceId: resolvedResourceId ?? undefined,
         perPage,
         page,
@@ -312,7 +341,13 @@ export async function GET(request: NextRequest) {
         pagination: availability.pagination,
         firstSlot: availability.slots?.[0] ?? null,
       });
-    } catch (error: any) {
+      return availability;
+    };
+
+    const inflightPromise = (async () => {
+      try {
+        await fetchAvailability();
+      } catch (error: any) {
       firstError = error;
       const status = Number(error?.response?.status || error?.status);
       const isNotFound = status === 404;
@@ -327,11 +362,11 @@ export async function GET(request: NextRequest) {
             dbServiceId: resolvedServiceId,
             staticServiceId,
           });
-          availability = await getAvailability({
-            serviceId: staticServiceId,
+            availability = await getAvailability({
+              serviceId: staticServiceId as string,
             from: fromIso,
             to: toIso,
-            locationId: resolvedLocationId,
+              locationId: resolvedLocationId as string,
             resourceId: resolvedResourceId ?? undefined,
             perPage,
             page,
@@ -376,93 +411,105 @@ export async function GET(request: NextRequest) {
           { status: status || 500 }
         );
       }
-    }
-
-    let outlookBusy: { start: string; end: string }[] = [];
-    let outlookError: string | null = null;
-    if (OUTLOOK_SYNC_ENABLED) {
-      try {
-        outlookBusy = await getOutlookBusySlots({
-          from: fromIso,
-          to: toIso,
-          timeZone: timezone,
-        });
-        // Filter out any blocks with missing start/end times
-        outlookBusy = outlookBusy.filter((block) => block.start && block.end);
-      } catch (error: any) {
-        outlookError = error?.message || 'Failed to retrieve Outlook busy slots';
-        console.error('[Outlook] Failed to retrieve busy slots', error);
-        // Continue without Outlook filtering - availability will still work
       }
-    }
 
-    // Filter out slots that overlap with Outlook busy times
-    const filteredSlotEntities =
-      outlookBusy.length > 0 && !outlookError
-        ? availability.slots.filter((slot) => {
-            return outlookBusy.every((block) => {
-              if (!block.start || !block.end) return true; // Skip invalid blocks
-              return !intervalsOverlap(slot.startsAt, slot.endsAt, block.start, block.end);
-            });
-          })
-        : availability.slots;
+      let outlookBusy: { start: string; end: string }[] = [];
+      let outlookError: string | null = null;
+      if (OUTLOOK_SYNC_ENABLED) {
+        try {
+          outlookBusy = await getOutlookBusySlots({
+            from: fromIso,
+            to: toIso,
+            timeZone: timezone,
+          });
+          // Filter out any blocks with missing start/end times
+          outlookBusy = outlookBusy.filter((block) => block.start && block.end);
+        } catch (error: any) {
+          outlookError = error?.message || 'Failed to retrieve Outlook busy slots';
+          console.error('[Outlook] Failed to retrieve busy slots', error);
+          // Continue without Outlook filtering - availability will still work
+        }
+      }
 
-    // Log filtering results
-    console.log('[Hapio] Filtering results:', {
-      originalSlotsCount: availability.slots.length,
-      filteredSlotsCount: filteredSlotEntities.length,
-      outlookBusyBlocks: outlookBusy.length,
-      outlookError: outlookError,
-    });
+      // Filter out slots that overlap with Outlook busy times
+      const slotsArray = Array.isArray(availability?.slots) ? availability!.slots : [];
+      const filteredSlotEntities =
+        outlookBusy.length > 0 && !outlookError
+          ? slotsArray.filter((slot) => {
+              return outlookBusy.every((block) => {
+                if (!block.start || !block.end) return true; // Skip invalid blocks
+                return !intervalsOverlap(slot.startsAt, slot.endsAt, block.start, block.end);
+              });
+            })
+          : slotsArray;
 
-    const payload = {
-      service: {
-        slug: slug ?? null,
-        serviceId: resolvedServiceId,
-        locationId: resolvedLocationId,
-      },
-      availability: filteredSlotEntities.map((slot) => ({
-        start: slot.startsAt,
-        end: slot.endsAt,
-        bufferStart: slot.bufferStartsAt,
-        bufferEnd: slot.bufferEndsAt,
-        resources: slot.resources.map((resource) => ({
-          id: resource.id,
-          name: resource.name,
-          enabled: resource.enabled,
-          metadata: resource.metadata ?? null,
+      // Log filtering results
+      console.log('[Hapio] Filtering results:', {
+        originalSlotsCount: slotsArray.length,
+        filteredSlotsCount: filteredSlotEntities.length,
+        outlookBusyBlocks: outlookBusy.length,
+        outlookError: outlookError,
+      });
+
+      const payload = {
+        service: {
+          slug: slug ?? null,
+          serviceId: resolvedServiceId,
+          locationId: resolvedLocationId,
+        },
+        availability: filteredSlotEntities.map((slot) => ({
+          start: slot.startsAt,
+          end: slot.endsAt,
+          bufferStart: slot.bufferStartsAt,
+          bufferEnd: slot.bufferEndsAt,
+          resources: slot.resources.map((resource) => ({
+            id: resource.id,
+            name: resource.name,
+            enabled: resource.enabled,
+            metadata: resource.metadata ?? null,
+          })),
         })),
-      })),
-      pagination: availability.pagination ?? null,
-      meta: {
-        fetchedAt: new Date().toISOString(),
-        timezone,
-        range: {
-          from: fromIso,
-          to: toIso,
+        pagination: availability?.pagination ?? null,
+        meta: {
+          fetchedAt: new Date().toISOString(),
+          timezone,
+          range: {
+            from: fromIso,
+            to: toIso,
+          },
+          outlook: {
+            enabled: OUTLOOK_SYNC_ENABLED,
+            busyBlocks: outlookBusy.length,
+            error: outlookError,
+          },
+          cache: {
+            ttlMs: cacheTtl,
+            hit: false,
+          },
         },
-        outlook: {
-          enabled: OUTLOOK_SYNC_ENABLED,
-          busyBlocks: outlookBusy.length,
-          error: outlookError,
+      };
+
+      // Compute a stable ETag for payload
+      const etag = crypto.createHash('sha1').update(JSON.stringify(payload)).digest('hex');
+      const response = NextResponse.json(payload, {
+        headers: {
+          'Cache-Control': `private, max-age=${Math.floor(cacheTtl / 1000)}`,
+          'X-Hapio-Cache': 'miss',
+          ETag: etag,
+          'x-inflight-coalesced': '0',
         },
-        cache: {
-          ttlMs: cacheTtl,
-          hit: false,
-        },
-      },
-    };
+      });
 
-    const response = NextResponse.json(payload, {
-      headers: {
-        'Cache-Control': `private, max-age=${Math.floor(cacheTtl / 1000)}`,
-        'X-Hapio-Cache': 'miss',
-      },
-    });
+      setCache(cacheKey, response.clone(), cacheTtl);
 
-    setCache(cacheKey, response.clone(), cacheTtl);
+      return response;
+    })();
 
-    return response;
+    inflightRequests.set(cacheKey, inflightPromise);
+    const finalResp = await inflightPromise;
+    // Clean up inflight
+    inflightRequests.delete(cacheKey);
+    return finalResp;
   } catch (error: any) {
     console.error('[Hapio] Availability error', error);
     const message = typeof error?.message === 'string' ? error.message : 'Unexpected error';

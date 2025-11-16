@@ -53,15 +53,13 @@ CREATE INDEX IF NOT EXISTS idx_bookings_customer_id ON bookings(customer_id);
 
 -- OPTIONAL legacy columns that can be dropped once UI no longer references them:
 -- NOTE: Current UI may still reference these. Drop only after removing dependencies.
--- ALTER TABLE bookings DROP COLUMN IF EXISTS amount;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS deposit_amount;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS final_amount;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS discount_code;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS discount_amount;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS payment_method_id;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS plaid_authorization_id;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS plaid_authorization_amount;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS payment_type;
--- ALTER TABLE bookings DROP COLUMN IF EXISTS cal_booking_id;
-
-
+ALTER TABLE bookings DROP COLUMN IF EXISTS amount;
+ALTER TABLE bookings DROP COLUMN IF EXISTS deposit_amount;
+ALTER TABLE bookings DROP COLUMN IF EXISTS final_amount;
+ALTER TABLE bookings DROP COLUMN IF EXISTS discount_code;
+ALTER TABLE bookings DROP COLUMN IF EXISTS discount_amount;
+ALTER TABLE bookings DROP COLUMN IF EXISTS payment_method_id;
+ALTER TABLE bookings DROP COLUMN IF EXISTS plaid_authorization_id;
+ALTER TABLE bookings DROP COLUMN IF EXISTS plaid_authorization_amount;
+ALTER TABLE bookings DROP COLUMN IF EXISTS payment_type;
+ALTER TABLE bookings DROP COLUMN IF EXISTS cal_booking_id;
