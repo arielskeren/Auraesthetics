@@ -27,6 +27,7 @@ interface BookingModalProps {
 export default function BookingModal({ isOpen, onClose, service }: BookingModalProps) {
   useBodyScrollLock(isOpen);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
     'idle'
   );
@@ -371,14 +372,13 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                         </div>
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Preferred time</label>
-                          <TimeWheel
-                            value={requestedTime}
-                            onChange={setRequestedTime}
-                            stepMinutes={15}
-                            startHour={7}
-                            endHour={21}
-                            className="border border-sand rounded-lg bg-white"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowTimePicker(true)}
+                            className="h-11 px-3 text-left border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                          >
+                            {requestedTime ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(`1970-01-01T${requestedTime}:00`)) : 'Select time'}
+                          </button>
                         </div>
                         <div className="flex items-center">
                           <Button onClick={handleSearchAvailability} className="w-full" variant="primary">
@@ -495,6 +495,28 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                     </div>
                   </div>
 
+                  {/* Time wheel overlay */}
+                  {showTimePicker && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30">
+                      <div className="bg-white rounded-lg shadow-xl p-4 w-full max-w-md">
+                        <div className="mb-3 text-sm font-medium text-charcoal">Select time</div>
+                        <TimeWheel
+                          value={requestedTime}
+                          onChange={setRequestedTime}
+                          stepMinutes={15}
+                          startHour={9}
+                          endHour={19}
+                          includeEnd
+                          className="border border-sand rounded-lg bg-white"
+                        />
+                        <div className="mt-4 flex gap-2">
+                          <Button className="flex-1" variant="secondary" onClick={() => setShowTimePicker(false)}>
+                            Done
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {/* Booking CTA */}
                   <div className="mb-6">
                     <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">

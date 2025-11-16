@@ -8,7 +8,8 @@ export interface TimeWheelProps {
   onChange: (value: string) => void;
   stepMinutes?: number; // default: 30
   startHour?: number; // default: 7
-  endHour?: number; // exclusive, default: 21 means up to 20:30
+  endHour?: number; // exclusive end, default: 21 means up to 20:30
+  includeEnd?: boolean; // if true, also include exactly endHour:00 as last option
   className?: string;
 }
 
@@ -27,6 +28,7 @@ export default function TimeWheel({
   stepMinutes = 30,
   startHour = 7,
   endHour = 21,
+  includeEnd = false,
   className,
 }: TimeWheelProps) {
   const items: TimeItem[] = useMemo(() => {
@@ -37,8 +39,12 @@ export default function TimeWheel({
         arr.push({ label: formatHM(h, m), value: v });
       }
     }
+    if (includeEnd && endHour > startHour) {
+      // include exactly endHour:00 as final selectable value
+      arr.push({ label: formatHM(endHour, 0), value: toHM(endHour, 0) });
+    }
     return arr;
-  }, [startHour, endHour, stepMinutes]);
+  }, [startHour, endHour, stepMinutes, includeEnd]);
 
   useEffect(() => {
     if (!value && items.length) {
