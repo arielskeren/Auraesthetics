@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAvailability } from '@/lib/hapioClient';
 import { getHapioServiceConfig } from '@/lib/hapioServiceCatalog';
 import { getOutlookBusySlots } from '@/lib/outlookClient';
+import { getSqlClient } from '@/app/_utils/db';
 
 type CacheKey = string;
 
@@ -135,29 +136,59 @@ export async function GET(request: NextRequest) {
     const timezone =
       searchParams.get('timezone') ?? searchParams.get('timeZone') ?? 'America/New_York';
 
-    const config = slug ? getHapioServiceConfig(slug) : null;
+    // Resolve Hapio identifiers
+    // 1) If explicit query params provided, use them
+    // 2) Else, look up service by slug in Neon DB to get hapio_service_id
+    // 3) Else, fall back to static mapping file
+    let resolvedServiceId: string | null = explicitServiceId ?? null;
+    let resolvedLocationId: string | null = explicitLocationId ?? null;
+    let resolvedResourceId: string | null = null;
 
-    const serviceId = explicitServiceId ?? config?.serviceId ?? null;
-    const locationId =
-      explicitLocationId ?? config?.locationId ?? process.env.HAPIO_DEFAULT_LOCATION_ID ?? null;
-    const resourceId = config?.resourceId ?? null;
+    let dbLookupError: string | null = null;
+    if (!resolvedServiceId && slug) {
+      try {
+        const sql = getSqlClient();
+        const rows = await sql`
+          SELECT hapio_service_id 
+          FROM services 
+          WHERE slug = ${slug}
+          LIMIT 1
+        ` as Array<{ hapio_service_id: string | null }>;
+        const dbServiceId = rows?.[0]?.hapio_service_id || null;
+        if (dbServiceId) {
+          resolvedServiceId = dbServiceId;
+        }
+      } catch (e: any) {
+        dbLookupError = e?.message || 'DB lookup failed';
+        // continue; we'll fall back to the static map
+      }
+    }
 
-    if (!serviceId) {
+    if (!resolvedServiceId || !resolvedLocationId) {
+      const config = slug ? getHapioServiceConfig(slug) : null;
+      resolvedServiceId = resolvedServiceId ?? (config?.serviceId ?? null);
+      resolvedLocationId =
+        resolvedLocationId ?? (config?.locationId ?? process.env.HAPIO_DEFAULT_LOCATION_ID ?? null);
+      resolvedResourceId = config?.resourceId ?? null;
+    }
+
+    if (!resolvedServiceId) {
       return NextResponse.json(
         {
           error: 'Missing Hapio service mapping. Provide a valid slug or serviceId.',
           slug: slug ?? null,
+          notes: dbLookupError ? `DB lookup error: ${dbLookupError}` : undefined,
         },
         { status: 400 }
       );
     }
 
-    if (!locationId) {
+    if (!resolvedLocationId) {
       return NextResponse.json(
         {
           error: 'Missing Hapio location mapping. Provide a locationId for the service.',
           slug: slug ?? null,
-          serviceId,
+          serviceId: resolvedServiceId,
         },
         { status: 400 }
       );
@@ -191,9 +222,9 @@ export async function GET(request: NextRequest) {
     const perPage = Math.min(perPageParam ? Number(perPageParam) : 100, 100);
 
     const cacheKey = buildCacheKey({
-      serviceId,
-      locationId,
-      resourceId: resourceId ?? '',
+      serviceId: resolvedServiceId,
+      locationId: resolvedLocationId,
+      resourceId: resolvedResourceId ?? '',
       fromIso,
       toIso,
       page: page ?? '',
@@ -209,33 +240,92 @@ export async function GET(request: NextRequest) {
     }
 
     let availability;
+    // Attempt 1: use resolvedServiceId (DB mapping or explicit). On 404, retry with static map ID if different.
+    const staticConfig = slug ? getHapioServiceConfig(slug) : null;
+    const staticServiceId = staticConfig?.serviceId ?? null;
+    let firstError: any = null;
     try {
       availability = await getAvailability({
-        serviceId,
+        serviceId: resolvedServiceId,
         from: fromIso,
         to: toIso,
-        locationId,
-        resourceId: resourceId ?? undefined,
+        locationId: resolvedLocationId,
+        resourceId: resolvedResourceId ?? undefined,
         perPage,
         page,
       });
       
       // Log availability response for debugging
       console.log('[Hapio] Availability response:', {
+        serviceIdTried: resolvedServiceId,
         slotsCount: availability.slots?.length ?? 0,
         pagination: availability.pagination,
         firstSlot: availability.slots?.[0] ?? null,
       });
     } catch (error: any) {
-      console.error('[Hapio] Failed to get availability', error);
-      const message = typeof error?.message === 'string' ? error.message : 'Failed to retrieve availability from Hapio';
-      return NextResponse.json(
-        {
-          error: message,
-          details: error?.response?.data || error?.response || null,
-        },
-        { status: 500 }
-      );
+      firstError = error;
+      const status = Number(error?.response?.status || error?.status);
+      const isNotFound = status === 404;
+      const canRetryWithStatic =
+        isNotFound &&
+        staticServiceId &&
+        staticServiceId !== resolvedServiceId;
+      if (canRetryWithStatic) {
+        try {
+          console.warn('[Hapio] Availability 404 for DB serviceId. Retrying with static map serviceId.', {
+            slug,
+            dbServiceId: resolvedServiceId,
+            staticServiceId,
+          });
+          availability = await getAvailability({
+            serviceId: staticServiceId,
+            from: fromIso,
+            to: toIso,
+            locationId: resolvedLocationId,
+            resourceId: resolvedResourceId ?? undefined,
+            perPage,
+            page,
+          });
+          // Update resolvedServiceId to static for downstream payload consistency
+          resolvedServiceId = staticServiceId;
+          console.log('[Hapio] Availability response (retry with static):', {
+            serviceIdTried: resolvedServiceId,
+            slotsCount: availability.slots?.length ?? 0,
+          });
+        } catch (retryErr: any) {
+          // Return detailed diagnostics
+          const retryStatus = Number(retryErr?.response?.status || retryErr?.status);
+          const diag = {
+            error: 'Failed to retrieve availability from Hapio',
+            primary: {
+              serviceIdTried: resolvedServiceId,
+              status: status || null,
+              details: firstError?.response?.data || firstError?.response || null,
+            },
+            retry: {
+              serviceIdTried: staticServiceId,
+              status: retryStatus || null,
+              details: retryErr?.response?.data || retryErr?.response || null,
+            },
+            hint: 'Your Neon DB hapio_service_id may be out of sync with the current Hapio project. Re-sync services or update hapio_service_id.',
+          };
+          const httpStatus = retryStatus || status || 500;
+          return NextResponse.json(diag, { status: httpStatus });
+        }
+      } else {
+        const message = typeof error?.message === 'string' ? error.message : 'Failed to retrieve availability from Hapio';
+        return NextResponse.json(
+          {
+            error: message,
+            details: error?.response?.data || error?.response || null,
+            serviceIdTried: resolvedServiceId,
+            hint: isNotFound
+              ? 'Service ID not found in Hapio. Ensure hapio_service_id matches the active Hapio project, or re-sync.'
+              : undefined,
+          },
+          { status: status || 500 }
+        );
+      }
     }
 
     let outlookBusy: { start: string; end: string }[] = [];
@@ -278,8 +368,8 @@ export async function GET(request: NextRequest) {
     const payload = {
       service: {
         slug: slug ?? null,
-        serviceId,
-        locationId,
+        serviceId: resolvedServiceId,
+        locationId: resolvedLocationId,
       },
       availability: filteredSlotEntities.map((slot) => ({
         start: slot.startsAt,
