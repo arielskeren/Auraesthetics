@@ -46,6 +46,11 @@ export async function GET(
 
     const bookingData = await fetchBookingByAnyId(sql, bookingId);
     if (!bookingData) {
+      console.info('[Admin][Booking GET] Not found by id or hapio id', { id: bookingId });
+    } else if (bookingData.id !== bookingId) {
+      console.info('[Admin][Booking GET] Fallback used (hapio id)', { id: bookingId, internalId: bookingData.id });
+    }
+    if (!bookingData) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
@@ -114,6 +119,7 @@ export async function POST(
       const sql = getSqlClient();
       const bookingData = await fetchBookingByAnyId(sql, bookingId);
       if (!bookingData) {
+        console.info('[Admin][Booking POST] Not found by id or hapio id', { id: bookingId, action });
         return NextResponse.json(
           { error: 'Booking not found' },
           { status: 404 }

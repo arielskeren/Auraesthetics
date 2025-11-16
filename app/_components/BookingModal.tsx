@@ -99,6 +99,45 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   // Local session cache for availability window responses
   const availabilityCacheRef = useRef<Map<string, AvailabilityApiResponse>>(new Map());
 
+  // Generate every 15-minute time from 09:00 to 19:00 for the requested date
+  const timeOptionsForDay = useMemo(() => {
+    if (!requestedDate) return [] as Date[];
+    const start = new Date(`${requestedDate}T09:00:00`);
+    const end = new Date(`${requestedDate}T19:00:00`);
+    const result: Date[] = [];
+    const cursor = new Date(start);
+    while (cursor.getTime() <= end.getTime()) {
+      result.push(new Date(cursor));
+      cursor.setMinutes(cursor.getMinutes() + 15);
+    }
+    return result;
+  }, [requestedDate]);
+
+  // Default requested time to the first valid option (future if today), else 09:00
+  useEffect(() => {
+    if (!requestedDate) return;
+    const now = new Date();
+    const isToday =
+      now.getFullYear() === new Date(requestedDate).getFullYear() &&
+      now.getMonth() === new Date(requestedDate).getMonth() &&
+      now.getDate() === new Date(requestedDate).getDate();
+    let firstValid: Date | null = null;
+    if (isToday) {
+      firstValid = timeOptionsForDay.find((d) => d.getTime() >= now.getTime()) || null;
+    } else {
+      firstValid = timeOptionsForDay[0] || null;
+    }
+    if (firstValid) {
+      const hh = String(firstValid.getHours()).padStart(2, '0');
+      const mi = String(firstValid.getMinutes()).padStart(2, '0');
+      setRequestedTime((prev) => prev || `${hh}:${mi}`);
+      setTimeValidationError(null);
+    } else {
+      setRequestedTime('');
+      setTimeValidationError(null);
+    }
+  }, [requestedDate, timeOptionsForDay]);
+
   // Recompute daySlots when requestedDate changes using already-fetched window slots
   useEffect(() => {
     if (!requestedDate || slots.length === 0) {
@@ -113,26 +152,6 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       return sStart >= dayStart && sStart <= dayEnd;
     });
     setDaySlots(dayAvail);
-    // If no explicit time chosen, default to first valid time of the day
-    const now = new Date();
-    const firstValid = dayAvail.find((s) => {
-      const start = new Date(s.start);
-      const isToday =
-        start.getFullYear() === now.getFullYear() &&
-        start.getMonth() === now.getMonth() &&
-        start.getDate() === now.getDate();
-      return !isToday || start.getTime() >= now.getTime();
-    });
-    if (firstValid) {
-      const d = new Date(firstValid.start);
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mi = String(d.getMinutes()).padStart(2, '0');
-      setRequestedTime((prev) => prev || `${hh}:${mi}`);
-      setTimeValidationError(null);
-    } else {
-      setRequestedTime('');
-      setTimeValidationError(null);
-    }
   }, [requestedDate, slots]);
 
   // Validate that selected date+time is not in the past
@@ -478,31 +497,28 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                             onChange={(e) => setRequestedTime(e.target.value)}
                           >
                             <option value="" disabled>
-                              {daySlots.length === 0 ? 'No times' : 'Select time'}
+                              Select time
                             </option>
-                            {daySlots
-                              .map((s) => new Date(s.start))
-                              .sort((a, b) => a.getTime() - b.getTime())
-                              .map((d) => {
-                                const now = new Date();
-                                const isPast =
-                                  d.getFullYear() === now.getFullYear() &&
-                                  d.getMonth() === now.getMonth() &&
-                                  d.getDate() === now.getDate() &&
-                                  d.getTime() < now.getTime();
-                                const hh = String(d.getHours()).padStart(2, '0');
-                                const mi = String(d.getMinutes()).padStart(2, '0');
-                                const value = `${hh}:${mi}`;
-                                const label = new Intl.DateTimeFormat(undefined, {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                }).format(d);
-                                return (
-                                  <option key={value + d.toISOString()} value={value} disabled={isPast}>
-                                    {label}
-                                  </option>
-                                );
-                              })}
+                            {timeOptionsForDay.map((d) => {
+                              const now = new Date();
+                              const isPast =
+                                d.getFullYear() === now.getFullYear() &&
+                                d.getMonth() === now.getMonth() &&
+                                d.getDate() === now.getDate() &&
+                                d.getTime() < now.getTime();
+                              const hh = String(d.getHours()).padStart(2, '0');
+                              const mi = String(d.getMinutes()).padStart(2, '0');
+                              const value = `${hh}:${mi}`;
+                              const label = new Intl.DateTimeFormat(undefined, {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }).format(d);
+                              return (
+                                <option key={value + d.toISOString()} value={value} disabled={isPast}>
+                                  {label}
+                                </option>
+                              );
+                            })}
                           </select>
                           {timeValidationError && (
                             <span className="mt-1 text-xs text-red-600">{timeValidationError}</span>

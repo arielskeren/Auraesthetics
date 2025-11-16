@@ -52,7 +52,7 @@ export default function BookingsCalendar() {
   const availabilityCacheRef = useRef<Map<string, Record<string, Array<{ start: string; end: string }>>>>(new Map());
 
   useEffect(() => {
-    loadFirstResourceAndLocation();
+    loadFirstLocation();
   }, []);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function BookingsCalendar() {
   }, []);
 
   useEffect(() => {
-    if (resourceId) {
+    if (resourceId && locationId) {
       loadBookings();
       loadAvailability();
     }
@@ -103,23 +103,18 @@ export default function BookingsCalendar() {
           resourcesMap[resource.id] = { id: resource.id, name: resource.name || 'Unknown Resource' };
         });
         setResources(resourcesMap);
+        // If no resource selected yet, pick the first one
+        if (!resourceId && Array.isArray(data.data) && data.data.length > 0) {
+          setResourceId(data.data[0].id);
+        }
       }
     } catch (err) {
       console.warn('[BookingsCalendar] Error loading resources:', err);
     }
   };
 
-  const loadFirstResourceAndLocation = async () => {
+  const loadFirstLocation = async () => {
     try {
-      // Load first resource
-      const resourceResponse = await fetch('/api/admin/hapio/resources?per_page=1');
-      if (resourceResponse.ok) {
-        const resourceData = await resourceResponse.json();
-        if (resourceData.data && resourceData.data.length > 0) {
-          setResourceId(resourceData.data[0].id);
-        }
-      }
-
       // Load first location
       const locationResponse = await fetch('/api/admin/hapio/locations?per_page=1');
       if (locationResponse.ok) {
@@ -129,7 +124,7 @@ export default function BookingsCalendar() {
         }
       }
     } catch (err) {
-      console.warn('[BookingsCalendar] Error loading resource/location:', err);
+      console.warn('[BookingsCalendar] Error loading location:', err);
     }
   };
 
