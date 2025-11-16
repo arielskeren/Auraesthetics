@@ -18,7 +18,8 @@ import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 type PaymentType = 'full' | 'deposit';
 
 interface ContactDetails {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
   notes: string;
@@ -79,11 +80,6 @@ function normalizePhoneForSubmit(value: string): string {
   return value.trim();
 }
 
-function hasFirstAndLastName(value: string): boolean {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  return parts.length >= 2;
-}
-
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -129,7 +125,8 @@ function ModernPaymentSection({
   const [depositAcknowledged, setDepositAcknowledged] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
   const [contactDetails, setContactDetails] = useState<ContactDetails>({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     notes: '',
@@ -153,8 +150,11 @@ function ModernPaymentSection({
 
   const validateContactDetails = useCallback(() => {
     const errors: Partial<Record<keyof ContactDetails, string>> = {};
-    if (!hasFirstAndLastName(contactDetails.name)) {
-      errors.name = 'Enter first and last name';
+    if (!contactDetails.firstName.trim()) {
+      errors.firstName = 'Enter first name';
+    }
+    if (!contactDetails.lastName.trim()) {
+      errors.lastName = 'Enter last name';
     }
     if (!isValidEmail(contactDetails.email)) {
       errors.email = 'Enter a valid email';
@@ -168,7 +168,8 @@ function ModernPaymentSection({
 
   const contactInfoReady = useMemo(
     () =>
-      hasFirstAndLastName(contactDetails.name) &&
+      !!contactDetails.firstName.trim() &&
+      !!contactDetails.lastName.trim() &&
       isValidEmail(contactDetails.email) &&
       isValidPhoneDisplay(contactDetails.phone),
     [contactDetails]
@@ -232,7 +233,8 @@ function ModernPaymentSection({
       }
 
       const trimmedContact: ContactDetails = {
-        name: contactDetails.name.trim(),
+        firstName: contactDetails.firstName.trim(),
+        lastName: contactDetails.lastName.trim(),
         email: contactDetails.email.trim(),
         phone: normalizePhoneForSubmit(contactDetails.phone),
         notes: contactDetails.notes.trim(),
@@ -277,6 +279,11 @@ function ModernPaymentSection({
         const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
           payment_method: {
             card: cardElement,
+            billing_details: {
+              name: `${trimmedContact.firstName} ${trimmedContact.lastName}`.trim(),
+              email: trimmedContact.email,
+              phone: trimmedContact.phone || undefined,
+            },
           },
         });
 
@@ -323,6 +330,8 @@ function ModernPaymentSection({
     ]
   );
 
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
   const disableSubmit =
     processing ||
     success ||
@@ -330,6 +339,7 @@ function ModernPaymentSection({
     !cardComplete ||
     !contactInfoReady ||
     (paymentType === 'deposit' && !depositAcknowledged) ||
+    !acceptedTerms ||
     !pendingBooking?.hapioBookingId;
 
   return (
@@ -338,23 +348,42 @@ function ModernPaymentSection({
         <h3 className="font-serif text-lg text-charcoal">Your Information</h3>
         <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-name">
-              Full Name
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-first-name">
+              First Name
             </label>
             <input
-              id="booking-name"
+              id="booking-first-name"
               type="text"
-              value={contactDetails.name}
+              value={contactDetails.firstName}
               onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, name: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, name: undefined }));
+                setContactDetails((prev) => ({ ...prev, firstName: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, firstName: undefined }));
               }}
               onBlur={validateContactDetails}
-              placeholder="Jane Doe"
+              placeholder="Jane"
               className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
               disabled={processing || success}
             />
-            {contactErrors.name && <p className="text-xs text-red-600 mt-1">{contactErrors.name}</p>}
+            {contactErrors.firstName && <p className="text-xs text-red-600 mt-1">{contactErrors.firstName}</p>}
+          </div>
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-last-name">
+              Last Name
+            </label>
+            <input
+              id="booking-last-name"
+              type="text"
+              value={contactDetails.lastName}
+              onChange={(event) => {
+                setContactDetails((prev) => ({ ...prev, lastName: event.target.value }));
+                setContactErrors((prev) => ({ ...prev, lastName: undefined }));
+              }}
+              onBlur={validateContactDetails}
+              placeholder="Doe"
+              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+              disabled={processing || success}
+            />
+            {contactErrors.lastName && <p className="text-xs text-red-600 mt-1">{contactErrors.lastName}</p>}
           </div>
           <div>
             <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
@@ -572,6 +601,32 @@ function ModernPaymentSection({
               Balance due at appointment: ${balanceDue.toFixed(2)}
             </div>
           )}
+        </div>
+
+        <div className="bg-sand/20 rounded-lg p-3 space-y-2">
+          <div className="flex items-start gap-2">
+            <input
+              id="terms-accept"
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-1"
+              disabled={processing || success}
+            />
+            <label htmlFor="terms-accept" className="text-xs text-charcoal leading-relaxed">
+              I agree to the booking &amp; cancellation policy, refund policy, and consent to receive appointment and
+              promotional communications from Auraesthetics. By completing this booking, I authorize Auraesthetics to
+              charge my card according to the selected payment option and policies described on this page and on the
+              site.
+            </label>
+          </div>
+          <p className="text-[11px] text-warm-gray leading-relaxed">
+            Policies (Florida): Please provide at least 24 hours&apos; notice to reschedule or cancel. Late
+            cancellations or no‑shows may incur a fee or forfeiture of your deposit. Services are cosmetic and wellness
+            treatments and do not constitute medical diagnosis or treatment. Refunds, when granted, are processed back
+            to the original form of payment and timing may vary by bank. All policies are applied in accordance with
+            applicable Florida law.
+          </p>
         </div>
 
         {error && (

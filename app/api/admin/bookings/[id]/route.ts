@@ -44,7 +44,8 @@ export async function GET(
     const sql = getSqlClient();
     const bookingId = params.id;
 
-    const bookingData = await fetchBookingByAnyId(sql, bookingId);
+    const rawBooking = await fetchBookingByAnyId(sql, bookingId);
+    let bookingData = rawBooking;
     if (!bookingData) {
       console.info('[Admin][Booking GET] Not found by id or hapio id', { id: bookingId });
     } else if (bookingData.id !== bookingId) {
@@ -55,6 +56,30 @@ export async function GET(
         { error: 'Booking not found' },
         { status: 404 }
       );
+    }
+
+    // Attach latest payment info as synthetic amount/final_amount
+    const payments = await sql`
+      SELECT amount_cents, currency, status
+      FROM payments
+      WHERE booking_id = ${bookingData.id}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const paymentRows = normalizeRows(payments);
+    if (paymentRows.length > 0) {
+      const p = paymentRows[0];
+      const finalAmount = typeof p.amount_cents === 'number' ? p.amount_cents / 100 : null;
+      bookingData = {
+        ...bookingData,
+        amount: finalAmount,
+        final_amount: finalAmount,
+        deposit_amount: null,
+        discount_code: bookingData.discount_code ?? null,
+        discount_amount: bookingData.discount_amount ?? null,
+        payment_type: bookingData.payment_type ?? null,
+        payment_status: bookingData.payment_status || p.status,
+      };
     }
 
     // Get client history (last 5 bookings for same email)

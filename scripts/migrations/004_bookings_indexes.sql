@@ -7,6 +7,6 @@ ALTER TABLE bookings
 ALTER COLUMN metadata SET DEFAULT '{}'::jsonb;
 
 -- Optional strictness (uncomment if desired once data is consistent)
--- ALTER TABLE payments ALTER COLUMN booking_id SET NOT NULL;
+ALTER TABLE payments ALTER COLUMN booking_id SET NOT NULL;
 
 

@@ -32,10 +32,18 @@ export async function finalizeBookingTransactional(args: {
   const slotStart = pim.slot_start || null;
   const timezone = pim.timezone || null;
   const emailFromPi =
+    (pim.customer?.email as string | undefined) ||
     (pi as any).receipt_email ||
     (pi as any)?.latest_charge?.billing_details?.email ||
     null;
-  const fullNameFromPi = (pi as any)?.latest_charge?.billing_details?.name || null;
+  const fullNameFromPi =
+    (pim.customer?.name as string | undefined) ||
+    ((pi as any)?.latest_charge?.billing_details?.name as string | undefined) ||
+    null;
+  const phoneFromPi =
+    (pim.customer?.phone as string | undefined) ||
+    ((pi as any)?.latest_charge?.billing_details?.phone as string | undefined) ||
+    null;
 
   const amount_cents = typeof (pi as any).amount === 'number' ? (pi as any).amount : 0;
   const currency = (pi as any).currency || 'usd';
@@ -85,11 +93,12 @@ export async function finalizeBookingTransactional(args: {
       const [firstName, ...lastParts] = (fullNameFromPi || '').split(' ').filter(Boolean);
       const lastName = lastParts.join(' ') || null;
       const custRows = (await sql`
-        INSERT INTO customers (email, first_name, last_name, last_seen_at)
-        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, NOW())
+        INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, last_seen_at)
+        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, NOW())
         ON CONFLICT (email) DO UPDATE SET
           first_name = COALESCE(EXCLUDED.first_name, customers.first_name),
           last_name = COALESCE(EXCLUDED.last_name, customers.last_name),
+          phone = COALESCE(EXCLUDED.phone, customers.phone),
           last_seen_at = NOW()
         RETURNING id
       `) as any[];
