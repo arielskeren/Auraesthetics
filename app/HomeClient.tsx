@@ -9,6 +9,8 @@ import Section from './_components/Section';
 import ServiceCard from './_components/ServiceCard';
 import BookingModal from './_components/BookingModal';
 import EmailCaptureModal from './_components/EmailCaptureModal';
+import SimpleAutoModal from './_components/SimpleAutoModal';
+import FloatingWelcomeOffer from './_components/FloatingWelcomeOffer';
 
 export default function HomeClient() {
   const [selectedService, setSelectedService] = useState<any>(null);
@@ -95,6 +97,9 @@ export default function HomeClient() {
 
   return (
     <>
+      {/* Home-only welcome offer popup/bubble */}
+      <SimpleAutoModal />
+      <FloatingWelcomeOffer />
       {/* Hero Section */}
       <Section className="relative overflow-hidden min-h-[45vh] md:min-h-[40vh] flex items-center pt-16 md:pt-8" background="sand">
         <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/15 via-sand via-dark-sage/10 to-taupe/20 opacity-60" />

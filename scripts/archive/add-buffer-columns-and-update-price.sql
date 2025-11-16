@@ -26,3 +26,4 @@ ALTER TABLE services RENAME COLUMN price_numeric TO price;
 -- Add comment to clarify price format
 COMMENT ON COLUMN services.price IS 'Numeric price in dollars (e.g., 150.00 for $150)';
 
+

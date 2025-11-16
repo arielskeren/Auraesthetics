@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { testConnection, query } from '../app/_utils/db';
+import { testConnection, query } from '../../app/_utils/db';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -48,4 +48,5 @@ testDatabase().catch((error) => {
   console.error('❌ Test failed:', error);
   process.exit(1);
 });
+
 

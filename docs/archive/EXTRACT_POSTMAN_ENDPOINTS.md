@@ -74,3 +74,4 @@ Please extract information for:
 
 Once you provide this information, I'll update the code to use the exact endpoints and field names from Hapio's API.
 
+

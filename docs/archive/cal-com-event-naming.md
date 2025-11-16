@@ -1,3 +1,5 @@
+<!-- Archived 2025-11-16: Legacy Cal.com note; retained for historical reference -->
+
 # Cal.com Event Name Customization
 
 ## Overview

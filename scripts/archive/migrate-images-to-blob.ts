@@ -13,8 +13,8 @@ config({ path: resolve(process.cwd(), '.env.local') });
 
 import { readdir, readFile } from 'fs/promises';
 import { join } from 'path';
-import { getSqlClient } from '../app/_utils/db';
-import { uploadImage } from '../lib/blobClient';
+import { getSqlClient } from '../../app/_utils/db';
+import { uploadImage } from '../../lib/blobClient';
 
 async function migrateImages() {
   const sql = getSqlClient();
@@ -112,4 +112,5 @@ migrateImages()
     console.error('\n💥 Image migration failed:', error);
     process.exit(1);
   });
+
 

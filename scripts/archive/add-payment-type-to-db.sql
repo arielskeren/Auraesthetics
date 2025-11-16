@@ -10,3 +10,4 @@ WHERE payment_type IS NULL AND metadata->>'paymentType' IS NOT NULL;
 -- Add index for payment type queries
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_type ON bookings(payment_type);
 
+

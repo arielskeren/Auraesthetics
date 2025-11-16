@@ -83,3 +83,4 @@ SELECT slug, name, price
 FROM services 
 ORDER BY slug;
 
+

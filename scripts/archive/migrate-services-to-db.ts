@@ -9,8 +9,8 @@ import { resolve } from 'path';
 // Load environment variables from .env.local
 config({ path: resolve(process.cwd(), '.env.local') });
 
-import { getSqlClient } from '../app/_utils/db';
-import servicesData from '../app/_content/services.json';
+import { getSqlClient } from '../../app/_utils/db';
+import servicesData from '../../app/_content/services.json';
 
 interface ServiceJson {
   category: string;
@@ -114,4 +114,5 @@ migrateServices()
     console.error('\n💥 Migration failed:', error);
     process.exit(1);
   });
+
 

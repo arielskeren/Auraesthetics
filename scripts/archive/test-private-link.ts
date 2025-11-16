@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import process from 'process';
-import { createCalPrivateLink } from '../lib/calPrivateLinks';
+import { createCalPrivateLink } from '../../lib/calPrivateLinks';
 
 dotenv.config({ path: '.env.local' });
 
@@ -41,4 +41,5 @@ async function main() {
 }
 
 main();
+
 

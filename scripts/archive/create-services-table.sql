@@ -23,3 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_services_slug ON services(slug);
 CREATE INDEX IF NOT EXISTS idx_services_category ON services(category);
 CREATE INDEX IF NOT EXISTS idx_services_enabled ON services(enabled);
 
+

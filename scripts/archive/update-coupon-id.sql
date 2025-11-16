@@ -6,3 +6,4 @@ WHERE code = 'WELCOME15';
 -- Verify the update
 SELECT * FROM discount_codes WHERE code = 'WELCOME15';
 
+

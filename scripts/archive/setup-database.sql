@@ -68,3 +68,4 @@ CREATE TABLE IF NOT EXISTS integration_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_integration_tokens_provider ON integration_tokens(provider);
 
+

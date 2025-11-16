@@ -1,3 +1,5 @@
+<!-- Archived 2025-11-16: Legacy Cal.com note; retained for historical reference -->
+
 # Preventing Direct Cal.com Access Without Payment
 
 ## Problem

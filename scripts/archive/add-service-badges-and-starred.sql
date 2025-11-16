@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_services_best_seller ON services(best_seller) WHE
 CREATE INDEX IF NOT EXISTS idx_services_most_popular ON services(most_popular) WHERE most_popular = true;
 CREATE INDEX IF NOT EXISTS idx_services_display_order ON services(display_order);
 
+
