@@ -39,6 +39,39 @@ export async function POST(request: NextRequest) {
     const [first_name, ...lastParts] = fullName.split(' ').filter(Boolean);
     const last_name = lastParts.join(' ');
 
+    // If we couldn't find a booking row (lock may have failed), create a minimal record from PI metadata
+    let ensuredBookingId: string | null = bookingRow?.id || null;
+    if (!bookingRow) {
+      const pim = (pi as any).metadata || {};
+      const svcId = pim.service_id || pim.service_slug || null;
+      const svcName = pim.service_slug || 'Service';
+      const slotStart = pim.slot_start || null;
+      const timezone = pim.timezone || null;
+      const minimalMeta = {
+        ...pim,
+        stripePaymentIntentId: (pi as any).id,
+        ensuredBy: 'finalize_fallback',
+      };
+      const inserted = (await sql`
+        INSERT INTO bookings (
+          hapio_booking_id, service_id, service_name, client_email, booking_date, payment_status, metadata
+        ) VALUES (
+          ${bookingId},
+          ${svcId},
+          ${svcName},
+          ${email || (pi as any).receipt_email || null},
+          ${slotStart ? slotStart : null},
+          ${status},
+          ${JSON.stringify(minimalMeta)}::jsonb
+        )
+        ON CONFLICT (hapio_booking_id) DO UPDATE SET
+          metadata = jsonb_set(COALESCE(bookings.metadata, '{}'::jsonb), '{stripePaymentIntentId}', ${JSON.stringify((pi as any).id)}::jsonb, true),
+          updated_at = NOW()
+        RETURNING id
+      `) as any[];
+      ensuredBookingId = inserted?.[0]?.id || null;
+    }
+
     // Upsert customer by email
     let customerId: string | null = null;
     if (email) {
@@ -53,8 +86,8 @@ export async function POST(request: NextRequest) {
         RETURNING id
       `) as any[];
       customerId = upsert?.[0]?.id || null;
-      if (bookingRow?.id && customerId) {
-        await sql`UPDATE bookings SET customer_id = ${customerId} WHERE id = ${bookingRow.id}`;
+      if (ensuredBookingId && customerId) {
+        await sql`UPDATE bookings SET customer_id = ${customerId} WHERE id = ${ensuredBookingId}`;
       }
     }
 
@@ -62,11 +95,11 @@ export async function POST(request: NextRequest) {
     const currency = (pi as any).currency || 'usd';
 
     // Save payment row and event
-    if (bookingRow?.id) {
+    if (ensuredBookingId) {
       await sql`
         INSERT INTO payments (booking_id, stripe_pi_id, stripe_charge_id, amount_cents, currency, status)
         VALUES (
-          ${bookingRow.id},
+          ${ensuredBookingId},
           ${pi.id},
           ${typeof (pi as any).latest_charge === 'string' ? (pi as any).latest_charge : null},
           ${amount_cents},
@@ -76,7 +109,7 @@ export async function POST(request: NextRequest) {
       `;
       await sql`
         INSERT INTO booking_events (booking_id, type, data)
-        VALUES (${bookingRow.id}, ${'finalized'}, ${JSON.stringify({ stripe_pi_id: pi.id, amount_cents, currency })}::jsonb)
+        VALUES (${ensuredBookingId}, ${'finalized'}, ${JSON.stringify({ stripe_pi_id: pi.id, amount_cents, currency })}::jsonb)
       `;
     }
 
@@ -96,10 +129,10 @@ export async function POST(request: NextRequest) {
           listId: listId && Number.isFinite(listId) ? listId : undefined,
           tags: ['booked', bookingRow?.service_id || 'service'],
         });
-        if (bookingRow?.id) {
+        if (ensuredBookingId) {
           await sql`
             INSERT INTO booking_events (booking_id, type, data)
-            VALUES (${bookingRow.id}, ${'email_sent'}, ${JSON.stringify({ kind: 'brevo_upsert' })}::jsonb)
+            VALUES (${ensuredBookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'brevo_upsert' })}::jsonb)
           `;
         }
       } catch (e) {
@@ -118,10 +151,10 @@ export async function POST(request: NextRequest) {
           htmlContent: `<p>Thanks for booking <strong>${svc}</strong>.</p><p>Date/Time: ${dateStr}</p>`,
           tags: ['booking_confirmed'],
         });
-        if (bookingRow?.id) {
+        if (ensuredBookingId) {
           await sql`
             INSERT INTO booking_events (booking_id, type, data)
-            VALUES (${bookingRow.id}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_confirmed' })}::jsonb)
+            VALUES (${ensuredBookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_confirmed' })}::jsonb)
           `;
         }
       } catch (e) {

@@ -812,6 +812,11 @@ export default function BookingsCalendar() {
           onClose={() => {
             setShowDetailModal(false);
             setSelectedBooking(null);
+            // refresh after closing
+            loadBookings();
+          }}
+          onRefresh={() => {
+            loadBookings();
           }}
         />
       )}
