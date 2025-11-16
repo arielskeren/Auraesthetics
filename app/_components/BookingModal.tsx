@@ -7,6 +7,8 @@ import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
 import { computeFiveDayWindow } from '@/lib/scheduling/suggestions';
+import DateWheel from './wheels/DateWheel';
+import TimeWheel from './wheels/TimeWheel';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -356,32 +358,30 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                         </h4>
                       </div>
 
-                      {/* Step 1: Date + Time picker (no prefetch) */}
+                      {/* Step 1: Date + Time wheel pickers (no prefetch) */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Date</label>
-                          <input
-                            type="date"
+                          <DateWheel
                             value={requestedDate}
-                            onChange={(e) => setRequestedDate(e.target.value)}
-                            className="border border-sand rounded-md px-3 py-2 text-sm"
+                            onChange={setRequestedDate}
+                            days={120}
+                            className="border border-sand rounded-lg bg-white"
                           />
                         </div>
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Preferred time</label>
-                          <input
-                            type="time"
+                          <TimeWheel
                             value={requestedTime}
-                            onChange={(e) => setRequestedTime(e.target.value)}
-                            className="border border-sand rounded-md px-3 py-2 text-sm"
+                            onChange={setRequestedTime}
+                            stepMinutes={15}
+                            startHour={7}
+                            endHour={21}
+                            className="border border-sand rounded-lg bg-white"
                           />
                         </div>
-                        <div className="flex items-end">
-                          <Button
-                            onClick={handleSearchAvailability}
-                            className="w-full"
-                            variant="primary"
-                          >
+                        <div className="flex items-center">
+                          <Button onClick={handleSearchAvailability} className="w-full" variant="primary">
                             Find times
                           </Button>
                         </div>

@@ -256,6 +256,7 @@ function ModernPaymentSection({
             slotEnd: pendingBooking.endsAt,
             timezone: pendingBooking.timezone,
             email: trimmedContact.email,
+            amountCents: Math.max(1, Math.round(amountDueToday * 100)),
             bookingId: pendingBooking.hapioBookingId,
           }),
         });
