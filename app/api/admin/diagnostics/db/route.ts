@@ -5,10 +5,9 @@ import crypto from 'crypto';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-async function safeQuery<T = any>(sql: any, strings: TemplateStringsArray, ...values: any[]): Promise<T | null> {
+async function safeQuery<T = any>(sql: any, query: any): Promise<T | null> {
   try {
-    // @ts-ignore -- use the sql tag
-    const res = await sql(strings, ...values);
+    const res = await query;
     // Support both neon/sql returns
     if (Array.isArray(res)) return res as any;
     if (res && Array.isArray((res as any).rows)) return (res as any).rows as any;
@@ -29,39 +28,40 @@ export async function GET(request: NextRequest) {
     const hash = dbUrl ? crypto.createHash('sha1').update(dbUrl).digest('hex') : '';
     const short = hash ? `${hash.slice(0, 4)}...${hash.slice(-4)}` : 'n/a';
 
-    const tables = ['bookings', 'customers', 'payments', 'booking_events'];
     const counts: Record<string, number | null> = {};
-    for (const t of tables) {
-      const c = (await safeQuery<any>(sql, [`SELECT COUNT(1)::int AS c FROM ${t}`] as any)) as any[] | null;
-      counts[t] = c?.[0]?.c ?? null;
-    }
+    const bookingsCount = (await safeQuery<any>(sql, sql`SELECT COUNT(1)::int AS c FROM bookings`)) as any[] | null;
+    const customersCount = (await safeQuery<any>(sql, sql`SELECT COUNT(1)::int AS c FROM customers`)) as any[] | null;
+    const paymentsCount = (await safeQuery<any>(sql, sql`SELECT COUNT(1)::int AS c FROM payments`)) as any[] | null;
+    const eventsCount = (await safeQuery<any>(sql, sql`SELECT COUNT(1)::int AS c FROM booking_events`)) as any[] | null;
+    counts.bookings = bookingsCount?.[0]?.c ?? null;
+    counts.customers = customersCount?.[0]?.c ?? null;
+    counts.payments = paymentsCount?.[0]?.c ?? null;
+    counts.booking_events = eventsCount?.[0]?.c ?? null;
 
     const bookingsCols = await safeQuery<any>(
       sql,
-      ['SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position'] as any,
-      'bookings'
+      sql`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'bookings' ORDER BY ordinal_position`
     );
     const customersCols = await safeQuery<any>(
       sql,
-      ['SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position'] as any,
-      'customers'
+      sql`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'customers' ORDER BY ordinal_position`
     );
 
     const latestBookings = await safeQuery<any>(
       sql,
-      ['SELECT id, hapio_booking_id, client_email, booking_date, payment_status, created_at FROM bookings ORDER BY created_at DESC NULLS LAST LIMIT 5'] as any
+      sql`SELECT id, hapio_booking_id, client_email, booking_date, payment_status, created_at FROM bookings ORDER BY created_at DESC NULLS LAST LIMIT 5`
     );
     const latestCustomers = await safeQuery<any>(
       sql,
-      ['SELECT id, email, first_name, last_name, last_seen_at FROM customers ORDER BY last_seen_at DESC NULLS LAST LIMIT 5'] as any
+      sql`SELECT id, email, first_name, last_name, last_seen_at FROM customers ORDER BY last_seen_at DESC NULLS LAST LIMIT 5`
     );
     const latestPayments = await safeQuery<any>(
       sql,
-      ['SELECT id, booking_id, stripe_pi_id, amount_cents, status, created_at FROM payments ORDER BY created_at DESC LIMIT 5'] as any
+      sql`SELECT id, booking_id, stripe_pi_id, amount_cents, status, created_at FROM payments ORDER BY created_at DESC LIMIT 5`
     );
     const latestEvents = await safeQuery<any>(
       sql,
-      ['SELECT id, booking_id, type, created_at FROM booking_events ORDER BY created_at DESC LIMIT 5'] as any
+      sql`SELECT id, booking_id, type, created_at FROM booking_events ORDER BY created_at DESC LIMIT 5`
     );
 
     return NextResponse.json({
