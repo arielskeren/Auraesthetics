@@ -753,12 +753,14 @@ export default function CustomPaymentModal({
     }
     const startDate = new Date(selectedSlot.start);
     const endDate = new Date(selectedSlot.end);
-    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+    const dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     });
-    const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
       hour: 'numeric',
       minute: '2-digit',
     });

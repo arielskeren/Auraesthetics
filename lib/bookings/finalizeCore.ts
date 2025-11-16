@@ -103,7 +103,19 @@ export async function finalizeBookingTransactional(args: {
         RETURNING id
       `) as any[];
       customerId = custRows?.[0]?.id || null;
-      await sql`UPDATE bookings SET customer_id = ${customerId} WHERE id = ${ensuredBookingRowId}`;
+      const displayName =
+        firstName || lastName
+          ? [firstName, lastName].filter(Boolean).join(' ')
+          : fullNameFromPi || null;
+      await sql`
+        UPDATE bookings
+        SET 
+          customer_id = ${customerId},
+          client_email = COALESCE(client_email, ${emailFromPi}),
+          client_name = COALESCE(client_name, ${displayName}),
+          client_phone = COALESCE(client_phone, ${phoneFromPi || null})
+        WHERE id = ${ensuredBookingRowId}
+      `;
     }
 
     // Insert payment

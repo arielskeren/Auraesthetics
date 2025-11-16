@@ -20,7 +20,11 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
   const attributes: Record<string, any> = {};
   if (input.firstName) attributes.FIRSTNAME = input.firstName;
   if (input.lastName) attributes.LASTNAME = input.lastName;
-  if (input.phone) attributes.PHONE = input.phone;
+  if (input.phone) {
+    attributes.PHONE = input.phone;
+    attributes.LANDLINE_NUMBER = input.phone;
+    attributes.SMS = input.phone;
+  }
 
   const body: any = {
     email: input.email,

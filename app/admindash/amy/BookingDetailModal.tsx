@@ -2,6 +2,7 @@
 
 import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
+import { formatInEST } from '@/lib/timezone';
 
 interface Booking {
   id: string;
@@ -191,15 +192,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   };
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    return formatInEST(dateString);
   };
 
   const getPaymentTypeLabel = (type: string | null) => {
