@@ -76,19 +76,69 @@ function parseDate(value: string | null): Date | null {
  * We format dates in UTC with +00:00 offset since JavaScript Date objects are UTC-based internally.
  */
 function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
-  // Get UTC components (Date objects are stored in UTC internally)
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const hour = String(date.getUTCHours()).padStart(2, '0');
-  const minute = String(date.getUTCMinutes()).padStart(2, '0');
-  const second = String(date.getUTCSeconds()).padStart(2, '0');
-  
-  // Use +00:00 for UTC offset (no milliseconds, no Z suffix)
-  const offset = '+00:00';
-  
-  // Format: YYYY-MM-DDTHH:mm:ss+HH:mm
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+  // Render date components in the provided IANA timeZone
+  // and compute the correct numeric offset (e.g., -05:00).
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      // timeZoneName: 'shortOffset' would be ideal, but not universally supported.
+    });
+    const parts = fmt.formatToParts(date);
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value ?? '';
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+    const hour = get('hour');
+    const minute = get('minute');
+    const second = get('second');
+
+    // Derive offset by comparing the same wall time vs UTC.
+    // Approach: get the clock components in the zone and UTC, then compute offset.
+    const utc = {
+      y: date.getUTCFullYear(),
+      m: date.getUTCMonth(),
+      d: date.getUTCDate(),
+      hh: date.getUTCHours(),
+      mm: date.getUTCMinutes(),
+      ss: date.getUTCSeconds(),
+    };
+    // Build a Date from the local parts interpreted as if they were UTC, then diff.
+    const pseudoUtc = new Date(Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second)
+    ));
+    // Offset minutes = (pseudoUtc - actualUTC)
+    const diffMs = pseudoUtc.getTime() - Date.UTC(utc.y, utc.m, utc.d, utc.hh, utc.mm, utc.ss);
+    const offsetMinutes = Math.round(diffMs / 60000);
+    const sign = offsetMinutes >= 0 ? '+' : '-';
+    const abs = Math.abs(offsetMinutes);
+    const offH = String(Math.floor(abs / 60)).padStart(2, '0');
+    const offM = String(abs % 60).padStart(2, '0');
+    const offset = `${sign}${offH}:${offM}`;
+
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+  } catch {
+    // Fallback to UTC if any error occurs
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    const hh = String(date.getUTCHours()).padStart(2, '0');
+    const mm = String(date.getUTCMinutes()).padStart(2, '0');
+    const ss = String(date.getUTCSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d}T${hh}:${mm}:${ss}+00:00`;
+  }
 }
 
 function toIsoString(date: Date): string {
