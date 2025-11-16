@@ -25,6 +25,16 @@ function ensureObject<T extends Record<string, any>>(value: any): T {
   return value && typeof value === 'object' ? { ...(value as T) } : ({} as T);
 }
 
+// Helper to fetch a booking by internal id, or fallback to hapio_booking_id
+async function fetchBookingByAnyId(sql: any, idOrHapioId: string) {
+  const primary = await sql`SELECT * FROM bookings WHERE id = ${idOrHapioId} LIMIT 1`;
+  const primaryRows = normalizeRows(primary);
+  if (primaryRows.length > 0) return primaryRows[0];
+  const fallback = await sql`SELECT * FROM bookings WHERE hapio_booking_id = ${idOrHapioId} LIMIT 1`;
+  const fallbackRows = normalizeRows(fallback);
+  return fallbackRows[0] || null;
+}
+
 // GET /api/admin/bookings/[id] - Get booking details and client history
 export async function GET(
   request: NextRequest,
@@ -34,20 +44,13 @@ export async function GET(
     const sql = getSqlClient();
     const bookingId = params.id;
 
-    // Get booking details
-    const booking = await sql`
-      SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
-    `;
-
-    const bookingRows = normalizeRows(booking);
-    if (bookingRows.length === 0) {
+    const bookingData = await fetchBookingByAnyId(sql, bookingId);
+    if (!bookingData) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
       );
     }
-
-    const bookingData = bookingRows[0];
 
     // Get client history (last 5 bookings for same email)
     let clientHistory = [];
@@ -109,18 +112,14 @@ export async function POST(
     if (action === 'cancel') {
       // Cancel booking
       const sql = getSqlClient();
-      const booking = await sql`
-        SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
-      `;
-
-      const bookingRows = normalizeRows(booking);
-      if (bookingRows.length === 0) {
+      const bookingData = await fetchBookingByAnyId(sql, bookingId);
+      if (!bookingData) {
         return NextResponse.json(
           { error: 'Booking not found' },
           { status: 404 }
         );
       }
-      const bookingData = bookingRows[0];
+      const bookingInternalId = bookingData.id;
 
       let refundProcessed = false;
       let refundId = null;
@@ -219,13 +218,13 @@ export async function POST(
           })}::jsonb,
           metadata = ${JSON.stringify(updatedMetadata)}::jsonb,
           updated_at = NOW()
-        WHERE id = ${bookingId}
+        WHERE id = ${bookingInternalId}
       `;
 
       // Record event
       await sql`
         INSERT INTO booking_events (booking_id, type, data)
-        VALUES (${bookingId}, ${'cancelled'}, ${JSON.stringify({ refundProcessed, refundId })}::jsonb)
+        VALUES (${bookingInternalId}, ${'cancelled'}, ${JSON.stringify({ refundProcessed, refundId })}::jsonb)
       `;
 
       // Send cancellation email (best-effort)
@@ -239,7 +238,7 @@ export async function POST(
           });
           await sql`
             INSERT INTO booking_events (booking_id, type, data)
-            VALUES (${bookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_cancelled' })}::jsonb)
+            VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_cancelled' })}::jsonb)
           `;
         } catch (e) {
           console.error('[Brevo] cancel email failed', e);
@@ -259,18 +258,14 @@ export async function POST(
     if (action === 'refund') {
       // Process refund via Stripe
       const sql = getSqlClient();
-      const booking = await sql`
-        SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1
-      `;
-
-      const bookingRows = normalizeRows(booking);
-      if (bookingRows.length === 0) {
+      const bookingData = await fetchBookingByAnyId(sql, bookingId);
+      if (!bookingData) {
         return NextResponse.json(
           { error: 'Booking not found' },
           { status: 404 }
         );
       }
-      const bookingData = bookingRows[0];
+      const bookingInternalId = bookingData.id;
 
       if (!bookingData.payment_intent_id) {
         return NextResponse.json(
@@ -331,13 +326,13 @@ export async function POST(
               ${JSON.stringify(refundCents)}::jsonb
             ),
             updated_at = NOW()
-          WHERE id = ${bookingId}
+          WHERE id = ${bookingInternalId}
         `;
 
         // Record event
         await sql`
           INSERT INTO booking_events (booking_id, type, data)
-          VALUES (${bookingId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents })}::jsonb)
+          VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents })}::jsonb)
         `;
 
         // Send refund email (best-effort)
