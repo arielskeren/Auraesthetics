@@ -294,39 +294,14 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     });
   }, [requestedDate]);
 
-  // Create dynamic displayDays: merge days with actual slots + 5-day window around chosen date
-  // This ensures chosen day always appears, and we show days with availability
+  // Create displayDays: always show exactly 5 days (the 5-day window around chosen date)
+  // Days with no slots will show "No availability"
   const displayDays = useMemo(() => {
     if (!requestedDate) return [];
     
-    const fmtDay = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    
-    // Get days that have actual slots (from groupedAvailability)
-    const daysWithSlots = new Set(groupedAvailability.map((g) => g.key));
-    
-    // Get 5-day window around chosen date
-    const windowKeys = computeFiveDayWindow(requestedDate);
-    const windowDays = new Set(windowKeys);
-    
-    // Merge: all days with slots + all days in 5-day window (ensures chosen day appears)
-    const allDayKeysSet = new Set<string>();
-    daysWithSlots.forEach((key) => allDayKeysSet.add(key));
-    windowDays.forEach((key) => allDayKeysSet.add(key));
-    
-    // Convert to array and sort chronologically
-    const sortedKeys = Array.from(allDayKeysSet).sort();
-    
-    // Convert to display format
-    return sortedKeys.map((key) => {
-      const d = new Date(key + 'T00:00:00');
-      return { key, label: fmtDay.format(d) };
-    });
-  }, [requestedDate, groupedAvailability]);
+    // Always use the 5-day window - this ensures consistent horizontal layout
+    return fiveDayWindow;
+  }, [fiveDayWindow]);
 
   // No suggested slots section; show only daily breakdown grid
 
@@ -678,10 +653,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
                       {availabilityStatus === 'success' && hasAvailability && !collapseTimes && (
                         <div className="space-y-4">
-                          {/* Dynamic day grid - shows days with slots + 5-day window around chosen date */}
+                          {/* Five-day grid - always horizontal, shows 5-day window around chosen date */}
                           {displayDays.length > 0 && (
-                            <div className={`grid grid-cols-1 md:grid-cols-${Math.min(displayDays.length, 5)} gap-3`}>
-                              {displayDays.map((day) => {
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                              {displayDays.slice(0, 5).map((day) => {
                                 const dayGroup = groupedAvailability.find((g) => g.key === day.key);
                                 return (
                                   <div key={`grid-${day.key}`} className="border border-dark-sage/40 bg-sand/20 rounded-lg p-3">
