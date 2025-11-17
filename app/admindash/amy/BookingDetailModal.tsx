@@ -211,6 +211,38 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     return formatInEST(dateString || null);
   };
 
+  // Format date as MM/DD in EST
+  const formatDateShort = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return formatter.format(date);
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  // Format time in EST
+  const formatTimeEST = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).format(date);
+    } catch {
+      return 'N/A';
+    }
+  };
+
   const getPaymentTypeLabel = (type: string | null | undefined) => {
     switch (type) {
       case 'full':
@@ -221,6 +253,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
         return 'N/A';
     }
   };
+
+  // Payment Type Explanation: 
+  // 'full' = customer paid the full service amount upfront
+  // 'deposit' = customer paid only a partial amount (typically 50%) as a deposit
+  // This is different from payment_status which indicates the payment state (succeeded, cancelled, etc.)
 
   if (!isOpen || !booking) return null;
 
@@ -269,110 +306,75 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
         {/* Content */}
         {!loading && (
           <div className="p-4 space-y-3">
-            {/* Client Information */}
-            <div className="bg-sand/20 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Client Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Name</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.client_name || 'N/A'}</p>
+            {/* Top Section: Client Info (left) + Service Details (right) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Client Information - Left Side, Half Width, Stacked */}
+              <div className="bg-sand/20 rounded-lg p-3">
+                <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  Client Information
+                </h3>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Name</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.client_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1 flex items-center gap-1">
+                      <Mail className="w-3 h-3" />
+                      Email
+                    </label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">{effective.client_email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1 flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      Phone
+                    </label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.client_phone || 'N/A'}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1 flex items-center gap-1">
-                    <Mail className="w-3 h-3" />
-                    Email
-                  </label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">{effective.client_email || 'N/A'}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1 flex items-center gap-1">
-                    <Phone className="w-3 h-3" />
-                    Phone
-                  </label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.client_phone || 'N/A'}</p>
+              </div>
+
+              {/* Service Details - Right Side, Half Width */}
+              <div className="bg-sand/20 rounded-lg p-3">
+                <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Service Details
+                </h3>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Service</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.service_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Date</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDateShort(effective.booking_date)}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Time (EST)</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatTimeEST(effective.booking_date)}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">
+                      Payment Type
+                      <span className="ml-1 text-xs text-warm-gray/70" title="Indicates whether customer paid in full or just a deposit. Different from payment status which shows payment state (succeeded, cancelled, etc.).">
+                        (?)
+                      </span>
+                    </label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{getPaymentTypeLabel(effective.payment_type)}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Amount Paid</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">${finalAmount.toFixed(2)}</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Booking Information */}
-            <div className="bg-sand/20 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Booking Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Service</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.service_name || 'N/A'}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Date/Time</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDate(effective.booking_date)}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Payment Type</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{getPaymentTypeLabel(effective.payment_type)}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Status</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.payment_status || 'N/A'}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Amount</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">${finalAmount.toFixed(2)}</p>
-                  {effective.payment_type === 'deposit' && (
-                    <p className="text-xs text-warm-gray mt-1">
-                      Deposit: ${depositAmount.toFixed(2)} • Balance: ${balanceDue.toFixed(2)}
-                    </p>
-                  )}
-                  {effective.discount_code && (
-                    <p className="text-xs text-warm-gray mt-1">
-                      Discount: {effective.discount_code} (-${(Number(effective.discount_amount) || 0).toFixed(2)})
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Hapio Booking ID</label>
-                  <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">
-                    {hapioBookingId || 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Outlook Sync</label>
-                  <p className="font-medium text-charcoal text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white">
-                    {effective.outlook_sync_status || 'Not synced'}
-                  </p>
-                  {effective.outlook_event_id && (
-                    <p className="text-xs text-warm-gray mt-1 font-mono break-all">
-                      {effective.outlook_event_id}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Payment Intent ID</label>
-                  <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">
-                    {effective.payment_intent_id || 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Created At</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDate(effective.created_at)}</p>
-                </div>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <label className="text-xs text-warm-gray mb-1">Notes</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white whitespace-pre-wrap min-h-[2rem]">
-                    {effective.metadata?.notes || effective.metadata?.customer_notes || 'None'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="bg-sand/20 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-charcoal mb-2">Actions</h3>
+            {/* Quick Actions - Below Client Info, Left Side */}
+            <div className="bg-sand/20 rounded-lg p-3 border-t-2 border-sage-dark/30">
+              <h3 className="text-base font-semibold text-charcoal mb-2">Quick Actions</h3>
               <div className="flex flex-wrap gap-2">
                 {effective.payment_status !== 'cancelled' && (
                   <>
@@ -414,37 +416,100 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
               </div>
             </div>
 
-            {/* Client History */}
-            {effective.client_email && (
+            {/* Bottom Section: Other Info (left) + Client History (right) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Other Information - Left Side */}
               <div className="bg-sand/20 rounded-lg p-3">
-                <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
-                  <History className="w-4 h-4" />
-                  Client History (Last 5)
-                </h3>
-                {loading ? (
-                  <p className="text-xs text-warm-gray">Loading...</p>
-                ) : clientHistory.length === 0 ? (
-                  <p className="text-xs text-warm-gray">No previous bookings found</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {clientHistory.map((history) => (
-                      <div key={history.id} className="bg-white rounded p-2 border border-sage-dark/20">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium text-charcoal text-sm">{history.service_name}</p>
-                            <p className="text-xs text-warm-gray">{formatDate(history.booking_date)}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium text-charcoal text-sm">${(Number(history.final_amount) || 0).toFixed(2)}</p>
-                            <p className="text-xs text-warm-gray">{history.payment_status}</p>
+                <h3 className="text-base font-semibold text-charcoal mb-2">Other Information</h3>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Status</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.payment_status || 'N/A'}</p>
+                  </div>
+                  {effective.payment_type === 'deposit' && (
+                    <div>
+                      <label className="text-xs text-warm-gray mb-1">Deposit Details</label>
+                      <p className="text-xs text-charcoal px-2 py-1.5 border border-sage-dark/20 rounded bg-white">
+                        Deposit: ${depositAmount.toFixed(2)} • Balance Due: ${balanceDue.toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                  {effective.discount_code && (
+                    <div>
+                      <label className="text-xs text-warm-gray mb-1">Discount</label>
+                      <p className="text-xs text-charcoal px-2 py-1.5 border border-sage-dark/20 rounded bg-white">
+                        {effective.discount_code} (-${(Number(effective.discount_amount) || 0).toFixed(2)})
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Hapio Booking ID</label>
+                    <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">
+                      {hapioBookingId || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Payment Intent ID</label>
+                    <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">
+                      {effective.payment_intent_id || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Outlook Sync</label>
+                    <p className="font-medium text-charcoal text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white">
+                      {effective.outlook_sync_status || 'Not synced'}
+                    </p>
+                    {effective.outlook_event_id && (
+                      <p className="text-xs text-warm-gray mt-1 font-mono break-all">
+                        {effective.outlook_event_id}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Created At</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDate(effective.created_at)}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-1">Notes</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white whitespace-pre-wrap min-h-[2rem]">
+                      {effective.metadata?.notes || effective.metadata?.customer_notes || 'None'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Client History - Right Side */}
+              {effective.client_email && (
+                <div className="bg-sand/20 rounded-lg p-3">
+                  <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    Client History (Last 5)
+                  </h3>
+                  {loading ? (
+                    <p className="text-xs text-warm-gray">Loading...</p>
+                  ) : clientHistory.length === 0 ? (
+                    <p className="text-xs text-warm-gray">No previous bookings found</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {clientHistory.map((history) => (
+                        <div key={history.id} className="bg-white rounded p-2 border border-sage-dark/20">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-charcoal text-sm">{history.service_name}</p>
+                              <p className="text-xs text-warm-gray">{formatDate(history.booking_date)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-charcoal text-sm">${(Number(history.final_amount) || 0).toFixed(2)}</p>
+                              <p className="text-xs text-warm-gray">{history.payment_status}</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
