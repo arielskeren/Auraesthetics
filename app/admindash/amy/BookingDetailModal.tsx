@@ -6,25 +6,31 @@ import { formatInEST } from '@/lib/timezone';
 
 interface Booking {
   id: string;
-  cal_booking_id: string | null;
-  hapio_booking_id: string | null;
-  outlook_event_id: string | null;
-  outlook_sync_status: string | null;
-  service_name: string;
-  client_name: string | null;
-  client_email: string | null;
-  client_phone: string | null;
-  booking_date: string | null;
-  amount: number | string | null;
-  final_amount: number | string | null;
-  deposit_amount: number | string | null;
-  discount_code: string | null;
-  discount_amount: number | string | null;
-  payment_type: 'full' | 'deposit' | null;
-  payment_status: string;
-  payment_intent_id: string | null;
-  created_at: string;
+  cal_booking_id?: string | null;
+  hapio_booking_id?: string | null;
+  outlook_event_id?: string | null;
+  outlook_sync_status?: string | null;
+  service_name?: string;
+  client_name?: string | null;
+  client_email?: string | null;
+  client_phone?: string | null;
+  booking_date?: string | null;
+  amount?: number | string | null;
+  final_amount?: number | string | null;
+  deposit_amount?: number | string | null;
+  discount_code?: string | null;
+  discount_amount?: number | string | null;
+  payment_type?: 'full' | 'deposit' | null;
+  payment_status?: string;
+  payment_intent_id?: string | null;
+  created_at?: string;
   metadata?: any;
+  // Hapio booking object fields (for compatibility)
+  startsAt?: string;
+  endsAt?: string;
+  serviceId?: string;
+  service?: { id: string; name: string };
+  customer?: { name?: string; email?: string; phone?: string };
 }
 
 interface ClientHistory {
@@ -51,51 +57,48 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Extract booking ID helper
+  const getBookingId = useCallback((b: Booking | null) => 
+    b ? ((b as any).hapio_booking_id || (b as any).id || b.id) : null, []);
+
   const fetchBookingDetails = useCallback(async () => {
     if (!booking) return;
     
+    const currentBookingId = getBookingId(booking);
     try {
       setLoading(true);
-      // Handle both Neon DB booking objects (with internal id) and Hapio booking objects (with hapio_booking_id)
-      // Hapio API returns bookings with `id` as the Hapio booking ID
-      // Neon DB bookings have `hapio_booking_id` field
-      // Try to get the Hapio booking ID from the booking object
-      const hapioBookingId = (booking as any).hapio_booking_id || (booking as any).id || booking.id;
-      const response = await fetch(`/api/admin/bookings/${hapioBookingId}`);
+      setActionMessage(null);
+      
+      const response = await fetch(`/api/admin/bookings/${currentBookingId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        if (response.status === 404) {
+          setActionMessage({ type: 'error', text: 'Booking not found. This booking may have been deleted.' });
+          setTimeout(onClose, 2000);
+          return;
+        }
+        setActionMessage({ type: 'error', text: `Failed to load booking: ${errorData.error || 'Unknown error'}` });
+        return;
+      }
+      
       const data = await response.json();
       
-      if (data.success) {
-        if (data.booking) {
-          setBookingDetails(data.booking as Booking);
-        }
+      // Race condition check
+      if (getBookingId(booking) !== currentBookingId) return;
+      
+      if (data.success && data.booking) {
+        setBookingDetails(data.booking as Booking);
         setClientHistory(data.clientHistory || []);
-        // If customer_id present, fetch full history via customers endpoint
-        if (data.booking?.customer_id) {
-          try {
-            const h = await fetch(`/api/customers/${data.booking.customer_id}/history`);
-            const hj = await h.json();
-            if (hj?.success && Array.isArray(hj.history)) {
-              // map to ClientHistory shape
-              const mapped = hj.history.slice(0, 5).map((item: any) => ({
-                id: item.bookingId,
-                service_name: item.serviceName,
-                booking_date: item.bookingDate,
-                payment_type: null,
-                payment_status: item.paymentStatus,
-                final_amount: (item.amountPaidCents || 0) / 100,
-                created_at: item.bookingDate || '',
-              }));
-              setClientHistory(mapped);
-            }
-          } catch {}
-        }
+      } else {
+        setActionMessage({ type: 'error', text: data.error || 'Failed to load booking details' });
       }
     } catch (error) {
-      console.error('Error fetching booking details:', error);
+      setActionMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load booking details' });
     } finally {
       setLoading(false);
     }
-  }, [booking]);
+  }, [booking, onClose, getBookingId]);
 
   useEffect(() => {
     if (isOpen && booking) {
@@ -105,8 +108,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
   const handleCancel = async () => {
     if (!booking) return;
+    const effective = bookingDetails || booking;
+    const bookingId = getBookingId(effective);
+    if (!bookingId) return;
     
-    const confirmMessage = booking.payment_status === 'paid' && booking.payment_intent_id
+    const confirmMessage = effective.payment_status === 'paid' && effective.payment_intent_id
       ? 'Are you sure you want to cancel this booking? This will also process a full refund. This action cannot be undone.'
       : 'Are you sure you want to cancel this booking? This action cannot be undone.';
     
@@ -116,7 +122,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       setActionLoading('cancel');
       setActionMessage(null);
       
-      const response = await fetch(`/api/admin/bookings/${booking.id}`, {
+      const response = await fetch(`/api/admin/bookings/${bookingId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'cancel' }),
@@ -147,6 +153,10 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
   const handleRefund = async () => {
     if (!booking) return;
+    const effective = bookingDetails || booking;
+    const bookingId = getBookingId(effective);
+    if (!bookingId) return;
+    
     const choice = prompt(
       'Refund amount:\n- Enter one of: 15,25,50,75,100 (percent)\n- Or enter a custom amount in dollars (e.g., 42.50)\n- Leave empty to refund full amount'
     );
@@ -169,7 +179,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       setActionLoading('refund');
       setActionMessage(null);
       
-      const response = await fetch(`/api/admin/bookings/${booking.id}`, {
+      const response = await fetch(`/api/admin/bookings/${bookingId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'refund', percentage, amountCents }),
@@ -196,11 +206,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     }
   };
 
-  const formatDate = (dateString: string | null) => {
-    return formatInEST(dateString);
+  const formatDate = (dateString: string | null | undefined) => {
+    return formatInEST(dateString || null);
   };
 
-  const getPaymentTypeLabel = (type: string | null) => {
+  const getPaymentTypeLabel = (type: string | null | undefined) => {
     switch (type) {
       case 'full':
         return 'Full Payment';
@@ -247,59 +257,68 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           </div>
         )}
 
+        {/* Loading State */}
+        {loading && (
+          <div className="p-6 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-dark-sage"></div>
+            <p className="mt-4 text-warm-gray">Loading booking details...</p>
+          </div>
+        )}
+
         {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Client Information */}
-          <div className="bg-sand/20 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Client Information
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-warm-gray">Name</label>
-                <p className="font-medium text-charcoal">{effective.client_name || 'N/A'}</p>
-              </div>
-              <div>
-                <label className="text-sm text-warm-gray flex items-center gap-1">
-                  <Mail className="w-4 h-4" />
-                  Email
-                </label>
-                <p className="font-medium text-charcoal">{effective.client_email || 'N/A'}</p>
-              </div>
-              <div>
-                <label className="text-sm text-warm-gray flex items-center gap-1">
-                  <Phone className="w-4 h-4" />
-                  Phone
-                </label>
-                <p className="font-medium text-charcoal">{effective.client_phone || 'N/A'}</p>
+        {!loading && (
+          <div className="p-6 space-y-6">
+            {/* Client Information */}
+            <div className="bg-sand/20 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Client Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-warm-gray">Name</label>
+                  <p className="font-medium text-charcoal">{effective.client_name || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-warm-gray flex items-center gap-1">
+                    <Mail className="w-4 h-4" />
+                    Email
+                  </label>
+                  <p className="font-medium text-charcoal">{effective.client_email || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-warm-gray flex items-center gap-1">
+                    <Phone className="w-4 h-4" />
+                    Phone
+                  </label>
+                  <p className="font-medium text-charcoal">{effective.client_phone || 'N/A'}</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Booking Information */}
-          <div className="bg-sand/20 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              Booking Information
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-warm-gray">Service</label>
-                <p className="font-medium text-charcoal">{effective.service_name}</p>
-              </div>
-              <div>
-                <label className="text-sm text-warm-gray">Date/Time</label>
-                <p className="font-medium text-charcoal">{formatDate(effective.booking_date)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-warm-gray">Payment Type</label>
-                <p className="font-medium text-charcoal">{getPaymentTypeLabel(effective.payment_type)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-warm-gray">Status</label>
-                <p className="font-medium text-charcoal">{effective.payment_status}</p>
-              </div>
+            {/* Booking Information */}
+            <div className="bg-sand/20 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Booking Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-warm-gray">Service</label>
+                  <p className="font-medium text-charcoal">{effective.service_name || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-warm-gray">Date/Time</label>
+                  <p className="font-medium text-charcoal">{formatDate(effective.booking_date)}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-warm-gray">Payment Type</label>
+                  <p className="font-medium text-charcoal">{getPaymentTypeLabel(effective.payment_type)}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-warm-gray">Status</label>
+                  <p className="font-medium text-charcoal">{effective.payment_status || 'N/A'}</p>
+                </div>
               <div>
                 <label className="text-sm text-warm-gray">Amount</label>
                 <p className="font-medium text-charcoal">${finalAmount.toFixed(2)}</p>
@@ -374,7 +393,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       : 'Cancel Booking'}
                   </button>
                   
-              {booking.payment_status === 'paid' && booking.payment_intent_id && (
+              {effective.payment_status === 'paid' && effective.payment_intent_id && (
                     <button
                       onClick={handleRefund}
                       disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
@@ -432,7 +451,8 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
               )}
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
-import BookingDetailModal from './BookingDetailModal';
+import BookingDetailModal from '../../BookingDetailModal';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
 
 interface Booking {
@@ -845,6 +845,7 @@ export default function BookingsCalendar() {
       {showDetailModal && selectedBooking && (
         <BookingDetailModal
           booking={selectedBooking}
+          isOpen={showDetailModal}
           onClose={() => {
             setShowDetailModal(false);
             setSelectedBooking(null);

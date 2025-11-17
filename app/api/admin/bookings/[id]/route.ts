@@ -45,94 +45,60 @@ export async function GET(
     const bookingId = params.id;
 
     const rawBooking = await fetchBookingByAnyId(sql, bookingId);
-    let bookingData = rawBooking;
-    if (!bookingData) {
-      console.info('[Admin][Booking GET] Not found by id or hapio id', { id: bookingId });
-    } else if (bookingData.id !== bookingId) {
-      console.info('[Admin][Booking GET] Fallback used (hapio id)', { id: bookingId, internalId: bookingData.id });
-    }
-    if (!bookingData) {
-      return NextResponse.json(
-        { error: 'Booking not found' },
-        { status: 404 }
-      );
+    if (!rawBooking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // Join with customers table to get enriched client info
-    const enriched = await sql`
-      SELECT 
-        b.*,
-        c.first_name || ' ' || c.last_name AS enriched_client_name,
-        c.email AS enriched_client_email,
-        c.phone AS enriched_client_phone
-      FROM bookings b
-      LEFT JOIN customers c ON b.customer_id = c.id
-      WHERE b.id = ${bookingData.id}
-      LIMIT 1
-    `;
-    const enrichedRows = normalizeRows(enriched);
-    if (enrichedRows.length > 0) {
-      const e = enrichedRows[0];
-      bookingData = {
-        ...bookingData,
-        client_name: e.enriched_client_name || bookingData.client_name,
-        client_email: e.enriched_client_email || bookingData.client_email,
-        client_phone: e.enriched_client_phone || bookingData.client_phone,
-      };
-    }
-
-    // Attach latest payment info as synthetic amount/final_amount
-    const payments = await sql`
-      SELECT amount_cents, currency, status
-      FROM payments
-      WHERE booking_id = ${bookingData.id}
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    const paymentRows = normalizeRows(payments);
-    if (paymentRows.length > 0) {
-      const p = paymentRows[0];
-      const finalAmount = typeof p.amount_cents === 'number' ? p.amount_cents / 100 : null;
-      bookingData = {
-        ...bookingData,
-        amount: finalAmount,
-        final_amount: finalAmount,
-        deposit_amount: null,
-        discount_code: bookingData.discount_code ?? null,
-        discount_amount: bookingData.discount_amount ?? null,
-        payment_type: bookingData.payment_type ?? null,
-        payment_status: bookingData.payment_status || p.status,
-      };
-    }
-
-    // Get client history (last 5 bookings for same email)
-    let clientHistory = [];
-    if (bookingData.client_email) {
-      const history = await sql`
+    // Single query for booking + customer + payment, parallel query for history
+    const [bookingResult, historyResult] = await Promise.all([
+      sql`
         SELECT 
-          id,
-          service_name,
-          booking_date,
-          payment_type,
-          payment_status,
-          final_amount,
-          created_at
+          b.*,
+          TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS enriched_client_name,
+          COALESCE(c.email, b.client_email) AS enriched_client_email,
+          COALESCE(c.phone, b.client_phone) AS enriched_client_phone,
+          (SELECT amount_cents FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_amount_cents,
+          (SELECT status FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_status_override
+        FROM bookings b
+        LEFT JOIN customers c ON b.customer_id = c.id
+        WHERE b.id = ${rawBooking.id}
+        LIMIT 1
+      `,
+      rawBooking.client_email ? sql`
+        SELECT id, service_name, booking_date, payment_type, payment_status, final_amount, created_at
         FROM bookings
-        WHERE client_email = ${bookingData.client_email}
-          AND id != ${bookingId}
-        ORDER BY created_at DESC
-        LIMIT 5
-      `;
-      clientHistory = normalizeRows(history);
+        WHERE client_email = ${rawBooking.client_email} AND id != ${rawBooking.id}
+        ORDER BY created_at DESC LIMIT 5
+      ` : Promise.resolve([])
+    ]);
+    
+    const bookingRows = normalizeRows(bookingResult);
+    if (bookingRows.length === 0) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
-      success: true,
-      booking: bookingData,
-      clientHistory,
-    });
+    const row = bookingRows[0];
+    const finalAmount = row.payment_amount_cents ? row.payment_amount_cents / 100 : null;
+    const clientHistory = normalizeRows(historyResult);
+
+    const bookingData = {
+      ...row,
+      client_name: (row.enriched_client_name?.trim()) || row.client_name,
+      client_email: row.enriched_client_email || row.client_email,
+      client_phone: row.enriched_client_phone || row.client_phone,
+      amount: finalAmount,
+      final_amount: finalAmount,
+      payment_status: row.payment_status_override || row.payment_status,
+    };
+
+    delete (bookingData as any).enriched_client_name;
+    delete (bookingData as any).enriched_client_email;
+    delete (bookingData as any).enriched_client_phone;
+    delete (bookingData as any).payment_amount_cents;
+    delete (bookingData as any).payment_status_override;
+
+    return NextResponse.json({ success: true, booking: bookingData, clientHistory });
   } catch (error: any) {
-    console.error('Error fetching booking details:', error);
     return NextResponse.json(
       { error: 'Failed to fetch booking details', details: error.message },
       { status: 500 }
@@ -167,11 +133,7 @@ export async function POST(
       const sql = getSqlClient();
       const bookingData = await fetchBookingByAnyId(sql, bookingId);
       if (!bookingData) {
-        console.info('[Admin][Booking POST] Not found by id or hapio id', { id: bookingId, action });
-        return NextResponse.json(
-          { error: 'Booking not found' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
       }
       const bookingInternalId = bookingData.id;
 
@@ -201,10 +163,8 @@ export async function POST(
             
             refundProcessed = true;
             refundId = refund.id;
-            console.log('✅ Refund processed for cancelled booking:', refund.id);
           }
         } catch (error: any) {
-          console.error('⚠️  Error processing refund during cancellation:', error.message);
           // Continue with cancellation even if refund fails
         }
       }
@@ -213,7 +173,7 @@ export async function POST(
         try {
           await hapioCancelBooking(bookingData.hapio_booking_id);
         } catch (error: any) {
-          console.error('⚠️  Error cancelling Hapio booking:', error?.message ?? error);
+          // Continue even if Hapio cancel fails
         }
       }
 
@@ -295,7 +255,7 @@ export async function POST(
             VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_cancelled' })}::jsonb)
           `;
         } catch (e) {
-          console.error('[Brevo] cancel email failed', e);
+          // Email send failure is non-critical
         }
       }
 
@@ -403,7 +363,7 @@ export async function POST(
               VALUES (${bookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_refunded' })}::jsonb)
             `;
           } catch (e) {
-            console.error('[Brevo] refund email failed', e);
+            // Email send failure is non-critical
           }
         }
 
@@ -413,7 +373,6 @@ export async function POST(
           refundId: refund.id,
         });
       } catch (error: any) {
-        console.error('Error processing refund:', error);
         return NextResponse.json(
           { error: 'Failed to process refund', details: error.message },
           { status: 500 }
@@ -421,12 +380,8 @@ export async function POST(
       }
     }
 
-    return NextResponse.json(
-      { error: 'Invalid action' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
-    console.error('Error processing booking action:', error);
     return NextResponse.json(
       { error: 'Failed to process action', details: error.message },
       { status: 500 }

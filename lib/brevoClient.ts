@@ -17,15 +17,25 @@ export type BrevoContactUpsert = {
 
 export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ id?: number; success: boolean }> {
   const apiKey = getApiKey();
+  
+  // Build attributes object - only include values that are explicitly provided
+  // This ensures updates work correctly: if firstName is provided (even if empty), it updates
   const attributes: Record<string, any> = {};
-  if (input.firstName) attributes.FIRSTNAME = input.firstName;
-  if (input.lastName) attributes.LASTNAME = input.lastName;
-  if (input.phone) {
+  if (input.firstName !== undefined) {
+    // If explicitly provided (even if null/empty), include it to update
+    attributes.FIRSTNAME = input.firstName || '';
+  }
+  if (input.lastName !== undefined) {
+    // If explicitly provided (even if null/empty), include it to update
+    attributes.LASTNAME = input.lastName || '';
+  }
+  if (input.phone !== undefined && input.phone) {
     attributes.PHONE = input.phone;
     attributes.LANDLINE_NUMBER = input.phone;
     attributes.SMS = input.phone;
   }
 
+  // Try POST first (saves 1 API call for new contacts), only GET if 400
   const body: any = {
     email: input.email,
     attributes,
@@ -36,36 +46,42 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
 
   const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-key': apiKey,
-    },
+    headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
     body: JSON.stringify(body),
   });
 
   if (resp.status === 200 || resp.status === 201) {
-    const json = await resp.json().catch(() => ({}));
-    return { id: json?.id, success: true };
+    return { id: (await resp.json().catch(() => ({})))?.id, success: true };
   }
-  // If contact exists, Brevo returns 400. We can try update.
+  
+  // Contact exists (400) - fetch existing to merge attributes, then PUT
   if (resp.status === 400) {
-    // Perform PUT /contacts/{identifier}
-    const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(input.email)}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': apiKey,
-      },
-      body: JSON.stringify({
-        attributes,
-        listIds: input.listId ? [input.listId] : undefined,
-        unlinkListIds: undefined,
-      }),
+    const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(input.email)}`, {
+      headers: { 'api-key': apiKey, 'Accept': 'application/json' },
     });
-    if (update.ok) return { success: true };
+    
+    if (existingResp.ok) {
+      const existing = await existingResp.json();
+      const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
+      const updateBody: any = { attributes: mergedAttributes };
+      
+      if (input.listId) {
+        updateBody.listIds = [input.listId];
+      } else if (existing.listIds?.length) {
+        updateBody.listIds = existing.listIds;
+      }
+      
+      const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(input.email)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+        body: JSON.stringify(updateBody),
+      });
+      
+      if (update.ok) return { success: true };
+    }
   }
-  const text = await resp.text().catch(() => '');
-  throw new Error(`Brevo upsert failed (${resp.status}): ${text}`);
+  
+  throw new Error(`Brevo upsert failed (${resp.status}): ${await resp.text().catch(() => '')}`);
 }
 
 export type BrevoEmail = {
