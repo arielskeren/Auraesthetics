@@ -58,6 +58,29 @@ export async function GET(
       );
     }
 
+    // Join with customers table to get enriched client info
+    const enriched = await sql`
+      SELECT 
+        b.*,
+        c.first_name || ' ' || c.last_name AS enriched_client_name,
+        c.email AS enriched_client_email,
+        c.phone AS enriched_client_phone
+      FROM bookings b
+      LEFT JOIN customers c ON b.customer_id = c.id
+      WHERE b.id = ${bookingData.id}
+      LIMIT 1
+    `;
+    const enrichedRows = normalizeRows(enriched);
+    if (enrichedRows.length > 0) {
+      const e = enrichedRows[0];
+      bookingData = {
+        ...bookingData,
+        client_name: e.enriched_client_name || bookingData.client_name,
+        client_email: e.enriched_client_email || bookingData.client_email,
+        client_phone: e.enriched_client_phone || bookingData.client_phone,
+      };
+    }
+
     // Attach latest payment info as synthetic amount/final_amount
     const payments = await sql`
       SELECT amount_cents, currency, status

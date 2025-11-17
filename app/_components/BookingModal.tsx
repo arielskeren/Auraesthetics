@@ -43,13 +43,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const [lockError, setLockError] = useState<string | null>(null);
   const [collapseTimes, setCollapseTimes] = useState<boolean>(false);
 
-  const userTimezone = useMemo(() => {
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-    } catch {
-      return 'UTC';
-    }
-  }, []);
+  // Always use EST for bookings (business is in Florida)
+  const userTimezone = 'America/New_York';
 
   // Do not prefetch availability. Fetch only after user selects date+time and searches.
 

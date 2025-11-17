@@ -25,10 +25,10 @@ function formatHM(h: number, m: number) {
 export default function TimeWheel({
   value,
   onChange,
-  stepMinutes = 30,
-  startHour = 7,
-  endHour = 21,
-  includeEnd = false,
+  stepMinutes = 15,
+  startHour = 9,
+  endHour = 19,
+  includeEnd = true,
   className,
 }: TimeWheelProps) {
   const items: TimeItem[] = useMemo(() => {

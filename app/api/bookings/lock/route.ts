@@ -178,8 +178,8 @@ export async function POST(request: NextRequest) {
     const hapioBooking = await createPendingBooking({
       serviceId: hapioServiceId,
       locationId: hapioLocationId,
-      startsAt: formatDateForHapio(startDate, body.timezone ?? 'UTC'),
-      endsAt: formatDateForHapio(endDate, body.timezone ?? 'UTC'),
+      startsAt: formatDateForHapio(startDate, body.timezone ?? 'America/New_York'),
+      endsAt: formatDateForHapio(endDate, body.timezone ?? 'America/New_York'),
       resourceId: resourceId ?? serviceConfig?.resourceId,
       metadata: {
         source: 'website',
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
         ${normalizedCustomer.name},
         ${normalizedCustomer.email},
         ${normalizedCustomer.phone},
-        ${formatDateForHapio(startDate, body.timezone ?? 'UTC')},
+        ${formatDateForHapio(startDate, body.timezone ?? 'America/New_York')},
         ${'pending'},
         ${JSON.stringify(metadataPayload)}::jsonb
       )
