@@ -2,6 +2,7 @@ import { stripe } from '@/lib/stripeClient';
 import { confirmBooking } from '@/lib/hapioClient';
 import { getSqlClient } from '@/app/_utils/db';
 import { upsertBrevoContact, sendBrevoEmail } from '@/lib/brevoClient';
+import { generateBookingConfirmationEmail, generateCalendarLinks } from '@/lib/emails/bookingConfirmation';
 
 export type FinalizeResult = {
   bookingId: string;
@@ -189,14 +190,70 @@ export async function finalizeBookingTransactional(args: {
             WHERE id = ${customerId}
           `;
         }
+
+        // Fetch service data for email (image, proper name, duration)
+        let serviceImageUrl: string | null = null;
+        let serviceDisplayName: string = svcName;
+        let serviceDuration: string | null = null;
+        
+        if (svcId) {
+          try {
+            const serviceResult = await sql`
+              SELECT name, image_url, duration 
+              FROM services 
+              WHERE id = ${svcId} OR slug = ${svcId}
+              LIMIT 1
+            `;
+            const serviceRows = Array.isArray(serviceResult) 
+              ? serviceResult 
+              : (serviceResult as any)?.rows || [];
+            if (serviceRows.length > 0) {
+              serviceDisplayName = serviceRows[0].name || svcName;
+              serviceImageUrl = serviceRows[0].image_url || null;
+              serviceDuration = serviceRows[0].duration || null;
+            }
+          } catch (e) {
+            // Service fetch failure is non-critical
+          }
+        }
+
+        // Format booking date and time
+        const bookingDate = slotStart ? new Date(slotStart) : new Date();
+        const bookingTime = bookingDate.toLocaleTimeString('en-US', {
+          timeZone: timezone || 'America/New_York',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+
+        // Generate calendar links
+        const endDate = new Date(bookingDate);
+        // Use service duration if available, otherwise default to 1 hour
+        const durationHours = serviceDuration 
+          ? parseInt(serviceDuration.match(/\d+/)?.[0] || '1') / 60 
+          : 1;
+        endDate.setHours(endDate.getHours() + durationHours);
+        const calendarLinks = generateCalendarLinks(serviceDisplayName, bookingDate, endDate);
+
+        // Generate beautiful email HTML
+        const emailHtml = generateBookingConfirmationEmail({
+          serviceName: serviceDisplayName,
+          serviceImageUrl,
+          clientName: fullNameFromPi,
+          bookingDate,
+          bookingTime,
+          calendarLinks,
+        });
+
         await sendBrevoEmail({
           to: [{ email: emailFromPi, name: fullNameFromPi || undefined }],
-          subject: 'Your appointment is confirmed',
-          htmlContent: `<p>Thanks for booking <strong>${svcName}</strong>.</p><p>Date/Time: ${slotStart || ''} (${timezone || ''})</p>`,
+          subject: `Your ${serviceDisplayName} appointment is confirmed`,
+          htmlContent: emailHtml,
           tags: ['booking_confirmed'],
         });
       } catch (e) {
         // Brevo failures are non-critical - booking is already finalized
+        console.error('[finalizeCore] Email send failed:', e);
       }
     }
 

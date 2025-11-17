@@ -73,7 +73,7 @@ export async function GET(
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // Single query for booking + customer + payment, parallel query for history
+    // Single query for booking + customer + payment + service, parallel query for history
     const [bookingResult, historyResult] = await Promise.all([
       sql`
         SELECT 
@@ -81,10 +81,14 @@ export async function GET(
           TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS enriched_client_name,
           COALESCE(c.email, b.client_email) AS enriched_client_email,
           COALESCE(c.phone, b.client_phone) AS enriched_client_phone,
+          s.name AS service_display_name,
+          s.image_url AS service_image_url,
+          s.duration AS service_duration,
           (SELECT amount_cents FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_amount_cents,
           (SELECT status FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_status_override
         FROM bookings b
         LEFT JOIN customers c ON b.customer_id = c.id
+        LEFT JOIN services s ON b.service_id = s.id
         WHERE b.id = ${rawBooking.id}
         LIMIT 1
       `,
@@ -124,6 +128,10 @@ export async function GET(
       amount: finalAmount,
       final_amount: finalAmount, // Synthetic field for UI compatibility
       payment_status: row.payment_status_override || row.payment_status,
+      // Service data from services table
+      service_display_name: row.service_display_name || row.service_name,
+      service_image_url: row.service_image_url,
+      service_duration: row.service_duration,
     };
 
     delete (bookingData as any).enriched_client_name;

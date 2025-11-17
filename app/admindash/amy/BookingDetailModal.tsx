@@ -11,6 +11,9 @@ interface Booking {
   outlook_event_id?: string | null;
   outlook_sync_status?: string | null;
   service_name?: string;
+  service_display_name?: string | null;
+  service_image_url?: string | null;
+  service_duration?: string | null;
   client_name?: string | null;
   client_email?: string | null;
   client_phone?: string | null;
@@ -338,15 +341,36 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
               {/* Service Details - Right Side, Half Width */}
               <div className="bg-sand/20 rounded-lg p-3">
-                <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
+                <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
                   Service Details
                 </h3>
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-xs text-warm-gray mb-1">Service</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.service_name || 'N/A'}</p>
+                
+                {/* Service Photo and Name */}
+                <div className="flex items-start gap-3 mb-3">
+                  {effective.service_image_url ? (
+                    <img 
+                      src={effective.service_image_url} 
+                      alt={effective.service_display_name || effective.service_name || 'Service'}
+                      className="w-16 h-16 object-cover rounded-lg border border-sage-dark/20 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-gradient-to-br from-dark-sage/20 to-sand/40 rounded-lg border border-sage-dark/20 flex-shrink-0 flex items-center justify-center">
+                      <Calendar className="w-6 h-6 text-dark-sage/50" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-charcoal text-sm leading-tight mb-1">
+                      {effective.service_display_name || effective.service_name || 'N/A'}
+                    </p>
+                    {effective.service_duration && (
+                      <p className="text-xs text-warm-gray">{effective.service_duration}</p>
+                    )}
                   </div>
+                </div>
+
+                {/* Date and Time (side by side) */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <div>
                     <label className="text-xs text-warm-gray mb-1">Date</label>
                     <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDateShort(effective.booking_date)}</p>
@@ -355,20 +379,26 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     <label className="text-xs text-warm-gray mb-1">Time (EST)</label>
                     <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatTimeEST(effective.booking_date)}</p>
                   </div>
-                  <div>
+                </div>
+
+                {/* Amount Paid */}
+                <div>
+                  <label className="text-xs text-warm-gray mb-1">Amount Paid</label>
+                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">${finalAmount.toFixed(2)}</p>
+                </div>
+
+                {/* Payment Type - only show if it's a deposit (partial payment) */}
+                {effective.payment_type === 'deposit' && (
+                  <div className="mt-2">
                     <label className="text-xs text-warm-gray mb-1">
                       Payment Type
-                      <span className="ml-1 text-xs text-warm-gray/70" title="Indicates whether customer paid in full or just a deposit. Different from payment status which shows payment state (succeeded, cancelled, etc.).">
+                      <span className="ml-1 text-xs text-warm-gray/70" title="This booking was paid as a partial deposit (typically 50%). The remaining balance may be due at the appointment.">
                         (?)
                       </span>
                     </label>
                     <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{getPaymentTypeLabel(effective.payment_type)}</p>
                   </div>
-                  <div>
-                    <label className="text-xs text-warm-gray mb-1">Amount Paid</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">${finalAmount.toFixed(2)}</p>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
