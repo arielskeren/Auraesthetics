@@ -46,14 +46,15 @@ function ensureObject<T extends Record<string, any>>(value: any): T {
   return value && typeof value === 'object' ? { ...(value as T) } : ({} as T);
 }
 
-// Helper to fetch a booking by internal id, or fallback to hapio_booking_id
-async function fetchBookingByAnyId(sql: any, idOrHapioId: string) {
-  const primary = await sql`SELECT * FROM bookings WHERE id = ${idOrHapioId} LIMIT 1`;
-  const primaryRows = normalizeRows(primary);
-  if (primaryRows.length > 0) return primaryRows[0];
-  const fallback = await sql`SELECT * FROM bookings WHERE hapio_booking_id = ${idOrHapioId} LIMIT 1`;
-  const fallbackRows = normalizeRows(fallback);
-  return fallbackRows[0] || null;
+// Helper to get booking internal ID by any identifier (optimized: single query)
+async function getBookingInternalId(sql: any, idOrHapioId: string): Promise<string | null> {
+  const result = await sql`
+    SELECT id FROM bookings 
+    WHERE id = ${idOrHapioId} OR hapio_booking_id = ${idOrHapioId} 
+    LIMIT 1
+  `;
+  const rows = normalizeRows(result);
+  return rows[0]?.id || null;
 }
 
 // GET /api/admin/bookings/[id] - Get booking details and client history
@@ -72,12 +73,14 @@ export async function GET(
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
     }
 
-    const rawBooking = await fetchBookingByAnyId(sql, bookingId);
-    if (!rawBooking) {
+    // Get internal ID first (single optimized query)
+    const internalId = await getBookingInternalId(sql, bookingId);
+    if (!internalId) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // Single query for booking + customer + payment + service, parallel query for history
+    // Single optimized query: booking + customer + payment + service, parallel history query
+    // Replaced subqueries with JOINs for better performance
     const [bookingResult, historyResult] = await Promise.all([
       sql`
         SELECT 
@@ -88,15 +91,25 @@ export async function GET(
           s.name AS service_display_name,
           s.image_url AS service_image_url,
           s.duration AS service_duration,
-          (SELECT amount_cents FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_amount_cents,
-          (SELECT status FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_status_override
+          p.amount_cents AS payment_amount_cents,
+          p.status AS payment_status_override
         FROM bookings b
         LEFT JOIN customers c ON b.customer_id = c.id
         LEFT JOIN services s ON (b.service_id = s.id OR b.service_id = s.slug)
-        WHERE b.id = ${rawBooking.id}
+        LEFT JOIN LATERAL (
+          SELECT amount_cents, status
+          FROM payments
+          WHERE booking_id = b.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) p ON true
+        WHERE b.id = ${internalId}
         LIMIT 1
       `,
-      rawBooking.client_email ? sql`
+      sql`
+        WITH current_booking AS (
+          SELECT client_email FROM bookings WHERE id = ${internalId} LIMIT 1
+        )
         SELECT 
           b.id, 
           b.service_name, 
@@ -105,10 +118,19 @@ export async function GET(
           b.created_at,
           COALESCE(p.amount_cents, 0) as amount_cents
         FROM bookings b
-        LEFT JOIN payments p ON p.booking_id = b.id
-        WHERE b.client_email = ${rawBooking.client_email} AND b.id != ${rawBooking.id}
-        ORDER BY b.created_at DESC LIMIT 5
-      ` : Promise.resolve([])
+        CROSS JOIN current_booking cb
+        LEFT JOIN LATERAL (
+          SELECT amount_cents
+          FROM payments
+          WHERE booking_id = b.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) p ON true
+        WHERE b.client_email = cb.client_email
+          AND b.id != ${internalId}
+        ORDER BY b.created_at DESC 
+        LIMIT 5
+      `
     ]);
     
     const bookingRows = normalizeRows(bookingResult);
@@ -119,30 +141,37 @@ export async function GET(
     const row = bookingRows[0];
     const finalAmount = row.payment_amount_cents ? row.payment_amount_cents / 100 : null;
     const clientHistory = normalizeRows(historyResult).map((h: any) => ({
-      ...h,
+      id: h.id,
+      service_name: h.service_name,
+      booking_date: h.booking_date,
+      payment_status: h.payment_status,
+      created_at: h.created_at,
       final_amount: h.amount_cents ? h.amount_cents / 100 : null,
-      payment_type: null, // Removed column
+      payment_type: null,
     }));
 
+    // Use destructuring instead of delete operations (more efficient)
+    const {
+      enriched_client_name,
+      enriched_client_email,
+      enriched_client_phone,
+      payment_amount_cents: _payment_amount_cents,
+      payment_status_override,
+      ...restRow
+    } = row;
+
     const bookingData = {
-      ...row,
-      client_name: (row.enriched_client_name?.trim()) || row.client_name,
-      client_email: row.enriched_client_email || row.client_email,
-      client_phone: row.enriched_client_phone || row.client_phone,
+      ...restRow,
+      client_name: (enriched_client_name?.trim()) || row.client_name,
+      client_email: enriched_client_email || row.client_email,
+      client_phone: enriched_client_phone || row.client_phone,
       amount: finalAmount,
-      final_amount: finalAmount, // Synthetic field for UI compatibility
-      payment_status: row.payment_status_override || row.payment_status,
-      // Service data from services table
+      final_amount: finalAmount,
+      payment_status: payment_status_override || row.payment_status,
       service_display_name: row.service_display_name || row.service_name,
       service_image_url: row.service_image_url,
       service_duration: row.service_duration,
     };
-
-    delete (bookingData as any).enriched_client_name;
-    delete (bookingData as any).enriched_client_email;
-    delete (bookingData as any).enriched_client_phone;
-    delete (bookingData as any).payment_amount_cents;
-    delete (bookingData as any).payment_status_override;
 
     return NextResponse.json({ success: true, booking: bookingData, clientHistory });
   } catch (error: any) {
@@ -186,11 +215,26 @@ export async function POST(
     if (action === 'cancel') {
       // Cancel booking
       const sql = getSqlClient();
-      const bookingData = await fetchBookingByAnyId(sql, bookingId);
-      if (!bookingData) {
+      const bookingInternalId = await getBookingInternalId(sql, bookingId);
+      if (!bookingInternalId) {
         return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
       }
-      const bookingInternalId = bookingData.id;
+      
+      // Fetch booking data in single optimized query
+      const bookingResult = await sql`
+        SELECT 
+          id, hapio_booking_id, payment_status, payment_intent_id,
+          client_email, client_name, service_name, booking_date,
+          outlook_event_id, outlook_sync_status, metadata, service_id
+        FROM bookings
+        WHERE id = ${bookingInternalId}
+        LIMIT 1
+      `;
+      const bookingRows = normalizeRows(bookingResult);
+      if (bookingRows.length === 0) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+      const bookingData = bookingRows[0];
 
       let refundProcessed = false;
       let refundId = null;
@@ -210,18 +254,17 @@ export async function POST(
           const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
           
           if (paymentIntent.status === 'succeeded') {
-            // Create refund
-            // Get payment amount from payments table
-            const paymentRows = await sql`
+            // Create refund - get payment amount in single query
+            const paymentResult = await sql`
               SELECT amount_cents FROM payments 
               WHERE booking_id = ${bookingInternalId} 
               ORDER BY created_at DESC LIMIT 1
             `;
-            const paymentRow = normalizeRows(paymentRows)[0];
-            if (!paymentRow || !paymentRow.amount_cents) {
+            const paymentRows = normalizeRows(paymentResult);
+            if (paymentRows.length === 0 || !paymentRows[0]?.amount_cents) {
               throw new Error('Payment record not found for booking');
             }
-            const paymentAmount = paymentRow.amount_cents;
+            const paymentAmount = paymentRows[0].amount_cents;
             
             const refund = await stripe.refunds.create({
               payment_intent: bookingData.payment_intent_id,
@@ -351,14 +394,30 @@ export async function POST(
     if (action === 'refund') {
       // Process refund via Stripe
       const sql = getSqlClient();
-      const bookingData = await fetchBookingByAnyId(sql, bookingId);
-      if (!bookingData) {
+      const bookingInternalId = await getBookingInternalId(sql, bookingId);
+      if (!bookingInternalId) {
         return NextResponse.json(
           { error: 'Booking not found' },
           { status: 404 }
         );
       }
-      const bookingInternalId = bookingData.id;
+      
+      // Fetch booking data in single optimized query
+      const bookingResult = await sql`
+        SELECT 
+          id, payment_intent_id, client_email, client_name, service_name
+        FROM bookings
+        WHERE id = ${bookingInternalId}
+        LIMIT 1
+      `;
+      const bookingRows = normalizeRows(bookingResult);
+      if (bookingRows.length === 0) {
+        return NextResponse.json(
+          { error: 'Booking not found' },
+          { status: 404 }
+        );
+      }
+      const bookingData = bookingRows[0];
 
       if (!bookingData.payment_intent_id) {
         return NextResponse.json(
