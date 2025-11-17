@@ -209,10 +209,19 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     };
 
     const groups = new Map<string, AvailabilityDay>();
+    
+    // Track timezone conversion for debugging
+    const dayGroupingDebug: Record<string, { count: number; firstSlot?: string; lastSlot?: string }> = {};
 
     for (const slot of slots) {
       const startDate = new Date(slot.start);
       const endDate = new Date(slot.end);
+      
+      // Validate date parsing
+      if (Number.isNaN(startDate.getTime())) {
+        console.warn('[BookingModal] Invalid slot start date:', slot.start);
+        continue;
+      }
       
       // Filter: Only show slots between 9 AM - 7 PM EST
       const startHourEST = getHourInEST(startDate);
@@ -223,6 +232,16 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       // Use EST date for grouping (not UTC)
       const dayKey = getDateKeyInEST(startDate);
       const dayLabel = dateFormatter.format(startDate);
+      
+      // Track for debugging
+      if (!dayGroupingDebug[dayKey]) {
+        dayGroupingDebug[dayKey] = { count: 0 };
+      }
+      dayGroupingDebug[dayKey].count++;
+      if (!dayGroupingDebug[dayKey].firstSlot) {
+        dayGroupingDebug[dayKey].firstSlot = timeFormatter.format(startDate);
+      }
+      dayGroupingDebug[dayKey].lastSlot = timeFormatter.format(startDate);
 
       if (!groups.has(dayKey)) {
         groups.set(dayKey, {
@@ -249,6 +268,11 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       }),
     }));
 
+    // Log timezone grouping for debugging
+    if (Object.keys(dayGroupingDebug).length > 0) {
+      console.log('[BookingModal] Day grouping (EST):', dayGroupingDebug);
+    }
+
     return sortedGroups.sort((a, b) => a.key.localeCompare(b.key));
   }, [slots]);
 
@@ -269,6 +293,40 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       return { key: k, label: fmtDay.format(d) };
     });
   }, [requestedDate]);
+
+  // Create dynamic displayDays: merge days with actual slots + 5-day window around chosen date
+  // This ensures chosen day always appears, and we show days with availability
+  const displayDays = useMemo(() => {
+    if (!requestedDate) return [];
+    
+    const fmtDay = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    
+    // Get days that have actual slots (from groupedAvailability)
+    const daysWithSlots = new Set(groupedAvailability.map((g) => g.key));
+    
+    // Get 5-day window around chosen date
+    const windowKeys = computeFiveDayWindow(requestedDate);
+    const windowDays = new Set(windowKeys);
+    
+    // Merge: all days with slots + all days in 5-day window (ensures chosen day appears)
+    const allDayKeysSet = new Set<string>();
+    daysWithSlots.forEach((key) => allDayKeysSet.add(key));
+    windowDays.forEach((key) => allDayKeysSet.add(key));
+    
+    // Convert to array and sort chronologically
+    const sortedKeys = Array.from(allDayKeysSet).sort();
+    
+    // Convert to display format
+    return sortedKeys.map((key) => {
+      const d = new Date(key + 'T00:00:00');
+      return { key, label: fmtDay.format(d) };
+    });
+  }, [requestedDate, groupedAvailability]);
 
   // No suggested slots section; show only daily breakdown grid
 
@@ -295,9 +353,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       const [hour, minute] = requestedTime.split(':').map((v) => Number(v));
       const chosen = new Date(`${requestedDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
 
+      // Exclude only Saturdays (day 6). Sundays (day 0) are work days.
       const isWorkingDay = (d: Date) => {
         const day = d.getDay(); // 0 Sun ... 6 Sat
-        return day !== 0 && day !== 6;
+        return day !== 6; // Only exclude Saturday
       };
       const prevWorkingDays: Date[] = [];
       const nextWorkingDays: Date[] = [];
@@ -619,10 +678,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
                       {availabilityStatus === 'success' && hasAvailability && !collapseTimes && (
                         <div className="space-y-4">
-                          {/* Five‑day grid */}
-                          {fiveDayWindow.length === 5 && (
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                              {fiveDayWindow.map((day) => {
+                          {/* Dynamic day grid - shows days with slots + 5-day window around chosen date */}
+                          {displayDays.length > 0 && (
+                            <div className={`grid grid-cols-1 md:grid-cols-${Math.min(displayDays.length, 5)} gap-3`}>
+                              {displayDays.map((day) => {
                                 const dayGroup = groupedAvailability.find((g) => g.key === day.key);
                                 return (
                                   <div key={`grid-${day.key}`} className="border border-dark-sage/40 bg-sand/20 rounded-lg p-3">

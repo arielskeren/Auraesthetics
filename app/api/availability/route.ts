@@ -463,7 +463,41 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      // Log filtering results
+      // Group slots by EST date for diagnostic logging
+      const daySummary: Record<string, { count: number; firstSlot?: string; lastSlot?: string }> = {};
+      for (const slot of businessHoursFiltered) {
+        try {
+          const startDate = new Date(slot.startsAt);
+          // Get EST date key (YYYY-MM-DD)
+          const estDateKey = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/New_York',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(startDate);
+          
+          if (!daySummary[estDateKey]) {
+            daySummary[estDateKey] = { count: 0 };
+          }
+          daySummary[estDateKey].count++;
+          
+          // Track first and last slot times in EST
+          const estTime = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York',
+            hour: 'numeric',
+            minute: '2-digit',
+          }).format(startDate);
+          
+          if (!daySummary[estDateKey].firstSlot) {
+            daySummary[estDateKey].firstSlot = estTime;
+          }
+          daySummary[estDateKey].lastSlot = estTime;
+        } catch (e) {
+          // Skip invalid dates
+        }
+      }
+
+      // Log filtering results with day breakdown
       console.log('[Hapio] Filtering results:', {
         originalSlotsCount: slotsArray.length,
         afterOutlookFilter: filteredSlotEntities.length,
@@ -471,6 +505,8 @@ export async function GET(request: NextRequest) {
         outlookBusyBlocks: outlookBusy.length,
         outlookError: outlookError,
         timezone: timezone,
+        daysWithSlots: Object.keys(daySummary).length,
+        dayBreakdown: daySummary,
       });
 
       filteredSlotEntities = businessHoursFiltered;

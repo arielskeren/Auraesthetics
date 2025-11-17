@@ -5,9 +5,10 @@ export type AvailabilitySlot = {
 
 export function computeFiveDayWindow(requestedDate: string): string[] {
   const chosenDate = new Date(requestedDate + 'T00:00:00');
+  // Exclude only Saturdays (day 6). Sundays (day 0) are work days.
   const isWorkingDay = (d: Date) => {
     const day = d.getDay();
-    return day !== 0 && day !== 6;
+    return day !== 6; // Only exclude Saturday
   };
   const prev: Date[] = [];
   const next: Date[] = [];

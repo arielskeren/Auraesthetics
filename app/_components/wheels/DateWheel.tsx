@@ -37,6 +37,8 @@ export default function DateWheel({ startDate, days = 120, value, onChange, clas
     for (let i = 0; i <= days; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
+      // Skip Saturdays (day 6). Sundays (day 0) are work days.
+      if (d.getDay() === 6) continue; // Skip Saturday
       arr.push({ label: formatDateLabel(d), value: toYMD(d) });
     }
     return arr;
