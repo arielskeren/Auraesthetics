@@ -183,12 +183,45 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       minute: '2-digit',
     });
 
+    // Helper to get hour in EST
+    const getHourInEST = (date: Date): number => {
+      return parseInt(
+        new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/New_York',
+          hour: '2-digit',
+          hour12: false,
+        }).format(date)
+      );
+    };
+
+    // Helper to get date string in EST (YYYY-MM-DD)
+    const getDateKeyInEST = (date: Date): string => {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(date);
+      const year = parts.find((p) => p.type === 'year')?.value ?? '';
+      const month = parts.find((p) => p.type === 'month')?.value ?? '';
+      const day = parts.find((p) => p.type === 'day')?.value ?? '';
+      return `${year}-${month}-${day}`;
+    };
+
     const groups = new Map<string, AvailabilityDay>();
 
     for (const slot of slots) {
       const startDate = new Date(slot.start);
       const endDate = new Date(slot.end);
-      const dayKey = startDate.toISOString().split('T')[0];
+      
+      // Filter: Only show slots between 9 AM - 7 PM EST
+      const startHourEST = getHourInEST(startDate);
+      if (startHourEST < 9 || startHourEST >= 19) {
+        continue; // Skip slots outside business hours
+      }
+
+      // Use EST date for grouping (not UTC)
+      const dayKey = getDateKeyInEST(startDate);
       const dayLabel = dateFormatter.format(startDate);
 
       if (!groups.has(dayKey)) {
@@ -206,7 +239,17 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       });
     }
 
-    return Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key));
+    // Sort slots within each day by start time
+    const sortedGroups = Array.from(groups.values()).map((group) => ({
+      ...group,
+      slots: group.slots.sort((a, b) => {
+        const timeA = new Date(a.slot.start).getTime();
+        const timeB = new Date(b.slot.start).getTime();
+        return timeA - timeB;
+      }),
+    }));
+
+    return sortedGroups.sort((a, b) => a.key.localeCompare(b.key));
   }, [slots]);
 
   const hasAvailability = groupedAvailability.length > 0;

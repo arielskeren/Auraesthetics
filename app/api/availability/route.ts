@@ -433,7 +433,7 @@ export async function GET(request: NextRequest) {
 
       // Filter out slots that overlap with Outlook busy times
       const slotsArray = Array.isArray(availability?.slots) ? availability!.slots : [];
-      const filteredSlotEntities =
+      let filteredSlotEntities =
         outlookBusy.length > 0 && !outlookError
           ? slotsArray.filter((slot) => {
               return outlookBusy.every((block) => {
@@ -443,13 +443,37 @@ export async function GET(request: NextRequest) {
             })
           : slotsArray;
 
+      // Filter out slots outside business hours (9 AM - 7 PM EST)
+      // This prevents invalid slots from appearing when schedules aren't properly configured
+      const businessHoursFiltered = filteredSlotEntities.filter((slot) => {
+        try {
+          const startDate = new Date(slot.startsAt);
+          // Get hour in EST
+          const hourInEST = parseInt(
+            new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/New_York',
+              hour: '2-digit',
+              hour12: false,
+            }).format(startDate)
+          );
+          // Only allow slots between 9 AM (9) and 7 PM (19, exclusive)
+          return hourInEST >= 9 && hourInEST < 19;
+        } catch {
+          return false; // Skip invalid dates
+        }
+      });
+
       // Log filtering results
       console.log('[Hapio] Filtering results:', {
         originalSlotsCount: slotsArray.length,
-        filteredSlotsCount: filteredSlotEntities.length,
+        afterOutlookFilter: filteredSlotEntities.length,
+        afterBusinessHoursFilter: businessHoursFiltered.length,
         outlookBusyBlocks: outlookBusy.length,
         outlookError: outlookError,
+        timezone: timezone,
       });
+
+      filteredSlotEntities = businessHoursFiltered;
 
       const payload = {
         service: {
