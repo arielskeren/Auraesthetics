@@ -599,10 +599,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                             <span className="mt-1 text-xs text-red-600">{timeValidationError}</span>
                           )}
                         </div>
-                        <div className="flex items-center">
+                        <div className="flex flex-col justify-end">
                           <Button
                             onClick={handleSearchAvailability}
-                            className="w-full"
+                            className="w-full h-11"
                             variant={timeValidationError || !requestedDate || !requestedTime ? 'disabled' : 'primary'}
                             tooltip={
                               timeValidationError
