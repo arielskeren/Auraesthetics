@@ -80,15 +80,50 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     setLockError(null);
   }, [service?.slug, reloadToken]);
 
-  // Seed default requested date to today when modal opens
+  // Helper to get current time in EST
+  const getCurrentTimeEST = (): { hour: number; minute: number; date: Date } => {
+    const now = new Date();
+    const estFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = estFormatter.formatToParts(now);
+    const year = parseInt(parts.find(p => p.type === 'year')?.value || '0');
+    const month = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
+    const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+    return { hour, minute, date: new Date(year, month, day) };
+  };
+
+  // Check if current time is past 6:45 PM EST
+  const isPastLastTimeToday = (): boolean => {
+    const { hour, minute } = getCurrentTimeEST();
+    return hour > 18 || (hour === 18 && minute >= 45);
+  };
+
+  // Seed default requested date to today (or tomorrow if past 6:45 PM EST) when modal opens
   useEffect(() => {
     if (!isOpen) return;
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const today = `${yyyy}-${mm}-${dd}`;
-    setRequestedDate(today);
+    const { date } = getCurrentTimeEST();
+    let targetDate = date;
+    
+    // If past 6:45 PM EST, advance to tomorrow
+    if (isPastLastTimeToday()) {
+      targetDate = new Date(date);
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+    
+    const yyyy = String(targetDate.getFullYear());
+    const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(targetDate.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    setRequestedDate(dateStr);
   }, [isOpen]);
 
   // Local session cache for availability window responses
@@ -542,26 +577,59 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                           <select
                             className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                             value={requestedDate}
-                            onChange={(e) => setRequestedDate(e.target.value)}
+                            onChange={(e) => {
+                              setRequestedDate(e.target.value);
+                              // If user selects today and it's past 6:45 PM EST, auto-advance to tomorrow
+                              const selectedDate = new Date(e.target.value + 'T00:00:00');
+                              const today = getCurrentTimeEST().date;
+                              const isToday = 
+                                selectedDate.getFullYear() === today.getFullYear() &&
+                                selectedDate.getMonth() === today.getMonth() &&
+                                selectedDate.getDate() === today.getDate();
+                              
+                              if (isToday && isPastLastTimeToday()) {
+                                const tomorrow = new Date(today);
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                const yyyy = String(tomorrow.getFullYear());
+                                const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+                                const dd = String(tomorrow.getDate()).padStart(2, '0');
+                                setRequestedDate(`${yyyy}-${mm}-${dd}`);
+                              }
+                            }}
                           >
-                            {Array.from({ length: 120 }).map((_, idx) => {
-                              const d = new Date();
-                              d.setDate(d.getDate() + idx);
-                              const yyyy = String(d.getFullYear());
-                              const mm = String(d.getMonth() + 1).padStart(2, '0');
-                              const dd = String(d.getDate()).padStart(2, '0');
-                              const value = `${yyyy}-${mm}-${dd}`;
-                              const label = new Intl.DateTimeFormat(undefined, {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                              }).format(d);
-                              return (
-                                <option key={value} value={value}>
-                                  {label}
-                                </option>
-                              );
-                            })}
+                            {(() => {
+                              const options: JSX.Element[] = [];
+                              const seen = new Set<string>();
+                              let currentDate = new Date();
+                              let daysAdded = 0;
+                              
+                              while (options.length < 120 && daysAdded < 200) {
+                                // Skip Saturdays (day 6)
+                                if (currentDate.getDay() !== 6) {
+                                  const yyyy = String(currentDate.getFullYear());
+                                  const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+                                  const dd = String(currentDate.getDate()).padStart(2, '0');
+                                  const value = `${yyyy}-${mm}-${dd}`;
+                                  
+                                  if (!seen.has(value)) {
+                                    seen.add(value);
+                                    const label = new Intl.DateTimeFormat(undefined, {
+                                      weekday: 'short',
+                                      month: 'short',
+                                      day: 'numeric',
+                                    }).format(currentDate);
+                                    options.push(
+                                      <option key={value} value={value}>
+                                        {label}
+                                      </option>
+                                    );
+                                  }
+                                }
+                                currentDate.setDate(currentDate.getDate() + 1);
+                                daysAdded++;
+                              }
+                              return options;
+                            })()}
                           </select>
                         </div>
                         <div className="flex flex-col">
@@ -599,7 +667,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                             <span className="mt-1 text-xs text-red-600">{timeValidationError}</span>
                           )}
                         </div>
-                        <div className="flex flex-col justify-end">
+                        <div className="flex flex-col">
+                          <label className="text-xs text-warm-gray mb-1 opacity-0">Find times</label>
                           <Button
                             onClick={handleSearchAvailability}
                             className="w-full h-11"
