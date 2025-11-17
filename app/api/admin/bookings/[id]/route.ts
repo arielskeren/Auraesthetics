@@ -65,10 +65,17 @@ export async function GET(
         LIMIT 1
       `,
       rawBooking.client_email ? sql`
-        SELECT id, service_name, booking_date, payment_type, payment_status, final_amount, created_at
-        FROM bookings
-        WHERE client_email = ${rawBooking.client_email} AND id != ${rawBooking.id}
-        ORDER BY created_at DESC LIMIT 5
+        SELECT 
+          b.id, 
+          b.service_name, 
+          b.booking_date, 
+          b.payment_status, 
+          b.created_at,
+          COALESCE(p.amount_cents, 0) as amount_cents
+        FROM bookings b
+        LEFT JOIN payments p ON p.booking_id = b.id
+        WHERE b.client_email = ${rawBooking.client_email} AND b.id != ${rawBooking.id}
+        ORDER BY b.created_at DESC LIMIT 5
       ` : Promise.resolve([])
     ]);
     
@@ -79,7 +86,11 @@ export async function GET(
 
     const row = bookingRows[0];
     const finalAmount = row.payment_amount_cents ? row.payment_amount_cents / 100 : null;
-    const clientHistory = normalizeRows(historyResult);
+    const clientHistory = normalizeRows(historyResult).map((h: any) => ({
+      ...h,
+      final_amount: h.amount_cents ? h.amount_cents / 100 : null,
+      payment_type: null, // Removed column
+    }));
 
     const bookingData = {
       ...row,
@@ -87,7 +98,7 @@ export async function GET(
       client_email: row.enriched_client_email || row.client_email,
       client_phone: row.enriched_client_phone || row.client_phone,
       amount: finalAmount,
-      final_amount: finalAmount,
+      final_amount: finalAmount, // Synthetic field for UI compatibility
       payment_status: row.payment_status_override || row.payment_status,
     };
 
@@ -155,14 +166,33 @@ export async function POST(
           
           if (paymentIntent.status === 'succeeded') {
             // Create refund
+            // Get payment amount from payments table
+            const paymentRows = await sql`
+              SELECT amount_cents FROM payments 
+              WHERE booking_id = ${bookingInternalId} 
+              ORDER BY created_at DESC LIMIT 1
+            `;
+            const paymentAmount = normalizeRows(paymentRows)[0]?.amount_cents || 0;
+            
             const refund = await stripe.refunds.create({
               payment_intent: bookingData.payment_intent_id,
-              amount: Math.round((Number(bookingData.final_amount) || 0) * 100), // Convert to cents
+              amount: paymentAmount,
               reason: 'requested_by_customer',
             });
             
             refundProcessed = true;
             refundId = refund.id;
+            
+            // Update payments.refunded_cents (use subquery for LIMIT in UPDATE)
+            await sql`
+              UPDATE payments 
+              SET refunded_cents = ${refund.amount || paymentAmount}, updated_at = NOW()
+              WHERE id = (
+                SELECT id FROM payments 
+                WHERE booking_id = ${bookingInternalId} 
+                ORDER BY created_at DESC LIMIT 1
+              )
+            `;
           }
         } catch (error: any) {
           // Continue with cancellation even if refund fails
@@ -302,8 +332,13 @@ export async function POST(
           );
         }
 
-        // Determine refund amount
-        const totalCents = Math.round((Number(bookingData.final_amount) || 0) * 100);
+        // Get payment amount from payments table
+        const paymentRows = await sql`
+          SELECT amount_cents FROM payments 
+          WHERE booking_id = ${bookingInternalId} 
+          ORDER BY created_at DESC LIMIT 1
+        `;
+        const totalCents = normalizeRows(paymentRows)[0]?.amount_cents || 0;
         let refundCents = totalCents;
         if (requestedAmountCents && requestedAmountCents > 0 && requestedAmountCents <= totalCents) {
           refundCents = requestedAmountCents;
@@ -318,24 +353,32 @@ export async function POST(
           reason: 'requested_by_customer',
         });
 
+        // Update payments.refunded_cents (use subquery for LIMIT in UPDATE)
+        await sql`
+          UPDATE payments 
+          SET refunded_cents = refunded_cents + ${refundCents}, updated_at = NOW()
+          WHERE id = (
+            SELECT id FROM payments 
+            WHERE booking_id = ${bookingInternalId} 
+            ORDER BY created_at DESC LIMIT 1
+          )
+        `;
+
         // Update booking status to refunded (but do NOT cancel the booking)
-        // The booking remains active, just marked as refunded
         await sql`
           UPDATE bookings
           SET 
             payment_status = 'refunded',
             metadata = jsonb_set(
-              COALESCE(metadata, '{}'::jsonb),
-              '{refundId}',
-              ${JSON.stringify(refund.id)}::jsonb
-            ),
-            metadata = jsonb_set(
-              metadata,
-              '{refundedAt}',
-              ${JSON.stringify(new Date().toISOString())}::jsonb
-            ),
-            metadata = jsonb_set(
-              metadata,
+              jsonb_set(
+                jsonb_set(
+                  COALESCE(metadata, '{}'::jsonb),
+                  '{refundId}',
+                  ${JSON.stringify(refund.id)}::jsonb
+                ),
+                '{refundedAt}',
+                ${JSON.stringify(new Date().toISOString())}::jsonb
+              ),
               '{refundAmountCents}',
               ${JSON.stringify(refundCents)}::jsonb
             ),

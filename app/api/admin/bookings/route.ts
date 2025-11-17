@@ -12,30 +12,31 @@ export async function GET(request: NextRequest) {
 
     const bookings = await sql`
       SELECT 
-        id,
-        cal_booking_id,
-        hapio_booking_id,
-        outlook_event_id,
-        outlook_sync_status,
-        service_id,
-        service_name,
-        client_name,
-        client_email,
-        client_phone,
-        booking_date,
-        COALESCE(amount, 0)::numeric as amount,
-        COALESCE(deposit_amount, 0)::numeric as deposit_amount,
-        COALESCE(final_amount, amount, 0)::numeric as final_amount,
-        discount_code,
-        COALESCE(discount_amount, 0)::numeric as discount_amount,
-        payment_type,
-        payment_status,
-        payment_intent_id,
-        metadata,
-        created_at,
-        updated_at
-      FROM bookings
-      ORDER BY created_at DESC
+        b.id,
+        b.hapio_booking_id,
+        b.outlook_event_id,
+        b.outlook_sync_status,
+        b.service_id,
+        b.service_name,
+        b.client_name,
+        b.client_email,
+        b.client_phone,
+        b.booking_date,
+        b.payment_status,
+        b.payment_intent_id,
+        b.metadata,
+        b.created_at,
+        b.updated_at,
+        COALESCE(p.amount_cents, 0)::numeric / 100.0 as amount,
+        COALESCE(p.amount_cents, 0)::numeric / 100.0 as final_amount,
+        0::numeric as deposit_amount,
+        NULL::text as discount_code,
+        0::numeric as discount_amount,
+        NULL::text as payment_type,
+        NULL::text as cal_booking_id
+      FROM bookings b
+      LEFT JOIN payments p ON p.booking_id = b.id
+      ORDER BY b.created_at DESC
     `;
 
     const bookingRows: any[] = Array.isArray(bookings)

@@ -89,16 +89,21 @@ export async function finalizeBookingTransactional(args: {
 
     // Upsert customer if email
     let customerId: string | null = null;
+    let stripeCustomerId: string | null = null;
     if (emailFromPi) {
       const [firstName, ...lastParts] = (fullNameFromPi || '').split(' ').filter(Boolean);
       const lastName = lastParts.join(' ') || null;
+      // Extract Stripe customer ID from payment intent if available
+      stripeCustomerId = (pi as any).customer || null;
+      
       const custRows = (await sql`
-        INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, last_seen_at)
-        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, NOW())
+        INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at)
+        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, ${stripeCustomerId}, NOW())
         ON CONFLICT (email) DO UPDATE SET
           first_name = COALESCE(EXCLUDED.first_name, customers.first_name),
           last_name = COALESCE(EXCLUDED.last_name, customers.last_name),
           phone = COALESCE(EXCLUDED.phone, customers.phone),
+          stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id),
           last_seen_at = NOW()
         RETURNING id
       `) as any[];
@@ -144,11 +149,11 @@ export async function finalizeBookingTransactional(args: {
     // Brevo (best-effort, outside of transaction scope but after we COMMIT)
     await sql`COMMIT`;
 
-    if (emailFromPi) {
+    if (emailFromPi && customerId) {
       try {
         const listEnv = process.env.BREVO_LIST_ID;
         const listId = listEnv ? Number(listEnv) : undefined;
-        await upsertBrevoContact({
+        const brevoResult = await upsertBrevoContact({
           email: emailFromPi,
           firstName: fullNameFromPi?.split(' ')?.[0],
           lastName: fullNameFromPi?.split(' ')?.slice(1)?.join(' '),
@@ -156,6 +161,15 @@ export async function finalizeBookingTransactional(args: {
           listId: listId && Number.isFinite(listId) ? listId : undefined,
           tags: ['booked', svcId || 'service'],
         });
+        
+        // Store Brevo contact ID in customers table
+        if (brevoResult.id) {
+          await sql`
+            UPDATE customers 
+            SET brevo_contact_id = ${String(brevoResult.id)}, updated_at = NOW()
+            WHERE id = ${customerId}
+          `;
+        }
         await sendBrevoEmail({
           to: [{ email: emailFromPi, name: fullNameFromPi || undefined }],
           subject: 'Your appointment is confirmed',
