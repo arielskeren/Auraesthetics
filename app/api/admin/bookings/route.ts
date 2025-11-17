@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 
 // Helper function to check admin authentication
-function checkAdminAuth(request: NextRequest): boolean {
-  // Check for admin token in header or query param (same pattern as diagnostics)
+// GET requests: Skip auth check (page is already protected by AdminPasswordProtection)
+// POST requests: Require token for write operations
+function checkAdminAuth(request: NextRequest, requireAuth: boolean = false): boolean {
+  // GET requests don't need token (read-only, page already protected)
+  if (!requireAuth) {
+    return true;
+  }
+  
+  // POST requests require token
   const token = request.nextUrl.searchParams.get('token') || request.headers.get('x-admin-token');
   const expectedToken = process.env.ADMIN_TOKEN || process.env.ADMIN_DIAG_TOKEN;
   
@@ -18,13 +25,8 @@ function checkAdminAuth(request: NextRequest): boolean {
 // GET /api/admin/bookings - Fetch all bookings
 export async function GET(request: NextRequest) {
   try {
-    // Basic admin authentication check
-    if (!checkAdminAuth(request)) {
-      return NextResponse.json(
-        { error: 'Unauthorized. Admin token required.' },
-        { status: 401 }
-      );
-    }
+    // No auth check for GET - page is already protected by AdminPasswordProtection
+    // GET requests are read-only and less critical
 
     const sql = getSqlClient();
 
