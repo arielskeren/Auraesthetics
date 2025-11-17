@@ -19,41 +19,44 @@ function safeCompare(a: string, b: string) {
   return crypto.timingSafeEqual(bufferA, bufferB);
 }
 
-function verifySignature(rawBody: string, signature: string | null, secret: string) {
+function verifySignature(rawBody: string, signature: string | null, secret: string, timestamp: string | null = null) {
   if (!secret) {
     console.error('[Hapio webhook] Missing HAPIO_SECRET');
     return false;
   }
 
-  // Allow local testing when signature is omitted by comparing directly against the secret.
+  // Require signature in production
   if (!signature) {
-    console.warn('[Hapio webhook] No signature provided, skipping verification (local testing only)');
-    return false; // Don't allow in production
+    console.error('[Hapio webhook] No signature provided');
+    return false;
   }
 
-  // Calculate expected signatures in all possible formats
-  const expectedHex = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  const expectedBase64 = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
-  
   // Clean the received signature
   const signatureClean = signature.trim();
   
+  // Hapio may sign with timestamp included: HMAC-SHA256(timestamp + body, secret)
+  // Try both formats: body only, and timestamp + body
+  const payloadsToTry = timestamp 
+    ? [
+        rawBody, // Standard: body only
+        `${timestamp}.${rawBody}`, // Timestamp + body (common pattern)
+        timestamp + rawBody, // Timestamp concatenated with body
+      ]
+    : [rawBody];
+  
+  // Calculate expected signatures in all possible formats
+  const expectedSignatures: string[] = [];
+  for (const payload of payloadsToTry) {
+    const expectedHex = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    const expectedBase64 = crypto.createHmac('sha256', secret).update(payload).digest('base64');
+    expectedSignatures.push(expectedHex, expectedBase64);
+  }
+  
   // Try multiple signature formats that Hapio might use
-  // Some webhook providers use: sha256=hex, sha256=base64, or just hex/base64
   const possibleSignatures = [
     signatureClean,
     signatureClean.toLowerCase(),
     signatureClean.toUpperCase(),
-    `sha256=${signatureClean}`,
-    `sha256=${signatureClean.toLowerCase()}`,
-    `sha256=${signatureClean.toUpperCase()}`,
-  ];
-  
-  const expectedSignatures = [
-    expectedHex,
-    expectedBase64,
-    `sha256=${expectedHex}`,
-    `sha256=${expectedBase64}`,
   ];
   
   // Check all combinations
@@ -69,31 +72,13 @@ function verifySignature(rawBody: string, signature: string | null, secret: stri
   }
 
   if (!matches) {
-    // Enhanced logging for debugging
-    console.warn('[Hapio webhook] Signature mismatch', {
+    // Log error (not warning) when signature fails
+    console.error('[Hapio webhook] Signature verification failed', {
       receivedLength: signatureClean.length,
       receivedSignature: signatureClean.substring(0, 20) + '...',
-      expectedHexLength: expectedHex.length,
-      expectedBase64Length: expectedBase64.length,
-      expectedHexPrefix: expectedHex.substring(0, 20) + '...',
-      expectedBase64Prefix: expectedBase64.substring(0, 20) + '...',
       bodyLength: rawBody.length,
-      bodyHash: crypto.createHash('sha256').update(rawBody).digest('hex').substring(0, 20) + '...',
+      timestamp: timestamp || 'none',
       secretLength: secret.length,
-      secretPrefix: secret.substring(0, 8) + '...',
-    });
-    
-    // Log the actual body content to see if it matches what Hapio signed
-    console.warn('[Hapio webhook] Body content:', {
-      bodyPreview: rawBody.substring(0, 500),
-      bodyIsValidJson: (() => {
-        try {
-          JSON.parse(rawBody);
-          return true;
-        } catch {
-          return false;
-        }
-      })(),
     });
   }
 
@@ -270,34 +255,24 @@ export async function POST(request: NextRequest) {
       request.headers.get('X-Hapio-Signature') ||
       request.headers.get('hapio-signature');
     
+    // Get timestamp from header (Hapio may include this in signature calculation)
+    const timestamp = 
+      request.headers.get('x-hapio-signature-timestamp') ||
+      request.headers.get('X-Hapio-Signature-Timestamp') ||
+      null;
+    
     // Get raw body - this must be done before any JSON parsing
     // In Next.js, request.text() gives us the raw body
     const rawBody = await request.text();
     
-    // Log webhook details for debugging
-    console.log('[Hapio webhook] Received webhook:', {
-      hasSignature: !!signature,
-      signatureLength: signature?.length || 0,
-      signaturePrefix: signature ? `${signature.substring(0, 20)}...` : 'none',
-      signatureFull: signature, // Log full signature for debugging (remove in production)
-      bodyLength: rawBody.length,
-      bodyPreview: rawBody.substring(0, 200),
-      bodyFull: rawBody, // Log full body for debugging (remove in production)
-      secretLength: secret.length,
-      secretPrefix: `${secret.substring(0, 8)}...`,
-      allHeaders: Object.fromEntries(request.headers.entries()), // Log all headers
-    });
-
-    // TEMPORARILY: Make webhook public for debugging
-    // TODO: Re-enable signature verification once we confirm the format
-    const signatureValid = verifySignature(rawBody, signature, secret);
+    // Verify signature - RE-ENABLED for production security
+    const signatureValid = verifySignature(rawBody, signature, secret, timestamp);
     if (!signatureValid) {
-      console.warn('[Hapio webhook] Signature verification failed, but allowing request for debugging');
-      console.warn('[Hapio webhook] This should be re-enabled in production!');
-      // TEMPORARILY ALLOW: return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    } else {
-      console.log('[Hapio webhook] Signature verification passed');
+      console.error('[Hapio webhook] Signature verification failed - rejecting request');
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
+    
+    console.log('[Hapio webhook] Signature verification passed');
 
     let event: HapioEvent;
     try {
