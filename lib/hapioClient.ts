@@ -1665,6 +1665,7 @@ export interface HapioScheduleBlock {
   id: string;
   starts_at: string;
   ends_at: string;
+  is_available?: boolean;
   metadata?: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;
@@ -1674,6 +1675,7 @@ export interface HapioScheduleBlockPayload {
   location_id?: string | null;
   starts_at: string;
   ends_at: string;
+  is_available?: boolean;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -1723,6 +1725,7 @@ export async function listScheduleBlocks(
       id: block.id,
       starts_at: block.starts_at,
       ends_at: block.ends_at,
+      is_available: block.is_available ?? true,
       metadata: block.metadata ?? null,
       created_at: block.created_at,
       updated_at: block.updated_at,
@@ -1741,6 +1744,7 @@ export async function getScheduleBlock(
     id: response.id,
     starts_at: response.starts_at,
     ends_at: response.ends_at,
+    is_available: response.is_available ?? true,
     metadata: response.metadata ?? null,
     created_at: response.created_at,
     updated_at: response.updated_at,
@@ -1758,6 +1762,7 @@ export async function createScheduleBlock(
     ends_at: block.ends_at,
   };
   if (block.location_id !== undefined) body.location_id = block.location_id;
+  if (block.is_available !== undefined) body.is_available = block.is_available;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
   const response = await requestJson<any>('post', `${parentPath}/schedule-blocks`, body);
@@ -1765,6 +1770,7 @@ export async function createScheduleBlock(
     id: response.id,
     starts_at: response.starts_at,
     ends_at: response.ends_at,
+    is_available: response.is_available ?? true,
     metadata: response.metadata ?? null,
     created_at: response.created_at,
     updated_at: response.updated_at,
@@ -1782,6 +1788,7 @@ export async function updateScheduleBlock(
   if (block.location_id !== undefined) body.location_id = block.location_id;
   if (block.starts_at !== undefined) body.starts_at = block.starts_at;
   if (block.ends_at !== undefined) body.ends_at = block.ends_at;
+  if (block.is_available !== undefined) body.is_available = block.is_available;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
   const response = await requestJson<any>('patch', `${parentPath}/schedule-blocks/${id}`, body);
@@ -1789,6 +1796,7 @@ export async function updateScheduleBlock(
     id: response.id,
     starts_at: response.starts_at,
     ends_at: response.ends_at,
+    is_available: response.is_available ?? true,
     metadata: response.metadata ?? null,
     created_at: response.created_at,
     updated_at: response.updated_at,
@@ -1807,6 +1815,7 @@ export async function replaceScheduleBlock(
     ends_at: block.ends_at,
   };
   if (block.location_id !== undefined) body.location_id = block.location_id;
+  if (block.is_available !== undefined) body.is_available = block.is_available;
   if (block.metadata !== undefined) body.metadata = block.metadata;
 
   const response = await requestJson<any>('put', `${parentPath}/schedule-blocks/${id}`, body);
@@ -1814,6 +1823,7 @@ export async function replaceScheduleBlock(
     id: response.id,
     starts_at: response.starts_at,
     ends_at: response.ends_at,
+    is_available: response.is_available ?? true,
     metadata: response.metadata ?? null,
     created_at: response.created_at,
     updated_at: response.updated_at,

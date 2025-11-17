@@ -152,6 +152,7 @@ export async function finalizeBookingTransactional(args: {
           email: emailFromPi,
           firstName: fullNameFromPi?.split(' ')?.[0],
           lastName: fullNameFromPi?.split(' ')?.slice(1)?.join(' '),
+          phone: phoneFromPi || null,
           listId: listId && Number.isFinite(listId) ? listId : undefined,
           tags: ['booked', svcId || 'service'],
         });

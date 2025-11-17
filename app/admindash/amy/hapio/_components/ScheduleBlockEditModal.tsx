@@ -44,9 +44,14 @@ export default function ScheduleBlockEditModal({
       const startTime = blockDate.toTimeString().slice(0, 5);
       const endTime = new Date(selectedBlock.ends_at).toTimeString().slice(0, 5);
       
-      // Determine block type
+      // Determine block type based on is_available field
+      // If is_available is false or undefined (defaults to true), it's a "closed" block
+      // If is_available is true, it's an "open" block (makes time available)
+      const isAvailable = selectedBlock.is_available !== false; // Default to true if not specified
       const isAllDay = startTime === '00:00' && endTime === '23:59';
-      const blockType = isAllDay ? 'closed' : 'open';
+      // If it's all day and not available, it's "closed"
+      // If it's available (regardless of time), it's "open" (makes time available)
+      const blockType = isAvailable ? 'open' : 'closed';
       
       // Extract service IDs from metadata if available
       const serviceIds = (selectedBlock.metadata?.service_ids as string[]) || [];
@@ -101,7 +106,12 @@ export default function ScheduleBlockEditModal({
         metadata: {},
       };
 
-      // Add service IDs if block type is partial (for service-specific blocking)
+      // Convert blockType to is_available:
+      // "closed" = block time (make unavailable) → is_available: false
+      // "open" = make time available (override recurring schedule) → is_available: true
+      payload.is_available = formData.blockType === 'open';
+
+      // Add service IDs if block type is open (for service-specific availability)
       if (formData.blockType === 'open' && formData.serviceIds.length > 0) {
         payload.metadata.service_ids = formData.serviceIds;
       }
@@ -199,14 +209,27 @@ export default function ScheduleBlockEditModal({
               }
               className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
             >
-              <option value="closed">Block entire day (unavailable all day)</option>
-              <option value="open">Block specific hours (unavailable during selected time)</option>
+              <option value="closed">Block time (make unavailable)</option>
+              <option value="open">Make time available (override recurring schedule)</option>
             </select>
-            <p className="text-xs text-warm-gray mt-1">
-              {formData.blockType === 'closed'
-                ? 'Makes this entire day unavailable for booking'
-                : 'Makes specific hours unavailable for booking (overrides recurring schedule)'}
-            </p>
+            <div className="mt-2 space-y-1">
+              {formData.blockType === 'closed' ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-red-800 mb-1">⚠️ Blocks this time</p>
+                  <p className="text-red-700">
+                    This will make the selected time unavailable for booking, even if it&apos;s normally available in your recurring schedule.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-amber-800 mb-1">⚠️ Overrides recurring schedule</p>
+                  <p className="text-amber-700">
+                    This will make the selected time available for booking, even if it&apos;s not in your recurring schedule. 
+                    <strong> Use this to open time on days that are normally closed.</strong>
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {formData.blockType === 'open' && (
@@ -258,11 +281,6 @@ export default function ScheduleBlockEditModal({
             </>
           )}
 
-          {formData.blockType === 'closed' && (
-            <div className="bg-sand/20 border border-sand rounded-lg p-3 text-sm text-warm-gray">
-              This day will be completely blocked. No bookings will be available.
-            </div>
-          )}
 
           <div className="flex items-center gap-3 pt-4 border-t border-sand">
             {selectedBlock && (

@@ -315,26 +315,45 @@ export default function BookingsCalendar() {
       return bookingDate >= today;
     });
 
-    // Group by date
+    // Group by EST date (not UTC) to match calendar display
     const grouped: Record<string, Booking[]> = {};
     for (const booking of upcoming) {
-      const dateStr = new Date(booking.startsAt).toISOString().split('T')[0];
-      if (!grouped[dateStr]) {
-        grouped[dateStr] = [];
+      // Convert to EST date string for grouping
+      const bookingDate = new Date(booking.startsAt);
+      const estDateStr = bookingDate.toLocaleDateString('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      if (!grouped[estDateStr]) {
+        grouped[estDateStr] = [];
       }
-      grouped[dateStr].push(booking);
+      grouped[estDateStr].push(booking);
     }
 
     // Sort dates
     const sortedDates = Object.keys(grouped).sort();
     
-    return sortedDates.map((dateStr) => ({
-      date: new Date(dateStr),
-      bookings: grouped[dateStr].sort((a, b) => 
-        new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
-      ),
-      status: calculateDayStatus(new Date(dateStr)),
-    }));
+    return sortedDates.map((dateStr) => {
+      // Parse EST date string (YYYY-MM-DD) and create a date object
+      // We need to create a date that represents midnight EST on that date
+      const [year, month, day] = dateStr.split('-').map(Number);
+      // Create date in local timezone, then adjust for EST display
+      const dateForStatus = new Date(year, month - 1, day);
+      // For display, create a date that when formatted in EST will show the correct day
+      // Use a date string that represents the date in EST
+      const estDateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`;
+      const displayDate = new Date(estDateString + '-05:00'); // EST is UTC-5
+      
+      return {
+        date: displayDate,
+        bookings: grouped[dateStr].sort((a, b) => 
+          new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+        ),
+        status: calculateDayStatus(dateForStatus),
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookings, availability]);
 

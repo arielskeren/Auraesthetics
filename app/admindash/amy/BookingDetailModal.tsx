@@ -57,8 +57,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     try {
       setLoading(true);
       // Handle both Neon DB booking objects (with internal id) and Hapio booking objects (with hapio_booking_id)
-      const bookingId = (booking as any).hapio_booking_id || (booking as any).id || booking.id;
-      const response = await fetch(`/api/admin/bookings/${bookingId}`);
+      // Hapio API returns bookings with `id` as the Hapio booking ID
+      // Neon DB bookings have `hapio_booking_id` field
+      // Try to get the Hapio booking ID from the booking object
+      const hapioBookingId = (booking as any).hapio_booking_id || (booking as any).id || booking.id;
+      const response = await fetch(`/api/admin/bookings/${hapioBookingId}`);
       const data = await response.json();
       
       if (data.success) {
