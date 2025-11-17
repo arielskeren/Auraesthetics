@@ -170,13 +170,15 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       return [];
     }
 
-    // Group by day for display
-    const dateFormatter = new Intl.DateTimeFormat(undefined, {
+    // Group by day for display - always use EST
+    const dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     });
-    const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
       hour: 'numeric',
       minute: '2-digit',
     });
@@ -213,7 +215,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const fiveDayWindow = useMemo(() => {
     if (!requestedDate) return [];
     const keys = computeFiveDayWindow(requestedDate);
-    const fmtDay = new Intl.DateTimeFormat(undefined, {
+    const fmtDay = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
       weekday: 'short',
       month: 'short',
       day: 'numeric',
