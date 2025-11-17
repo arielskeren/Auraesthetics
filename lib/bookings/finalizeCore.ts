@@ -242,11 +242,30 @@ export async function finalizeBookingTransactional(args: {
           calendarLinks,
         });
 
+        // Get receipt PDF attachment if payment intent exists
+        const attachments: Array<{ name: string; content: string }> = [];
+        if (args.paymentIntentId) {
+          try {
+            const { getStripeReceiptPdf } = await import('@/lib/stripeClient');
+            const receiptPdf = await getStripeReceiptPdf(args.paymentIntentId);
+            if (receiptPdf) {
+              attachments.push({
+                name: receiptPdf.filename,
+                content: receiptPdf.content,
+              });
+            }
+          } catch (e) {
+            // Receipt fetch failure is non-critical
+            console.error('[finalizeCore] Failed to fetch receipt PDF:', e);
+          }
+        }
+
         await sendBrevoEmail({
           to: [{ email: emailFromPi, name: fullNameFromPi || undefined }],
           subject: `Your ${serviceDisplayName} appointment is confirmed`,
           htmlContent: emailHtml,
           tags: ['booking_confirmed'],
+          attachments: attachments.length > 0 ? attachments : undefined,
         });
       } catch (e) {
         // Brevo failures are non-critical - booking is already finalized

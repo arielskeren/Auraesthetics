@@ -4,6 +4,8 @@ import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
+import { generateBookingCancellationEmail } from '@/lib/emails/bookingCancellation';
+import { getStripeReceiptPdf, getStripeRefundReceiptPdf } from '@/lib/stripeClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
@@ -363,21 +365,92 @@ export async function POST(
         VALUES (${bookingInternalId}, ${'cancelled'}, ${JSON.stringify({ refundProcessed, refundId })}::jsonb)
       `;
 
-      // Send cancellation email (best-effort)
+      // Send cancellation email with receipt attachment (best-effort)
       if (bookingData.client_email) {
         try {
+          // Fetch service details for email
+          let serviceImageUrl: string | null = null;
+          if (bookingData.service_id) {
+            try {
+              const serviceResult = await sql`
+                SELECT image_url FROM services
+                WHERE id = ${bookingData.service_id} OR slug = ${bookingData.service_id}
+                LIMIT 1
+              `;
+              const serviceRows = normalizeRows(serviceResult);
+              if (serviceRows.length > 0) {
+                serviceImageUrl = serviceRows[0].image_url || null;
+              }
+            } catch (e) {
+              // Service fetch failure is non-critical
+            }
+          }
+
+          // Format booking date and time
+          const bookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
+          const bookingTime = bookingDate.toLocaleTimeString('en-US', {
+            timeZone: 'America/New_York',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+
+          // Get refund amount in dollars
+          let refundAmount: number | null = null;
+          if (refundProcessed && refundId) {
+            try {
+              const refund = await stripe.refunds.retrieve(refundId);
+              refundAmount = refund.amount ? refund.amount / 100 : null;
+            } catch (e) {
+              // Refund fetch failure is non-critical
+            }
+          }
+
+          // Get receipt PDF attachment if refund was processed
+          const attachments: Array<{ name: string; content: string }> = [];
+          if (refundProcessed && refundId) {
+            try {
+              const receiptPdf = await getStripeRefundReceiptPdf(refundId);
+              if (receiptPdf) {
+                attachments.push({
+                  name: receiptPdf.filename,
+                  content: receiptPdf.content,
+                });
+              }
+            } catch (e) {
+              // Receipt fetch failure is non-critical
+              console.error('[Cancel Booking] Failed to fetch receipt PDF:', e);
+            }
+          }
+
+          // Generate cancellation email
+          const emailHtml = generateBookingCancellationEmail({
+            serviceName: bookingData.service_name || 'Service',
+            serviceImageUrl,
+            clientName: bookingData.client_name || null,
+            bookingDate,
+            bookingTime,
+            refundProcessed,
+            refundAmount,
+            refundId: refundId || null,
+            receiptUrl: refundProcessed && refundId ? `https://dashboard.stripe.com/refunds/${refundId}` : null,
+          });
+
           await sendBrevoEmail({
             to: [{ email: bookingData.client_email, name: bookingData.client_name || undefined }],
             subject: 'Your appointment has been cancelled',
-            htmlContent: `<p>Your appointment for <strong>${bookingData.service_name || 'your service'}</strong> on ${bookingData.booking_date || ''} has been cancelled.</p>`,
+            htmlContent: emailHtml,
             tags: ['booking_cancelled'],
+            attachments: attachments.length > 0 ? attachments : undefined,
           });
+          
           await sql`
             INSERT INTO booking_events (booking_id, type, data)
-            VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_cancelled' })}::jsonb)
+            VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_cancelled', refundProcessed, refundId })}::jsonb)
           `;
         } catch (e) {
           // Email send failure is non-critical
+          console.error('[Cancel Booking] Failed to send cancellation email:', e);
         }
       }
 
@@ -507,21 +580,77 @@ export async function POST(
           VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents })}::jsonb)
         `;
 
-        // Send refund email (best-effort)
+        // Send refund email with receipt attachment (best-effort)
         if (bookingData.client_email) {
           try {
+            // Get receipt PDF attachment
+            const attachments: Array<{ name: string; content: string }> = [];
+            try {
+              const receiptPdf = await getStripeRefundReceiptPdf(refund.id);
+              if (receiptPdf) {
+                attachments.push({
+                  name: receiptPdf.filename,
+                  content: receiptPdf.content,
+                });
+              }
+            } catch (e) {
+              // Receipt fetch failure is non-critical
+              console.error('[Refund] Failed to fetch receipt PDF:', e);
+            }
+
+            // Generate cancellation email (refund is similar to cancellation)
+            const bookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
+            const bookingTime = bookingDate.toLocaleTimeString('en-US', {
+              timeZone: 'America/New_York',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            });
+
+            // Fetch service image
+            let serviceImageUrl: string | null = null;
+            if (bookingData.service_id) {
+              try {
+                const serviceResult = await sql`
+                  SELECT image_url FROM services
+                  WHERE id = ${bookingData.service_id} OR slug = ${bookingData.service_id}
+                  LIMIT 1
+                `;
+                const serviceRows = normalizeRows(serviceResult);
+                if (serviceRows.length > 0) {
+                  serviceImageUrl = serviceRows[0].image_url || null;
+                }
+              } catch (e) {
+                // Service fetch failure is non-critical
+              }
+            }
+
+            const emailHtml = generateBookingCancellationEmail({
+              serviceName: bookingData.service_name || 'Service',
+              serviceImageUrl,
+              clientName: bookingData.client_name || null,
+              bookingDate,
+              bookingTime,
+              refundProcessed: true,
+              refundAmount: refundCents / 100,
+              refundId: refund.id,
+              receiptUrl: `https://dashboard.stripe.com/refunds/${refund.id}`,
+            });
+
             await sendBrevoEmail({
               to: [{ email: bookingData.client_email, name: bookingData.client_name || undefined }],
               subject: 'Your refund has been issued',
-              htmlContent: `<p>A refund for <strong>$${(refundCents / 100).toFixed(2)}</strong> has been issued for your appointment ${bookingData.service_name ? `(${bookingData.service_name})` : ''}.</p>`,
+              htmlContent: emailHtml,
               tags: ['booking_refunded'],
+              attachments: attachments.length > 0 ? attachments : undefined,
             });
             await sql`
               INSERT INTO booking_events (booking_id, type, data)
-              VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_refunded' })}::jsonb)
+              VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_refunded', refundId: refund.id })}::jsonb)
             `;
           } catch (e) {
             // Email send failure is non-critical
+            console.error('[Refund] Failed to send refund email:', e);
           }
         }
 

@@ -84,12 +84,18 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
   throw new Error(`Brevo upsert failed (${resp.status}): ${await resp.text().catch(() => '')}`);
 }
 
+export type BrevoEmailAttachment = {
+  name: string;
+  content: string; // Base64 encoded content
+};
+
 export type BrevoEmail = {
   to: { email: string; name?: string }[];
   subject: string;
   htmlContent: string;
   sender?: { email: string; name?: string };
   tags?: string[];
+  attachments?: BrevoEmailAttachment[];
 };
 
 export async function sendBrevoEmail(input: BrevoEmail): Promise<boolean> {
@@ -100,19 +106,29 @@ export async function sendBrevoEmail(input: BrevoEmail): Promise<boolean> {
       email: process.env.BREVO_SENDER_EMAIL || 'no-reply@example.com',
       name: process.env.BREVO_SENDER_NAME || 'Auraesthetics',
     };
+  
+  const body: any = {
+    sender,
+    to: input.to,
+    subject: input.subject,
+    htmlContent: input.htmlContent,
+  };
+  
+  if (input.tags) {
+    body.tags = input.tags;
+  }
+  
+  if (input.attachments && input.attachments.length > 0) {
+    body.attachment = input.attachments;
+  }
+  
   const resp = await fetch(`${BREVO_API_BASE}/smtp/email`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'api-key': apiKey,
     },
-    body: JSON.stringify({
-      sender,
-      to: input.to,
-      subject: input.subject,
-      htmlContent: input.htmlContent,
-      tags: input.tags,
-    }),
+    body: JSON.stringify(body),
   });
   return resp.ok;
 }
