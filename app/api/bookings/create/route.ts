@@ -34,20 +34,19 @@ export async function POST(request: NextRequest) {
       metadata,
     } = body;
 
-    // Validate required fields
-    if (!serviceId || !serviceName || !clientEmail || !amount) {
+    // Validate required fields (amount validation removed - stored in payments table)
+    if (!serviceId || !serviceName || !clientEmail) {
       return NextResponse.json(
-        { error: 'Missing required fields: serviceId, serviceName, clientEmail, amount' },
+        { error: 'Missing required fields: serviceId, serviceName, clientEmail' },
         { status: 400 }
       );
     }
 
     const sql = getSqlClient();
 
-    // Insert booking record
+    // Insert booking record (removed dropped columns: cal_booking_id, amount, deposit_amount, final_amount, discount_code, discount_amount, payment_method_id)
     const result = await sql`
       INSERT INTO bookings (
-        cal_booking_id,
         hapio_booking_id,
         service_id,
         service_name,
@@ -55,17 +54,10 @@ export async function POST(request: NextRequest) {
         client_email,
         client_phone,
         booking_date,
-        amount,
-        deposit_amount,
-        final_amount,
-        discount_code,
-        discount_amount,
         payment_status,
         payment_intent_id,
-        payment_method_id,
         metadata
       ) VALUES (
-        ${calBookingId || null},
         ${hapioBookingId || null},
         ${serviceId},
         ${serviceName},
@@ -73,14 +65,8 @@ export async function POST(request: NextRequest) {
         ${clientEmail},
         ${clientPhone || null},
         ${bookingDate ? new Date(bookingDate) : null},
-        ${amount},
-        ${depositAmount || null},
-        ${finalAmount || amount},
-        ${discountCode || null},
-        ${discountAmount || null},
         ${paymentStatus || 'pending'},
         ${paymentIntentId || null},
-        ${paymentMethodId || null},
         ${metadata ? JSON.stringify(metadata) : null}
       )
       RETURNING id, created_at
@@ -93,7 +79,6 @@ export async function POST(request: NextRequest) {
       success: true,
       booking: {
         id: booking.id,
-        calBookingId,
         hapioBookingId,
         serviceId,
         serviceName,

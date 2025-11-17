@@ -75,11 +75,7 @@ export async function PATCH(
       values.push(body.hapioBookingId);
       paramIndex++;
     }
-    if (body.calBookingId !== undefined) {
-      updates.push(`cal_booking_id = $${paramIndex}`);
-      values.push(body.calBookingId);
-      paramIndex++;
-    }
+    // cal_booking_id column removed - ignore if provided
 
     if (updates.length === 0) {
       return NextResponse.json(
@@ -100,13 +96,13 @@ export async function PATCH(
     `;
 
     // Convert to template literal format for Neon
+    // Note: cal_booking_id column removed
     const result = await sql`
       UPDATE bookings 
       SET 
         payment_status = ${body.paymentStatus ?? null},
         payment_intent_id = ${body.paymentIntentId ?? null},
         hapio_booking_id = ${body.hapioBookingId ?? null},
-        cal_booking_id = ${body.calBookingId ?? null},
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *

@@ -78,9 +78,7 @@ export async function GET(request: NextRequest) {
     }
 
     const hapioStatus = booking.metadata?.hapio?.status ?? null;
-    const isBooked =
-      (booking.hapio_booking_id !== null && hapioStatus !== 'cancelled') ||
-      booking.cal_booking_id !== null;
+    const isBooked = booking.hapio_booking_id !== null && hapioStatus !== 'cancelled';
 
     return NextResponse.json({
       valid: !isExpired && paymentValid && !isBooked,
@@ -93,8 +91,6 @@ export async function GET(request: NextRequest) {
         serviceId: booking.service_id,
         hapioBookingId: booking.hapio_booking_id,
         hapioStatus,
-        amount: booking.amount,
-        finalAmount: booking.final_amount,
         paymentStatus: booking.payment_status,
         paymentType: booking.metadata?.paymentType || 'full',
         paymentIntentId: booking.payment_intent_id,

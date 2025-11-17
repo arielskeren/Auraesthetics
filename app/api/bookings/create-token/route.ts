@@ -380,16 +380,12 @@ export async function POST(request: NextRequest) {
         // Legacy Cal.com booking URL removed (Hapio migration)
       };
 
-      // Update existing booking with token and payment type
+      // Update existing booking with token and payment status
+      // Note: payment_type, amount, deposit_amount, final_amount, discount_code, discount_amount columns removed
+      // Payment amounts are stored in payments table
       await sql`
         UPDATE bookings 
         SET 
-          payment_type = ${paymentType},
-          amount = ${paymentIntent.amount / 100},
-          deposit_amount = ${depositAmountMetadata},
-          final_amount = ${finalAmount},
-          discount_amount = ${parseFloat(paymentIntent.metadata?.discountAmount || '0')},
-          discount_code = ${paymentIntent.metadata?.discountCode || null},
           payment_status = ${paymentType === 'deposit' ? 'deposit_paid' : paymentIntent.status === 'succeeded' ? 'paid' : paymentIntent.status === 'requires_capture' ? 'authorized' : 'processing'},
           client_name = ${attendeeDetails.name || null},
           client_email = ${attendeeDetails.email || null},
@@ -430,16 +426,12 @@ export async function POST(request: NextRequest) {
         // Legacy Cal.com booking URL removed (Hapio migration)
       };
 
+      // Insert booking (removed dropped columns: amount, deposit_amount, final_amount, discount_code, discount_amount, payment_type)
+      // Payment amounts are stored in payments table
       await sql`
         INSERT INTO bookings (
           service_id,
           service_name,
-          amount,
-          deposit_amount,
-          final_amount,
-          discount_code,
-          discount_amount,
-          payment_type,
           payment_status,
           payment_intent_id,
           client_name,
@@ -450,12 +442,6 @@ export async function POST(request: NextRequest) {
         ) VALUES (
           ${serviceId},
           ${serviceName},
-          ${amount},
-          ${depositAmountMetadata},
-          ${finalAmount},
-          ${discountCode},
-          ${discountAmount},
-          ${paymentType},
           ${paymentStatus},
           ${paymentIntentId},
           ${attendeeDetails.name || null},

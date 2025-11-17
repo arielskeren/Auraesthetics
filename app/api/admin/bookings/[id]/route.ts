@@ -172,7 +172,11 @@ export async function POST(
               WHERE booking_id = ${bookingInternalId} 
               ORDER BY created_at DESC LIMIT 1
             `;
-            const paymentAmount = normalizeRows(paymentRows)[0]?.amount_cents || 0;
+            const paymentRow = normalizeRows(paymentRows)[0];
+            if (!paymentRow || !paymentRow.amount_cents) {
+              throw new Error('Payment record not found for booking');
+            }
+            const paymentAmount = paymentRow.amount_cents;
             
             const refund = await stripe.refunds.create({
               payment_intent: bookingData.payment_intent_id,
@@ -183,7 +187,7 @@ export async function POST(
             refundProcessed = true;
             refundId = refund.id;
             
-            // Update payments.refunded_cents (use subquery for LIMIT in UPDATE)
+            // Update payments.refunded_cents using actual refund amount from Stripe
             await sql`
               UPDATE payments 
               SET refunded_cents = ${refund.amount || paymentAmount}, updated_at = NOW()
@@ -338,7 +342,14 @@ export async function POST(
           WHERE booking_id = ${bookingInternalId} 
           ORDER BY created_at DESC LIMIT 1
         `;
-        const totalCents = normalizeRows(paymentRows)[0]?.amount_cents || 0;
+        const paymentRow = normalizeRows(paymentRows)[0];
+        if (!paymentRow || !paymentRow.amount_cents) {
+          return NextResponse.json(
+            { error: 'Payment record not found for this booking' },
+            { status: 400 }
+          );
+        }
+        const totalCents = paymentRow.amount_cents;
         let refundCents = totalCents;
         if (requestedAmountCents && requestedAmountCents > 0 && requestedAmountCents <= totalCents) {
           refundCents = requestedAmountCents;
@@ -403,7 +414,7 @@ export async function POST(
             });
             await sql`
               INSERT INTO booking_events (booking_id, type, data)
-              VALUES (${bookingId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_refunded' })}::jsonb)
+              VALUES (${bookingInternalId}, ${'email_sent'}, ${JSON.stringify({ kind: 'booking_refunded' })}::jsonb)
             `;
           } catch (e) {
             // Email send failure is non-critical

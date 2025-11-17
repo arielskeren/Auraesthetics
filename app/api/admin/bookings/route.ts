@@ -35,7 +35,12 @@ export async function GET(request: NextRequest) {
         NULL::text as payment_type,
         NULL::text as cal_booking_id
       FROM bookings b
-      LEFT JOIN payments p ON p.booking_id = b.id
+      LEFT JOIN LATERAL (
+        SELECT amount_cents FROM payments 
+        WHERE payments.booking_id = b.id 
+        ORDER BY payments.created_at DESC 
+        LIMIT 1
+      ) p ON true
       ORDER BY b.created_at DESC
     `;
 

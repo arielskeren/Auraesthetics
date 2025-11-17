@@ -78,7 +78,7 @@ export async function finalizeBookingTransactional(args: {
         booking_date = COALESCE(EXCLUDED.booking_date, bookings.booking_date),
         payment_status = EXCLUDED.payment_status,
         payment_intent_id = EXCLUDED.payment_intent_id,
-        metadata = bookings.metadata || EXCLUDED.metadata,
+        metadata = COALESCE(bookings.metadata, '{}'::jsonb) || EXCLUDED.metadata,
         updated_at = NOW()
       RETURNING id
     `) as any[];
@@ -177,7 +177,7 @@ export async function finalizeBookingTransactional(args: {
           tags: ['booking_confirmed'],
         });
       } catch (e) {
-        console.error('[Brevo] finalize email/upsert failed', e);
+        // Brevo failures are non-critical - booking is already finalized
       }
     }
 
@@ -194,7 +194,6 @@ export async function finalizeBookingTransactional(args: {
     try {
       await sql`ROLLBACK`;
     } catch {}
-    console.error('[Finalize][trace]', { error: (e as any)?.message, traceId });
     throw e;
   }
 }
