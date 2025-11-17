@@ -309,32 +309,79 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
         {/* Content */}
         {!loading && (
           <div className="p-4 space-y-3">
-            {/* Top Section: Client Info (left) + Service Details (right) */}
+            {/* Top Section: Client Info + Quick Actions (left) + Service Details (right) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Client Information - Left Side, Half Width, Stacked */}
-              <div className="bg-sand/20 rounded-lg p-3">
-                <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Client Information
-                </h3>
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-xs text-warm-gray mb-1">Name</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.client_name || 'N/A'}</p>
+              {/* Left Column: Client Info + Quick Actions */}
+              <div className="space-y-3">
+                {/* Client Information - Shortened */}
+                <div className="bg-sand/20 rounded-lg p-2.5">
+                  <h3 className="text-sm font-semibold text-charcoal mb-1.5 flex items-center gap-2">
+                    <User className="w-3.5 h-3.5" />
+                    Client Information
+                  </h3>
+                  <div className="space-y-1.5">
+                    <div>
+                      <label className="text-xs text-warm-gray mb-0.5">Name</label>
+                      <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{effective.client_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-warm-gray mb-0.5 flex items-center gap-1">
+                        <Mail className="w-3 h-3" />
+                        Email
+                      </label>
+                      <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white break-all">{effective.client_email || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-warm-gray mb-0.5 flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        Phone
+                      </label>
+                      <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{effective.client_phone || 'N/A'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-warm-gray mb-1 flex items-center gap-1">
-                      <Mail className="w-3 h-3" />
-                      Email
-                    </label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">{effective.client_email || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-warm-gray mb-1 flex items-center gap-1">
-                      <Phone className="w-3 h-3" />
-                      Phone
-                    </label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.client_phone || 'N/A'}</p>
+                </div>
+
+                {/* Quick Actions - Below Client Info, Same Width */}
+                <div className="bg-sand/20 rounded-lg p-2.5">
+                  <h3 className="text-sm font-semibold text-charcoal mb-1.5">Quick Actions</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {effective.payment_status !== 'cancelled' && (
+                      <>
+                        <button
+                          onClick={handleCancel}
+                          disabled={actionLoading === 'cancel' || actionLoading === 'refund'}
+                          className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id)
+                            ? 'Cancel & Refund' 
+                            : 'Cancel Booking'}
+                        </button>
+                        
+                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id) && (
+                          <button
+                            onClick={handleRefund}
+                            disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
+                            className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            Refund Only
+                          </button>
+                        )}
+                      </>
+                    )}
+                    
+                    {effective.payment_status === 'cancelled' && (
+                      <div className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded">
+                        This booking has been cancelled
+                      </div>
+                    )}
+                    
+                    {effective.payment_status === 'refunded' && (
+                      <div className="px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded">
+                        This booking has been refunded (booking remains active)
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -397,50 +444,6 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       </span>
                     </label>
                     <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{getPaymentTypeLabel(effective.payment_type)}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Actions - Below Client Info, Left Side */}
-            <div className="bg-sand/20 rounded-lg p-3 border-t-2 border-sage-dark/30">
-              <h3 className="text-base font-semibold text-charcoal mb-2">Quick Actions</h3>
-              <div className="flex flex-wrap gap-2">
-                {effective.payment_status !== 'cancelled' && (
-                  <>
-                    <button
-                      onClick={handleCancel}
-                      disabled={actionLoading === 'cancel' || actionLoading === 'refund'}
-                      className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                      {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id)
-                        ? 'Cancel & Refund' 
-                        : 'Cancel Booking'}
-                    </button>
-                    
-                    {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id) && (
-                      <button
-                        onClick={handleRefund}
-                        disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
-                        className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                      >
-                        <DollarSign className="w-3.5 h-3.5" />
-                        Refund Only
-                      </button>
-                    )}
-                  </>
-                )}
-                
-                {effective.payment_status === 'cancelled' && (
-                  <div className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded">
-                    This booking has been cancelled
-                  </div>
-                )}
-                
-                {effective.payment_status === 'refunded' && (
-                  <div className="px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded">
-                    This booking has been refunded (booking remains active)
                   </div>
                 )}
               </div>
