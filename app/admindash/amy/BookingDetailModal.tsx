@@ -60,19 +60,27 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Extract booking ID helper
-  const getBookingId = useCallback((b: Booking | null) => 
-    b ? ((b as any).hapio_booking_id || (b as any).id || b.id) : null, []);
+  // Extract booking ID helper - prioritize internal ID, then Hapio ID
+  const getBookingId = useCallback((b: Booking | null) => {
+    if (!b) return null;
+    // Try internal ID first (UUID), then Hapio ID, then any id field
+    return (b as any).id || (b as any).hapio_booking_id || b.id || null;
+  }, []);
 
   const fetchBookingDetails = useCallback(async () => {
     if (!booking) return;
     
     const currentBookingId = getBookingId(booking);
+    if (!currentBookingId) {
+      setActionMessage({ type: 'error', text: 'Invalid booking: missing booking ID' });
+      return;
+    }
+    
     try {
       setLoading(true);
       setActionMessage(null);
       
-      const response = await fetch(`/api/admin/bookings/${currentBookingId}`);
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(currentBookingId)}`);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -81,7 +89,8 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           setTimeout(onClose, 2000);
           return;
         }
-        setActionMessage({ type: 'error', text: `Failed to load booking: ${errorData.error || 'Unknown error'}` });
+        const errorMsg = errorData.error || errorData.details || 'Unknown error';
+        setActionMessage({ type: 'error', text: `Failed to load booking: ${errorMsg}` });
         return;
       }
       
@@ -97,7 +106,9 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
         setActionMessage({ type: 'error', text: data.error || 'Failed to load booking details' });
       }
     } catch (error) {
-      setActionMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load booking details' });
+      console.error('[BookingDetailModal] Fetch error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to load booking details';
+      setActionMessage({ type: 'error', text: `Failed to load booking: ${errorMsg}` });
     } finally {
       setLoading(false);
     }

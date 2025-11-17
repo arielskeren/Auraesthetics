@@ -53,6 +53,19 @@ export function generateCalendarLinks(
 }
 
 /**
+ * Escape HTML to prevent XSS attacks
+ */
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
  * Generate HTML email template for booking confirmation
  */
 export function generateBookingConfirmationEmail(params: {
@@ -117,7 +130,7 @@ export function generateBookingConfirmationEmail(params: {
           <tr>
             <td style="padding: 40px 40px 20px 40px; text-align: center;">
               <h2 style="margin: 0 0 15px 0; color: #2C3E2D; font-size: 24px; font-weight: 600;">Thank You for Your Booking!</h2>
-              ${clientName ? `<p style="margin: 0 0 20px 0; color: #5A5A5A; font-size: 16px; line-height: 1.6;">Dear ${clientName},</p>` : ''}
+              ${clientName ? `<p style="margin: 0 0 20px 0; color: #5A5A5A; font-size: 16px; line-height: 1.6;">Dear ${escapeHtml(clientName)},</p>` : ''}
               <p style="margin: 0; color: #5A5A5A; font-size: 16px; line-height: 1.6;">We're excited to welcome you to Aura Aesthetics. Your appointment has been confirmed!</p>
             </td>
           </tr>
@@ -129,13 +142,13 @@ export function generateBookingConfirmationEmail(params: {
                 <tr>
                   ${serviceImageUrl ? `
                   <td style="padding: 20px; text-align: center; background-color: #ffffff;">
-                    <img src="${serviceImageUrl}" alt="${serviceName}" style="max-width: 200px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
+                    <img src="${escapeHtml(serviceImageUrl)}" alt="${escapeHtml(serviceName)}" style="max-width: 200px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
                   </td>
                   ` : ''}
                 </tr>
                 <tr>
                   <td style="padding: ${serviceImageUrl ? '0 20px 20px 20px' : '20px'}; text-align: center;">
-                    <h3 style="margin: 0 0 10px 0; color: #2C3E2D; font-size: 22px; font-weight: 600;">${serviceName}</h3>
+                    <h3 style="margin: 0 0 10px 0; color: #2C3E2D; font-size: 22px; font-weight: 600;">${escapeHtml(serviceName)}</h3>
                     <table role="presentation" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                       <tr>
                         <td style="padding: 12px; background-color: #ffffff; border: 1px solid #E8E8E0; border-radius: 6px; text-align: center;">
@@ -152,7 +165,7 @@ export function generateBookingConfirmationEmail(params: {
                       <tr>
                         <td style="padding: 12px; background-color: #ffffff; border: 1px solid #E8E8E0; border-radius: 6px; text-align: center; margin-top: 10px;">
                           <p style="margin: 0; color: #5A5A5A; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Location</p>
-                          <p style="margin: 5px 0 0 0; color: #2C3E2D; font-size: 16px; font-weight: 500;">${address}</p>
+                          <p style="margin: 5px 0 0 0; color: #2C3E2D; font-size: 16px; font-weight: 500;">${escapeHtml(address)}</p>
                         </td>
                       </tr>
                     </table>

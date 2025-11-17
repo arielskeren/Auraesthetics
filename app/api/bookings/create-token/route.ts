@@ -397,8 +397,32 @@ export async function POST(request: NextRequest) {
       `;
     } else {
       // Create new booking record with token
-      const serviceName = paymentIntent.metadata?.serviceName || 'Unknown Service';
-      const serviceId = paymentIntent.metadata?.serviceId || 'unknown';
+      // Get service_id from metadata (Neon DB UUID) or fallback to service_slug
+      const serviceIdFromMeta = paymentIntent.metadata?.service_id || paymentIntent.metadata?.service_slug || null;
+      
+      // Fetch service name from database if we have service_id
+      let serviceName = 'Unknown Service';
+      let serviceId = serviceIdFromMeta || 'unknown';
+      
+      if (serviceIdFromMeta) {
+        try {
+          const serviceRows = await sql`
+            SELECT name, id, slug
+            FROM services
+            WHERE id = ${serviceIdFromMeta} OR slug = ${serviceIdFromMeta}
+            LIMIT 1
+          `;
+          const svc = Array.isArray(serviceRows) ? serviceRows[0] : (serviceRows as any)?.rows?.[0];
+          if (svc) {
+            serviceName = svc.name || 'Unknown Service';
+            serviceId = svc.id || serviceIdFromMeta; // Use Neon DB UUID if available
+          }
+        } catch (e) {
+          // Fallback to slug if DB lookup fails
+          serviceName = paymentIntent.metadata?.service_slug || 'Unknown Service';
+        }
+      }
+      
       const amount = paymentIntent.amount / 100; // Amount charged (deposit or full)
       const discountCode = paymentIntent.metadata?.discountCode || null;
       const discountAmount = parseFloat(paymentIntent.metadata?.discountAmount || '0');

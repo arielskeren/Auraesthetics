@@ -68,6 +68,10 @@ export async function GET(
     const sql = getSqlClient();
     const bookingId = params.id;
 
+    if (!bookingId) {
+      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
+    }
+
     const rawBooking = await fetchBookingByAnyId(sql, bookingId);
     if (!rawBooking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
@@ -88,7 +92,7 @@ export async function GET(
           (SELECT status FROM payments WHERE booking_id = b.id ORDER BY created_at DESC LIMIT 1) AS payment_status_override
         FROM bookings b
         LEFT JOIN customers c ON b.customer_id = c.id
-        LEFT JOIN services s ON b.service_id = s.id
+        LEFT JOIN services s ON (b.service_id = s.id OR b.service_id = s.slug)
         WHERE b.id = ${rawBooking.id}
         LIMIT 1
       `,
@@ -142,6 +146,11 @@ export async function GET(
 
     return NextResponse.json({ success: true, booking: bookingData, clientHistory });
   } catch (error: any) {
+    console.error('[Admin Bookings API] Error fetching booking details:', {
+      bookingId: params.id,
+      error: error.message,
+      stack: error.stack,
+    });
     return NextResponse.json(
       { error: 'Failed to fetch booking details', details: error.message },
       { status: 500 }
