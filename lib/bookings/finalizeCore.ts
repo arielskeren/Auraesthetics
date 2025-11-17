@@ -66,7 +66,7 @@ export async function finalizeBookingTransactional(args: {
         ${svcName},
         ${emailFromPi},
         ${slotStart ? slotStart : null},
-        ${status},
+        ${status === 'succeeded' ? 'succeeded' : status},
         ${(pi as any).id},
         ${JSON.stringify(minimalMeta)}::jsonb,
         NOW()
@@ -123,20 +123,39 @@ export async function finalizeBookingTransactional(args: {
       `;
     }
 
-    // Insert payment
-    const paymentRows = (await sql`
-      INSERT INTO payments (booking_id, stripe_pi_id, stripe_charge_id, amount_cents, currency, status)
-      VALUES (
-        ${ensuredBookingRowId},
-        ${(pi as any).id},
-        ${typeof (pi as any).latest_charge === 'string' ? (pi as any).latest_charge : null},
-        ${amount_cents},
-        ${currency},
-        ${status}
-      )
-      RETURNING id
-    `) as any[];
-    const paymentId = paymentRows?.[0]?.id || null;
+    // Insert payment with idempotency check (prevent duplicates if called twice)
+    // Check if payment already exists for this booking and payment intent
+    const existingPaymentResult = await sql`
+      SELECT id FROM payments 
+      WHERE booking_id = ${ensuredBookingRowId} 
+        AND stripe_pi_id = ${(pi as any).id}
+      LIMIT 1
+    `;
+    
+    const existingPayments = Array.isArray(existingPaymentResult) 
+      ? existingPaymentResult 
+      : (existingPaymentResult as any)?.rows || [];
+    
+    let paymentId: string | null = null;
+    if (existingPayments.length > 0 && existingPayments[0]?.id) {
+      // Payment already exists, use existing ID
+      paymentId = existingPayments[0].id;
+    } else {
+      // Insert new payment
+      const paymentRows = (await sql`
+        INSERT INTO payments (booking_id, stripe_pi_id, stripe_charge_id, amount_cents, currency, status)
+        VALUES (
+          ${ensuredBookingRowId},
+          ${(pi as any).id},
+          ${typeof (pi as any).latest_charge === 'string' ? (pi as any).latest_charge : null},
+          ${amount_cents},
+          ${currency},
+          ${status === 'succeeded' ? 'succeeded' : status}
+        )
+        RETURNING id
+      `) as any[];
+      paymentId = paymentRows?.[0]?.id || null;
+    }
 
     await sql`
       INSERT INTO booking_events (booking_id, type, data)

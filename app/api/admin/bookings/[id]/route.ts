@@ -11,6 +11,18 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const OUTLOOK_SYNC_ENABLED = process.env.OUTLOOK_SYNC_ENABLED !== 'false';
 
+// Helper function to check admin authentication
+function checkAdminAuth(request: NextRequest): boolean {
+  const token = request.nextUrl.searchParams.get('token') || request.headers.get('x-admin-token');
+  const expectedToken = process.env.ADMIN_TOKEN || process.env.ADMIN_DIAG_TOKEN;
+  
+  if (process.env.NODE_ENV === 'development' && !expectedToken) {
+    return true;
+  }
+  
+  return token === expectedToken;
+}
+
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
     return result;
@@ -41,6 +53,14 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Basic admin authentication check
+    if (!checkAdminAuth(request)) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Admin token required.' },
+        { status: 401 }
+      );
+    }
+
     const sql = getSqlClient();
     const bookingId = params.id;
 
@@ -123,6 +143,14 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Basic admin authentication check
+    if (!checkAdminAuth(request)) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Admin token required.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const action = body.action;
     const bookingId = params.id;
@@ -159,8 +187,9 @@ export async function POST(
       let outlookLastAction = existingOutlookMeta.lastAction ?? null;
       let outlookError = existingOutlookMeta.error ?? null;
 
-      // If booking is paid, process refund first
-      if (bookingData.payment_status === 'paid' && bookingData.payment_intent_id) {
+      // If booking is paid, process refund first (check both 'paid' and 'succeeded')
+      const isPaid = (bookingData.payment_status === 'paid' || bookingData.payment_status === 'succeeded') && bookingData.payment_intent_id;
+      if (isPaid) {
         try {
           const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
           

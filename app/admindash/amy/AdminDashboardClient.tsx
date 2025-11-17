@@ -285,7 +285,7 @@ export default function AdminDashboardClient() {
               <div>
                 <p className="text-sm text-warm-gray mb-1">Paid</p>
                 <p className="text-2xl font-semibold text-charcoal">
-                  {bookings.filter(b => b.payment_status === 'paid').length}
+                  {bookings.filter(b => b.payment_status === 'paid' || b.payment_status === 'succeeded').length}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-green-600" />

@@ -386,7 +386,7 @@ export async function POST(request: NextRequest) {
       await sql`
         UPDATE bookings 
         SET 
-          payment_status = ${paymentType === 'deposit' ? 'deposit_paid' : paymentIntent.status === 'succeeded' ? 'paid' : paymentIntent.status === 'requires_capture' ? 'authorized' : 'processing'},
+          payment_status = ${paymentType === 'deposit' ? 'deposit_paid' : paymentIntent.status === 'succeeded' ? 'succeeded' : paymentIntent.status === 'requires_capture' ? 'authorized' : 'processing'},
           client_name = ${attendeeDetails.name || null},
           client_email = ${attendeeDetails.email || null},
           client_phone = ${attendeeDetails.phone || null},

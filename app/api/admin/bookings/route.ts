@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 
+// Helper function to check admin authentication
+function checkAdminAuth(request: NextRequest): boolean {
+  // Check for admin token in header or query param (same pattern as diagnostics)
+  const token = request.nextUrl.searchParams.get('token') || request.headers.get('x-admin-token');
+  const expectedToken = process.env.ADMIN_TOKEN || process.env.ADMIN_DIAG_TOKEN;
+  
+  // In development, allow if no token is set (for easier testing)
+  if (process.env.NODE_ENV === 'development' && !expectedToken) {
+    return true;
+  }
+  
+  return token === expectedToken;
+}
+
 // GET /api/admin/bookings - Fetch all bookings
 export async function GET(request: NextRequest) {
   try {
-    const sql = getSqlClient();
+    // Basic admin authentication check
+    if (!checkAdminAuth(request)) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Admin token required.' },
+        { status: 401 }
+      );
+    }
 
-    // TODO: Add authentication/authorization check here
-    // For now, this is a basic implementation
-    // In production, add proper admin authentication
+    const sql = getSqlClient();
 
     const bookings = await sql`
       SELECT 
@@ -35,12 +53,15 @@ export async function GET(request: NextRequest) {
         NULL::text as payment_type,
         NULL::text as cal_booking_id
       FROM bookings b
-      LEFT JOIN LATERAL (
-        SELECT amount_cents FROM payments 
-        WHERE payments.booking_id = b.id 
-        ORDER BY payments.created_at DESC 
-        LIMIT 1
-      ) p ON true
+      LEFT JOIN (
+        SELECT booking_id, amount_cents
+        FROM (
+          SELECT booking_id, amount_cents,
+                 ROW_NUMBER() OVER (PARTITION BY booking_id ORDER BY created_at DESC) as rn
+          FROM payments
+        ) ranked
+        WHERE rn = 1
+      ) p ON p.booking_id = b.id
       ORDER BY b.created_at DESC
     `;
 
