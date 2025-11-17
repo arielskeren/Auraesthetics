@@ -117,4 +117,69 @@ export async function sendBrevoEmail(input: BrevoEmail): Promise<boolean> {
   return resp.ok;
 }
 
+/**
+ * Sync a customer from database to Brevo
+ * This should be called whenever customer data changes to keep Brevo in sync
+ */
+export async function syncCustomerToBrevo(params: {
+  customerId: string;
+  sql: any;
+  listId?: number;
+  tags?: string[];
+}): Promise<{ success: boolean; brevoId?: number }> {
+  const { customerId, sql, listId, tags } = params;
+  
+  try {
+    // Fetch customer from database
+    const customerResult = await sql`
+      SELECT email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id
+      FROM customers
+      WHERE id = ${customerId}
+      LIMIT 1
+    `;
+    
+    const customers = Array.isArray(customerResult) 
+      ? customerResult 
+      : (customerResult as any)?.rows || [];
+    
+    if (customers.length === 0 || !customers[0]?.email) {
+      return { success: false };
+    }
+    
+    const customer = customers[0];
+    
+    // Only sync if marketing opt-in is true
+    if (!customer.marketing_opt_in) {
+      return { success: false };
+    }
+    
+    // Use listId from params, or fallback to env, or preserve existing
+    const finalListId = listId ?? (process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined);
+    
+    // Sync to Brevo
+    const brevoResult = await upsertBrevoContact({
+      email: customer.email,
+      firstName: customer.first_name || null,
+      lastName: customer.last_name || null,
+      phone: customer.phone || null,
+      listId: finalListId && Number.isFinite(finalListId) ? finalListId : undefined,
+      tags: tags || ['customer'],
+    });
+    
+    // Update brevo_contact_id in database if we got a new ID
+    if (brevoResult.id && brevoResult.id !== customer.brevo_contact_id) {
+      await sql`
+        UPDATE customers 
+        SET brevo_contact_id = ${String(brevoResult.id)}, updated_at = NOW()
+        WHERE id = ${customerId}
+      `;
+    }
+    
+    return { success: true, brevoId: brevoResult.id };
+  } catch (error) {
+    console.error('[syncCustomerToBrevo] Error:', error);
+    return { success: false };
+  }
+}
+
 

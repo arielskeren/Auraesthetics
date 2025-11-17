@@ -1,7 +1,7 @@
 import { stripe } from '@/lib/stripeClient';
 import { confirmBooking } from '@/lib/hapioClient';
 import { getSqlClient } from '@/app/_utils/db';
-import { upsertBrevoContact, sendBrevoEmail } from '@/lib/brevoClient';
+import { upsertBrevoContact, sendBrevoEmail, syncCustomerToBrevo } from '@/lib/brevoClient';
 import { generateBookingConfirmationEmail, generateCalendarLinks } from '@/lib/emails/bookingConfirmation';
 
 export type FinalizeResult = {
@@ -169,27 +169,24 @@ export async function finalizeBookingTransactional(args: {
     // Brevo (best-effort, outside of transaction scope but after we COMMIT)
     await sql`COMMIT`;
 
-    if (emailFromPi && customerId) {
+    // Sync customer to Brevo using database data (ensures we sync latest data, not just payment intent metadata)
+    if (customerId) {
       try {
-        const listEnv = process.env.BREVO_LIST_ID;
-        const listId = listEnv ? Number(listEnv) : undefined;
-        const brevoResult = await upsertBrevoContact({
-          email: emailFromPi,
-          firstName: fullNameFromPi?.split(' ')?.[0],
-          lastName: fullNameFromPi?.split(' ')?.slice(1)?.join(' '),
-          phone: phoneFromPi || null,
-          listId: listId && Number.isFinite(listId) ? listId : undefined,
+        await syncCustomerToBrevo({
+          customerId,
+          sql,
+          listId: process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined,
           tags: ['booked', svcId || 'service'],
         });
-        
-        // Store Brevo contact ID in customers table
-        if (brevoResult.id) {
-          await sql`
-            UPDATE customers 
-            SET brevo_contact_id = ${String(brevoResult.id)}, updated_at = NOW()
-            WHERE id = ${customerId}
-          `;
-        }
+      } catch (e) {
+        // Brevo sync failure is non-critical - booking is already finalized
+        console.error('[finalizeCore] Brevo sync failed:', e);
+      }
+    }
+
+    // Send confirmation email
+    if (emailFromPi && customerId) {
+      try {
 
         // Fetch service data for email (image, proper name, duration)
         let serviceImageUrl: string | null = null;

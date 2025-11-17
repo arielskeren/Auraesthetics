@@ -95,7 +95,7 @@ export async function GET(
           p.status AS payment_status_override
         FROM bookings b
         LEFT JOIN customers c ON b.customer_id = c.id
-        LEFT JOIN services s ON (b.service_id = s.id OR b.service_id = s.slug)
+        LEFT JOIN services s ON (b.service_id = s.id::text OR b.service_id = s.slug)
         LEFT JOIN LATERAL (
           SELECT amount_cents, status
           FROM payments
