@@ -196,7 +196,7 @@ export async function finalizeBookingTransactional(args: {
         if (svcId) {
           try {
             const serviceResult = await sql`
-              SELECT name, image_url, duration 
+              SELECT name, image_url, duration_display 
               FROM services 
               WHERE id = ${svcId} OR slug = ${svcId}
               LIMIT 1
@@ -207,7 +207,7 @@ export async function finalizeBookingTransactional(args: {
             if (serviceRows.length > 0) {
               serviceDisplayName = serviceRows[0].name || svcName;
               serviceImageUrl = serviceRows[0].image_url || null;
-              serviceDuration = serviceRows[0].duration || null;
+              serviceDuration = serviceRows[0].duration_display || null;
             }
           } catch (e) {
             // Service fetch failure is non-critical

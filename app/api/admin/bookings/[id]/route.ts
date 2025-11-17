@@ -90,7 +90,7 @@ export async function GET(
           COALESCE(c.phone, b.client_phone) AS enriched_client_phone,
           s.name AS service_display_name,
           s.image_url AS service_image_url,
-          s.duration AS service_duration,
+          s.duration_display AS service_duration,
           p.amount_cents AS payment_amount_cents,
           p.status AS payment_status_override
         FROM bookings b
