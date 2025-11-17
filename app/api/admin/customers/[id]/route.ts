@@ -10,6 +10,7 @@ export async function GET(
   try {
     const sql = getSqlClient();
     const customerId = params.id;
+
     const result = await sql`
       SELECT 
         id, email, first_name, last_name, phone, 
