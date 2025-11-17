@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import { Service } from '@/lib/types/services';
 
+// Explicitly mark as dynamic since we use searchParams
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/services
  * Public endpoint to list all enabled services
