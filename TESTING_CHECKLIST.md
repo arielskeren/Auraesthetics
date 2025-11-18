@@ -2,7 +2,7 @@
 
 This checklist tracks all implemented features to ensure they work correctly. Check off items as you test them.
 
-**Last Updated**: After Customer-Facing Booking Management Implementation
+**Last Updated**: After Admin Reschedule Flow Update & UI Fixes
 
 ---
 
@@ -10,53 +10,14 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 
 ### Phase 8: Customer-Facing Booking Management
 
-- [x] **Navigation Link**: "Manage Booking" link should appear in main navigation bar
-- [x] **Page Access**: Navigate to `/manage-booking` - page should load with search form
-- [x] **URL Parameter**: Access `/manage-booking?id=<booking-id>` - should auto-fill booking ID and search
-- [x] **Booking ID Search**: Enter booking ID (internal UUID or Hapio ID) - should find booking
-- [x] **Search by Details**: Switch to "Search by Details" mode - form should show lastName and email fields (no booking ID required)
-- [x] **Search by Name/Email**: Enter last name and email - should find the most recent booking for that customer
-- [x] **Search Validation**: Try searching with missing fields - should show validation error
-- [x] **Invalid Booking**: Search with non-existent booking ID - should show "Booking not found" error
-- [x] **Booking Display**: After successful search, booking details should display with:
-  - Service image and name
-  - Booking date and time (formatted in EST)
-  - Client name, email, phone
-  - Payment status and amount
-  - Location address
-- [x] **Reschedule Button**: For active bookings, "Reschedule" button should appear
-- [x] **Cancel Button**: For active bookings, "Cancel Booking" button should appear
-- [x] **Reschedule Modal**: Click "Reschedule" - modal should open with date input pre-filled (time is empty, user must select)
-- [x] **Reschedule Date/Time Selection**: Select a date and time in the reschedule modal (now uses dropdowns like BookingModal)
-- [x] **Check Availability Button**: Click "Find times" - should fetch and display available slots
-- [x] **Availability Loading**: While checking, should show loading spinner
-- [x] **Available Slots Display**: After checking, should show grouped availability by day in a grid (similar to BookingModal)
-- [x] **Slot Selection**: Click on an available slot - should highlight it
-- [x] **No Availability**: If no slots available, should show message to try different date/time
-- [x] **Reschedule Validation**: Try rescheduling to past date - should show validation error (date picker should prevent this)
 - [ ] **Reschedule Submission**: Select a slot and submit - should:
   - Update booking in Hapio
   - Update booking_date in Neon database
   - Update Outlook event (if synced)
   - Send reschedule confirmation email
   - Show success message
-- [x] **Cancel Modal**: Click "Cancel Booking" - confirmation modal should appear
-- [x] **72-Hour Restriction**: Try to cancel/reschedule a booking within 72 hours - buttons should be disabled and show phone number message
-- [ ] **Phone Number Display**: When within 72 hours, should show clickable phone number +1 (440) 520-3337
-- [ ] **API 72-Hour Check**: API should reject cancel/reschedule requests within 72 hours with appropriate error message
-- [x] **Cancel Confirmation**: Confirm cancellation (if more than 72 hours away) - should:
-  - Cancel booking in Hapio
-  - Update payment_status to 'cancelled' in Neon
-  - Delete Outlook event (if synced)
-  - Process refund if booking was paid
-  - Send cancellation email
-  - Show success message
-- [x] **Refund on Cancel**: Cancel a paid booking - refund should be processed automatically
-- [x] **Cancelled Booking Display**: After cancellation, booking should show big red container with cancellation date/time and no action buttons
-- [x] **Cancelled Booking Lookup**: Look up a cancelled booking - should show cancelled status with big red container, no reschedule/cancel buttons
 - [ ] **Email Links**: Click "Reschedule" or "Cancel" links in confirmation email - should open manage-booking page with booking ID pre-filled
 - [ ] **Email Link Format**: Check booking confirmation email - Reschedule/Cancel links should include `?id=<booking-id>` parameter
-- [x] **Back to Search**: Click "Search for another booking" - should clear current booking and show search form
 - [ ] **Mobile Responsiveness**: Test on mobile device - all UI elements should be properly sized and accessible
 - [ ] **Error Handling**: Test with network errors - should show appropriate error messages
 - [ ] **Security**: Try accessing another customer's booking with wrong email/lastName - should fail validation
@@ -74,7 +35,6 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 
 ### Phase 7: Admin Reschedule Functionality
 
-- [ ] **Admin Reschedule**: Admin reschedule from booking details modal should update booking in Hapio, Neon, and Outlook
 - [ ] **Hapio Update**: Check Hapio - booking should have new start/end times
 - [ ] **Database Update**: Check `bookings` table - `booking_date` should be updated, `metadata.rescheduled_at` should be set
 - [ ] **Outlook Update**: Check Outlook calendar - event should be updated with new time
@@ -99,12 +59,12 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 
 ### Phase 3: One-Time Discount Code Generation
 
-- [ ] **Generate Code API**: Call `/api/admin/discount-codes/generate` with customer info - should create code
-- [ ] **Table Check**: If table doesn't exist, API should return helpful error message
-- [ ] **Stripe Coupon**: Check Stripe dashboard - coupon should be created with correct discount and `duration: 'once'`
-- [ ] **Email Sent**: Check customer email - should receive discount code email with code, discount amount, expiration
-- [ ] **Code Validation**: Try using generated code at checkout - should apply discount correctly
-- [ ] **One-Time Use**: Try using same code again - should be rejected (already used)
+- [x] **Generate Code API**: Call `/api/admin/discount-codes/generate` with customer info - should create code
+- [x] **Table Check**: If table doesn't exist, API should return helpful error message
+- [x] **Stripe Coupon**: Check Stripe dashboard - coupon should be created with correct discount and `duration: 'once'`
+- [x] **Email Sent**: Check customer email - should receive discount code email with code, discount amount, expiration
+- [x] **Code Validation**: Try using generated code at checkout - should apply discount correctly
+- [x] **One-Time Use**: Try using same code again - should be rejected (already used)
 - [ ] **Customer Match**: Try using customer-specific code with different email - should be rejected
 - [ ] **Expiration**: Test expired code - should be rejected
 - [ ] **Database Tracking**: Check `one_time_discount_codes` table - `used` should be `true` after use, `used_at` should be set
@@ -163,10 +123,13 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 ### Phase 7: Admin Reschedule Functionality
 
 - [x] **Reschedule Button**: "Reschedule" button should appear in Quick Actions section of booking details
-- [x] **Reschedule Modal**: Clicking "Reschedule" should open modal with date and time inputs
-- [x] **Date Pre-fill**: Modal should pre-fill current booking date and time
+- [x] **Reschedule Modal**: Clicking "Reschedule" should open modal with date and time dropdowns (matching client flow)
+- [x] **Date Pre-fill**: Modal should pre-fill current booking date (time is empty, user must select)
+- [x] **Availability Checking**: Admin can check availability before rescheduling, just like clients
 - [x] **Admin Reschedule API**: Admin reschedule endpoint should update Hapio, Neon, and Outlook
 - [x] **Reschedule Email**: Reschedule confirmation email should be sent to customer
+- [x] **Admin Reschedule**: Admin reschedule from booking details modal should update booking in Hapio, Neon, and Outlook (now uses availability checking like client flow)
+- [x] **Reschedule Modal UI**: Admin reschedule modal now matches client reschedule flow with date/time dropdowns and availability checking
 
 ### Phase 2: Welcome15 Offer Tracking
 
@@ -202,13 +165,94 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 - [x] **Booking Cancellation**: Cancel booking - Outlook event should be deleted
 - [x] **Event Details**: Verify Outlook event has correct subject, time, client info, service name
 
-### Phase 8: Customer-Facing Booking Management (Additional Fixes)
+### Phase 8: Customer-Facing Booking Management
 
+- [x] **Navigation Link**: "Manage Booking" link should appear in main navigation bar
+- [x] **Page Access**: Navigate to `/manage-booking` - page should load with search form
+- [x] **URL Parameter**: Access `/manage-booking?id=<booking-id>` - should auto-fill booking ID and search
+- [x] **Booking ID Search**: Enter booking ID (internal UUID or Hapio ID) - should find booking
+- [x] **Search by Details**: Switch to "Search by Details" mode - form should show lastName and email fields (no booking ID required)
+- [x] **Search by Name/Email**: Enter last name and email - should find the most recent booking for that customer
+- [x] **Search Validation**: Try searching with missing fields - should show validation error
+- [x] **Invalid Booking**: Search with non-existent booking ID - should show "Booking not found" error
+- [x] **Booking Display**: After successful search, booking details should display with:
+  - Service image and name
+  - Booking date and time (formatted in EST)
+  - Client name, email, phone
+  - Payment status and amount
+  - Location address
+- [x] **Reschedule Button**: For active bookings, "Reschedule" button should appear
+- [x] **Cancel Button**: For active bookings, "Cancel Booking" button should appear
+- [x] **Reschedule Modal**: Click "Reschedule" - modal should open with date input pre-filled (time is empty, user must select)
+- [x] **Reschedule Date/Time Selection**: Select a date and time in the reschedule modal (now uses dropdowns like BookingModal)
+- [x] **Check Availability Button**: Click "Find times" - should fetch and display available slots
+- [x] **Availability Loading**: While checking, should show loading spinner
+- [x] **Available Slots Display**: After checking, should show grouped availability by day in a grid (similar to BookingModal)
+- [x] **Slot Selection**: Click on an available slot - should highlight it
+- [x] **No Availability**: If no slots available, should show message to try different date/time
+- [x] **Reschedule Validation**: Try rescheduling to past date - should show validation error (date picker should prevent this)
+- [x] **Cancel Modal**: Click "Cancel Booking" - confirmation modal should appear
+- [x] **72-Hour Restriction**: Try to cancel/reschedule a booking within 72 hours - buttons should be disabled and show phone number message
+- [x] **Phone Number Display**: When within 72 hours, should show large, visible clickable phone number +1 (440) 520-3337 in a prominent yellow container
+- [x] **API 72-Hour Check**: API should reject cancel/reschedule requests within 72 hours with appropriate error message
+- [x] **Cancel Confirmation**: Confirm cancellation (if more than 72 hours away) - should:
+  - Cancel booking in Hapio
+  - Update payment_status to 'cancelled' in Neon
+  - Delete Outlook event (if synced)
+  - Process refund if booking was paid
+  - Send cancellation email
+  - Show success message
+- [x] **Refund on Cancel**: Cancel a paid booking - refund should be processed automatically
+- [x] **Cancelled Booking Display**: After cancellation, booking should show big red container with cancellation date/time and no action buttons
+- [x] **Cancelled Booking Lookup**: Look up a cancelled booking - should show cancelled status with big red container, no reschedule/cancel buttons
+- [x] **Back to Search**: Click "Search for another booking" - should clear current booking and show search form
+
+### Phase 8: Customer-Facing Booking Management
+
+- [x] **Navigation Link**: "Manage Booking" link should appear in main navigation bar
+- [x] **Page Access**: Navigate to `/manage-booking` - page should load with search form
+- [x] **URL Parameter**: Access `/manage-booking?id=<booking-id>` - should auto-fill booking ID and search
+- [x] **Booking ID Search**: Enter booking ID (internal UUID or Hapio ID) - should find booking
+- [x] **Search by Details**: Switch to "Search by Details" mode - form should show lastName and email fields (no booking ID required)
+- [x] **Search by Name/Email**: Enter last name and email - should find the most recent booking for that customer
+- [x] **Search Validation**: Try searching with missing fields - should show validation error
+- [x] **Invalid Booking**: Search with non-existent booking ID - should show "Booking not found" error
+- [x] **Booking Display**: After successful search, booking details should display with:
+  - Service image and name
+  - Booking date and time (formatted in EST)
+  - Client name, email, phone
+  - Payment status and amount
+  - Location address
+- [x] **Reschedule Button**: For active bookings, "Reschedule" button should appear
+- [x] **Cancel Button**: For active bookings, "Cancel Booking" button should appear
+- [x] **Reschedule Modal**: Click "Reschedule" - modal should open with date input pre-filled (time is empty, user must select)
+- [x] **Reschedule Date/Time Selection**: Select a date and time in the reschedule modal (now uses dropdowns like BookingModal)
+- [x] **Check Availability Button**: Click "Find times" - should fetch and display available slots
+- [x] **Availability Loading**: While checking, should show loading spinner
+- [x] **Available Slots Display**: After checking, should show grouped availability by day in a grid (similar to BookingModal)
+- [x] **Slot Selection**: Click on an available slot - should highlight it
+- [x] **No Availability**: If no slots available, should show message to try different date/time
+- [x] **Reschedule Validation**: Try rescheduling to past date - should show validation error (date picker should prevent this)
+- [x] **Cancel Modal**: Click "Cancel Booking" - confirmation modal should appear
+- [x] **72-Hour Restriction**: Try to cancel/reschedule a booking within 72 hours - buttons should be disabled and show phone number message
+- [x] **Phone Number Display**: When within 72 hours, should show large, visible clickable phone number +1 (440) 520-3337 in a prominent yellow container
+- [x] **API 72-Hour Check**: API should reject cancel/reschedule requests within 72 hours with appropriate error message
+- [x] **Cancel Confirmation**: Confirm cancellation (if more than 72 hours away) - should:
+  - Cancel booking in Hapio
+  - Update payment_status to 'cancelled' in Neon
+  - Delete Outlook event (if synced)
+  - Process refund if booking was paid
+  - Send cancellation email
+  - Show success message
+- [x] **Refund on Cancel**: Cancel a paid booking - refund should be processed automatically
+- [x] **Cancelled Booking Display**: After cancellation, booking should show big red container with cancellation date/time and no action buttons
+- [x] **Cancelled Booking Lookup**: Look up a cancelled booking - should show cancelled status with big red container, no reschedule/cancel buttons
+- [x] **Back to Search**: Click "Search for another booking" - should clear current booking and show search form
 - [x] **Reschedule UI Update**: Reschedule modal now uses dropdown selectors for date/time (matching BookingModal style)
 - [x] **Availability Display Update**: Available slots are now grouped by day in a grid layout (matching BookingModal style)
-- [x] **Cancelled Booking Display**: Cancelled bookings show big red container with cancellation date/time in EST
-- [x] **Cancelled Booking Lookup**: Cancelled bookings properly display cancellation status with red container
 - [x] **UUID Error Fix**: Fixed reschedule route error when service_id is a slug (not UUID) - now properly handles both UUIDs and slugs
+- [x] **Phone Number Visibility**: Phone number for 72-hour restriction is now large, bold, and prominently displayed in a yellow container
+- [x] **Zero Display Fix**: Fixed "0" appearing in booking details modal and customer booking page (refunded_cents rendering issue)
 
 ### Critical Fixes & Improvements
 

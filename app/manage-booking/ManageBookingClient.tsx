@@ -700,19 +700,25 @@ export default function ManageBookingClient() {
               {!isCancelled && (
                 <>
                   {within72Hours ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                      <p className="text-sm text-yellow-800 mb-2">
-                        This appointment is within 72 hours. To reschedule or cancel, please contact us directly.
-                      </p>
-                      <p className="text-sm text-yellow-800">
-                        Call or text:{' '}
-                        <a 
-                          href="tel:+14405203337" 
-                          className="text-dark-sage font-semibold hover:underline"
-                        >
-                          +1 (440) 520-3337
-                        </a>
-                      </p>
+                    <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-6">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-6 h-6 text-yellow-700 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-yellow-900 mb-2">
+                            Appointment Within 72 Hours
+                          </h3>
+                          <p className="text-base text-yellow-800 mb-3">
+                            This appointment is within 72 hours. To reschedule or cancel, please contact us directly.
+                          </p>
+                          <p className="text-base text-yellow-800 mb-2">Call or text:</p>
+                          <a 
+                            href="tel:+14405203337" 
+                            className="inline-block text-2xl font-bold text-dark-sage hover:text-sage-dark hover:underline transition-colors"
+                          >
+                            +1 (440) 520-3337
+                          </a>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex flex-col sm:flex-row gap-4">
