@@ -120,10 +120,12 @@ export async function POST(
     await sql`BEGIN`;
     try {
       // Update Hapio booking
+      // Format dates in Hapio's required format: Y-m-d\TH:i:sP (e.g., 2025-11-18T14:30:00-05:00)
+      const { formatDateForHapio } = await import('@/lib/hapioDateUtils');
       try {
         await updateBooking(bookingData.hapio_booking_id, {
-          startsAt: newDateTime.toISOString(),
-          endsAt: newEndDateTime.toISOString(),
+          startsAt: formatDateForHapio(newDateTime),
+          endsAt: formatDateForHapio(newEndDateTime),
         });
       } catch (hapioError: any) {
         await sql`ROLLBACK`;

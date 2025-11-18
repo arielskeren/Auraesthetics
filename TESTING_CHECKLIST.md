@@ -2,7 +2,7 @@
 
 This checklist tracks all implemented features to ensure they work correctly. Check off items as you test them.
 
-**Last Updated**: After Admin Reschedule Flow Update & UI Fixes
+**Last Updated**: After Date Format Fix for Hapio Reschedule & Discount Code Validation Improvements
 
 ---
 
@@ -41,6 +41,7 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 - [ ] **Validation**: Try rescheduling to past date - should show validation error
 - [ ] **Duration Calculation**: Service duration should be correctly calculated for new end time
 - [ ] **Reschedule Email**: Customer should receive reschedule confirmation email
+- [ ] **Date Format Fix**: Reschedule should work without Hapio validation errors (dates formatted as Y-m-d\TH:i:sP)
 
 ### Phase 2: Welcome15 Offer Tracking
 
@@ -59,15 +60,10 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 
 ### Phase 3: One-Time Discount Code Generation
 
-- [x] **Generate Code API**: Call `/api/admin/discount-codes/generate` with customer info - should create code
-- [x] **Table Check**: If table doesn't exist, API should return helpful error message
-- [x] **Stripe Coupon**: Check Stripe dashboard - coupon should be created with correct discount and `duration: 'once'`
-- [x] **Email Sent**: Check customer email - should receive discount code email with code, discount amount, expiration
-- [x] **Code Validation**: Try using generated code at checkout - should apply discount correctly
-- [x] **One-Time Use**: Try using same code again - should be rejected (already used)
-- [ ] **Customer Match**: Try using customer-specific code with different email - should be rejected
+- [ ] **Customer Match**: Try using customer-specific code with different email - should be rejected (now requires email before validation)
+- [ ] **Email Requirement**: Try validating discount code without email - should show "Please enter your email address to verify your eligibility"
 - [ ] **Expiration**: Test expired code - should be rejected
-- [ ] **Database Tracking**: Check `one_time_discount_codes` table - `used` should be `true` after use, `used_at` should be set
+- [ ] **Database Tracking**: Check `one_time_discount_codes` table - `used` should be `true` after use, `used_at` should be set (fixed: codes now properly marked as used)
 - [ ] **Race Condition Prevention**: Try using same code simultaneously from two browsers - only one should succeed
 
 ### Phase 4: Outlook Calendar Integration
@@ -130,6 +126,7 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 - [x] **Reschedule Email**: Reschedule confirmation email should be sent to customer
 - [x] **Admin Reschedule**: Admin reschedule from booking details modal should update booking in Hapio, Neon, and Outlook (now uses availability checking like client flow)
 - [x] **Reschedule Modal UI**: Admin reschedule modal now matches client reschedule flow with date/time dropdowns and availability checking
+- [x] **Date Format Fix**: Fixed Hapio date format error - dates now formatted as Y-m-d\TH:i:sP (e.g., 2025-11-18T14:30:00-05:00) for both admin and customer reschedule
 
 ### Phase 2: Welcome15 Offer Tracking
 
@@ -154,6 +151,15 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 - [x] **Database Migration**: Run migration `006_create_one_time_discount_codes.sql` - should create table
 - [x] **Graceful Degradation**: Code should work even if `one_time_discount_codes` table doesn't exist yet (checks `information_schema`)
 - [x] **Discount Validation**: Regular discount codes (like WELCOME15) should work even if one-time table doesn't exist
+- [x] **Generate Code API**: Call `/api/admin/discount-codes/generate` with customer info - should create code
+- [x] **Table Check**: If table doesn't exist, API should return helpful error message
+- [x] **Stripe Coupon**: Check Stripe dashboard - coupon should be created with correct discount and `duration: 'once'`
+- [x] **Email Sent**: Check customer email - should receive discount code email with code, discount amount, expiration
+- [x] **Code Validation**: Try using generated code at checkout - should apply discount correctly (now requires email before validation)
+- [x] **One-Time Use**: Try using same code again - should be rejected (already used)
+- [x] **Customer-Specific Code Validation**: Customer-specific codes now require email before validation
+- [x] **Code Marking as Used**: Fixed issue where codes weren't marked as used - now properly updates `used` and `used_at` fields
+- [x] **Discount Code Tracking**: Discount codes are now stored in booking metadata and booking_events for usage tracking
 
 ### Phase 4: Outlook Calendar Integration
 
