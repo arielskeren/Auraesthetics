@@ -146,13 +146,38 @@ export async function syncCustomerToBrevo(params: {
   const { customerId, sql, listId, tags } = params;
   
   try {
+    // Check if used_welcome_offer column exists
+    let hasWelcomeOfferColumn = false;
+    try {
+      const columnCheck = await sql`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'customers' 
+          AND column_name = 'used_welcome_offer'
+        LIMIT 1
+      `;
+      hasWelcomeOfferColumn = Array.isArray(columnCheck) 
+        ? columnCheck.length > 0 
+        : ((columnCheck as any)?.rows || []).length > 0;
+    } catch (e) {
+      // If check fails, assume column doesn't exist
+      hasWelcomeOfferColumn = false;
+    }
+    
     // Fetch customer from database
-    const customerResult = await sql`
-      SELECT email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id, used_welcome_offer
-      FROM customers
-      WHERE id = ${customerId}
-      LIMIT 1
-    `;
+    const customerResult = hasWelcomeOfferColumn
+      ? await sql`
+          SELECT email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id, used_welcome_offer
+          FROM customers
+          WHERE id = ${customerId}
+          LIMIT 1
+        `
+      : await sql`
+          SELECT email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id, FALSE as used_welcome_offer
+          FROM customers
+          WHERE id = ${customerId}
+          LIMIT 1
+        `;
     
     const customers = Array.isArray(customerResult) 
       ? customerResult 

@@ -75,6 +75,7 @@ export function generateBookingConfirmationEmail(params: {
   bookingDate: Date;
   bookingTime: string; // Formatted time string
   address?: string;
+  bookingId?: string; // Internal booking ID or Hapio booking ID
   cancelUrl?: string;
   rescheduleUrl?: string;
   calendarLinks?: ReturnType<typeof generateCalendarLinks>;
@@ -86,10 +87,16 @@ export function generateBookingConfirmationEmail(params: {
     bookingDate,
     bookingTime,
     address = '2998 Green Palm Court, Dania Beach, FL, 33312',
-    cancelUrl = 'https://www.theauraesthetics.com/book',
-    rescheduleUrl = 'https://www.theauraesthetics.com/book',
+    bookingId,
+    cancelUrl,
+    rescheduleUrl,
     calendarLinks,
   } = params;
+
+  // Generate URLs with booking ID if provided
+  const baseUrl = 'https://www.theauraesthetics.com/manage-booking';
+  const finalCancelUrl = cancelUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
+  const finalRescheduleUrl = rescheduleUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
 
   const formattedDate = bookingDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -247,15 +254,24 @@ export function generateBookingConfirmationEmail(params: {
               <table role="presentation" style="width: 100%; border-collapse: collapse;">
                 <tr>
                   <td align="center" style="padding: 5px;">
-                    <a href="${rescheduleUrl}" style="display: inline-block; padding: 14px 24px; background-color: #ffffff; color: #6B8E6F; text-decoration: none; border: 2px solid #6B8E6F; border-radius: 6px; font-size: 14px; font-weight: 600; width: 100%; max-width: 250px; box-sizing: border-box;">Reschedule</a>
+                    <a href="${finalRescheduleUrl}" style="display: inline-block; padding: 14px 24px; background-color: #ffffff; color: #6B8E6F; text-decoration: none; border: 2px solid #6B8E6F; border-radius: 6px; font-size: 14px; font-weight: 600; width: 100%; max-width: 250px; box-sizing: border-box;">Reschedule</a>
                   </td>
                 </tr>
                 <tr>
                   <td align="center" style="padding: 5px;">
-                    <a href="${cancelUrl}" style="display: inline-block; padding: 14px 24px; background-color: #ffffff; color: #D97777; text-decoration: none; border: 2px solid #D97777; border-radius: 6px; font-size: 14px; font-weight: 600; width: 100%; max-width: 250px; box-sizing: border-box;">Cancel</a>
+                    <a href="${finalCancelUrl}" style="display: inline-block; padding: 14px 24px; background-color: #ffffff; color: #D97777; text-decoration: none; border: 2px solid #D97777; border-radius: 6px; font-size: 14px; font-weight: 600; width: 100%; max-width: 250px; box-sizing: border-box;">Cancel</a>
                   </td>
                 </tr>
               </table>
+            </td>
+          </tr>
+
+          <!-- Receipt Note -->
+          <tr>
+            <td style="padding: 0 20px 20px 20px;">
+              <p style="margin: 0; color: #5A5A5A; font-size: 13px; line-height: 1.6; font-style: italic; text-align: center;">
+                <strong>Note:</strong> You will receive a separate payment receipt email from Stripe with your official receipt.
+              </p>
             </td>
           </tr>
 

@@ -2,83 +2,203 @@
 
 This checklist tracks all implemented features to ensure they work correctly. Check off items as you test them.
 
-**Last Updated**: After Phase 3 & 4 Implementation
+**Last Updated**: After Customer-Facing Booking Management Implementation
 
-## Phase 0: Dashboard Cleanup & Rebranding
+---
 
-- [ ] **Dashboard Redirect**: Navigate to `/admindash/amy` - should redirect to `/admindash/amy/hapio`
-- [ ] **Dashboard Title**: Header should show "Aura Esthetics Dashboard" (not "Hapio Management Portal")
-- [ ] **Footer Link**: Footer should show "Internal" link (not "Hapio") pointing to `/admindash/amy/hapio`
-- [ ] **Overview Tab**: Should show welcome message for Amy with explanation, no API calls on load
-- [ ] **Quick Actions**: Buttons should navigate to correct tabs (Bookings, Services, Employees, Schedules)
+## 🔴 PENDING TASKS
 
-## Phase 5: PDF Receipt Fix
+### Phase 8: Customer-Facing Booking Management
 
-- [ ] **Booking Confirmation Email**: Check email attachments - should include PDF receipt
-- [ ] **Refund Email**: Check refund email attachments - should include PDF receipt
-- [ ] **PDF Validation**: Verify PDFs are valid (not empty, correct format)
-- [ ] **Error Handling**: Test with invalid payment intent - should fail gracefully without breaking booking
+- [ ] **Navigation Link**: "Manage Booking" link should appear in main navigation bar
+- [ ] **Page Access**: Navigate to `/manage-booking` - page should load with search form
+- [ ] **URL Parameter**: Access `/manage-booking?id=<booking-id>` - should auto-fill booking ID and search
+- [ ] **Booking ID Search**: Enter booking ID (internal UUID or Hapio ID) - should find booking
+- [ ] **Search by Details**: Switch to "Search by Details" mode - form should show lastName, email, bookingId fields
+- [ ] **Search Validation**: Try searching with missing fields - should show validation error
+- [ ] **Invalid Booking**: Search with non-existent booking ID - should show "Booking not found" error
+- [ ] **Booking Display**: After successful search, booking details should display with:
+  - Service image and name
+  - Booking date and time (formatted in EST)
+  - Client name, email, phone
+  - Payment status and amount
+  - Location address
+- [ ] **Reschedule Button**: For active bookings, "Reschedule" button should appear
+- [ ] **Cancel Button**: For active bookings, "Cancel Booking" button should appear
+- [ ] **Reschedule Modal**: Click "Reschedule" - modal should open with date/time inputs pre-filled
+- [ ] **Reschedule Validation**: Try rescheduling to past date - should show validation error
+- [ ] **Reschedule Submission**: Submit new date/time - should:
+  - Update booking in Hapio
+  - Update booking_date in Neon database
+  - Update Outlook event (if synced)
+  - Send reschedule confirmation email
+  - Show success message
+- [ ] **Cancel Modal**: Click "Cancel Booking" - confirmation modal should appear
+- [ ] **Cancel Confirmation**: Confirm cancellation - should:
+  - Cancel booking in Hapio
+  - Update payment_status to 'cancelled' in Neon
+  - Delete Outlook event (if synced)
+  - Process refund if booking was paid
+  - Send cancellation email
+  - Show success message
+- [ ] **Refund on Cancel**: Cancel a paid booking - refund should be processed automatically
+- [ ] **Email Links**: Click "Reschedule" or "Cancel" links in confirmation email - should open manage-booking page with booking ID pre-filled
+- [ ] **Email Link Format**: Check booking confirmation email - Reschedule/Cancel links should include `?id=<booking-id>` parameter
+- [ ] **Back to Search**: Click "Search for another booking" - should clear current booking and show search form
+- [ ] **Mobile Responsiveness**: Test on mobile device - all UI elements should be properly sized and accessible
+- [ ] **Error Handling**: Test with network errors - should show appropriate error messages
+- [ ] **Security**: Try accessing another customer's booking with wrong email/lastName - should fail validation
 
-## Phase 6: Refund UI Enhancements
+### Phase 5: Stripe Receipt Handling
 
-- [ ] **Refund Modal**: Click "Refund Only" button - modal should open with $/% toggle
-- [ ] **Dollar Toggle**: Select $, enter amount - should validate against payment amount
-- [ ] **Percent Toggle**: Select %, enter percentage (1-100) - should calculate correctly
-- [ ] **Reason Field**: Try submitting without reason - should show error
-- [ ] **Refund Display**: After refund, booking details should show refund amount, date, reason
-- [ ] **Partial Refund**: Test partial refund - should show remaining amount
+- [ ] **Stripe Receipt Delivery**: Verify Stripe Dashboard → Settings → Email → Customer emails → Successful payments/Refunds is enabled
+- [ ] **Receipt Email**: Customer should receive separate receipt email from Stripe after payment/refund
+
+### Phase 6: Refund UI Enhancements & Booking Management
+
+- [ ] **Refund Display**: After refund, booking details should show refund amount, date, reason in "Payment Information" section
+- [ ] **Partial Refund**: Test partial refund - should show remaining refundable amount
 - [ ] **Full Refund**: Test full refund - should show "Full refund" indicator
 
-## Phase 2: Welcome15 Offer Tracking
+### Phase 7: Admin Reschedule Functionality
 
-- [ ] **Database Migration**: Run migration `005_add_welcome_offer_tracking.sql` - should add `used_welcome_offer` column
+- [ ] **Admin Reschedule**: Admin reschedule from booking details modal should update booking in Hapio, Neon, and Outlook
+- [ ] **Hapio Update**: Check Hapio - booking should have new start/end times
+- [ ] **Database Update**: Check `bookings` table - `booking_date` should be updated, `metadata.rescheduled_at` should be set
+- [ ] **Outlook Update**: Check Outlook calendar - event should be updated with new time
+- [ ] **Validation**: Try rescheduling to past date - should show validation error
+- [ ] **Duration Calculation**: Service duration should be correctly calculated for new end time
+- [ ] **Reschedule Email**: Customer should receive reschedule confirmation email
+
+### Phase 2: Welcome15 Offer Tracking
+
 - [ ] **First Use**: Apply WELCOME15 code with new customer - should work
-- [ ] **Duplicate Email**: Try WELCOME15 with same email again - should be rejected
+- [ ] **Duplicate Email**: Try WELCOME15 with same email again - should be rejected with clear error message
 - [ ] **Duplicate Name**: Try WELCOME15 with different email but same name - should be rejected
 - [ ] **Database Tracking**: Check `customers` table - `used_welcome_offer` should be `true` after use
-- [ ] **Brevo Sync**: Check Brevo contact - `USED_WELCOME_OFFER` attribute should be 'true'
+- [ ] **Brevo Sync**: Check Brevo contact - `USED_WELCOME_OFFER` attribute should be 'true' after sync
 
-## Phase 1: Brevo Client Management Portal
+### Phase 1: Brevo Client Management Portal
 
-- [ ] **Clients Tab**: Navigate to Clients tab in dashboard - should load
-- [ ] **Neon View**: Default view should show Neon customers (source of truth)
-- [ ] **Brevo Toggle**: Click "View Brevo" - should switch to Brevo contacts
-- [ ] **Toggle Back**: Click "View Neon" - should switch back to Neon customers
-- [ ] **Search**: Enter search query - should filter both Neon and Brevo views
-- [ ] **Sync to Brevo**: Click "Sync to Brevo" on a Neon customer - should sync successfully
-- [ ] **Customer Display**: Verify columns show correctly (email, name, phone, marketing opt-in, welcome offer status)
-- [ ] **Brevo Display**: Verify Brevo view shows Brevo-specific fields (Brevo ID, list IDs)
+- [ ] **Individual Sync**: Click "Push to Brevo" on a Neon customer - should sync successfully
+- [ ] **Sync All Button**: In "Unmatched" view, click "Sync All to Brevo" - should sync all pending customers
+- [ ] **Hourly Cron Job**: Verify `/api/cron/sync-brevo` runs hourly (check Vercel cron logs)
 
-## Phase 3: One-Time Discount Code Generation
+### Phase 3: One-Time Discount Code Generation
 
-- [ ] **Database Migration**: Run migration `006_create_one_time_discount_codes.sql` - should create table
 - [ ] **Generate Code API**: Call `/api/admin/discount-codes/generate` with customer info - should create code
-- [ ] **Stripe Coupon**: Check Stripe dashboard - coupon should be created with correct discount
-- [ ] **Email Sent**: Check customer email - should receive discount code email
-- [ ] **Code Validation**: Try using generated code at checkout - should apply discount
+- [ ] **Table Check**: If table doesn't exist, API should return helpful error message
+- [ ] **Stripe Coupon**: Check Stripe dashboard - coupon should be created with correct discount and `duration: 'once'`
+- [ ] **Email Sent**: Check customer email - should receive discount code email with code, discount amount, expiration
+- [ ] **Code Validation**: Try using generated code at checkout - should apply discount correctly
 - [ ] **One-Time Use**: Try using same code again - should be rejected (already used)
-- [ ] **Customer Match**: Try using code with different customer email - should be rejected
+- [ ] **Customer Match**: Try using customer-specific code with different email - should be rejected
 - [ ] **Expiration**: Test expired code - should be rejected
-- [ ] **Database Tracking**: Check `one_time_discount_codes` table - `used` should be `true` after use
+- [ ] **Database Tracking**: Check `one_time_discount_codes` table - `used` should be `true` after use, `used_at` should be set
+- [ ] **Race Condition Prevention**: Try using same code simultaneously from two browsers - only one should succeed
 
-## Phase 4: Outlook Calendar Integration
+### Phase 4: Outlook Calendar Integration
 
-- [ ] **Environment Check**: Verify `OUTLOOK_SYNC_ENABLED` is set (not 'false')
-- [ ] **Booking Creation**: Create a new booking - Outlook event should be created
-- [ ] **Event ID Storage**: Check `bookings` table - `outlook_event_id` should be populated
-- [ ] **Sync Status**: Check `outlook_sync_status` - should be 'synced' or 'updated'
-- [ ] **Outlook Calendar**: Check Outlook calendar - event should appear
-- [ ] **Booking Update**: Update booking (e.g., refund) - Outlook event should be updated
-- [ ] **Booking Cancellation**: Cancel booking - Outlook event should be deleted
-- [ ] **Error Handling**: Test with Outlook disabled - should not break booking flow
-- [ ] **Event Details**: Verify Outlook event has correct subject, time, client info
+- [ ] **Booking Refund**: Process refund - Outlook event should be updated (not deleted)
+- [ ] **Booking Reschedule**: Reschedule booking - Outlook event should be updated with new time
+- [ ] **Error Handling**: Test with Outlook disabled (`OUTLOOK_SYNC_ENABLED=false`) - should not break booking flow
+- [ ] **Best-Effort Sync**: If Outlook sync fails, booking should still complete successfully
 
-## General Integration Tests
+### Critical Fixes & Improvements
+
+- [ ] **Idempotency**: Verify payment records aren't duplicated if webhook is called twice
+
+### General Integration Tests
 
 - [ ] **End-to-End Booking**: Complete booking flow - all integrations should work (Hapio, Stripe, Brevo, Outlook)
-- [ ] **Error Recovery**: Test with one integration failing - others should still work
+- [ ] **Error Recovery**: Test with one integration failing (e.g., Outlook disabled) - others should still work
 - [ ] **Data Consistency**: Verify data is consistent across Neon, Brevo, Stripe, Outlook
 - [ ] **Performance**: Test with multiple bookings - should not slow down significantly
+- [ ] **Webhook Reliability**: Test Hapio webhook signature verification - invalid signatures should be rejected
+- [ ] **Concurrent Operations**: Test multiple refunds/reschedules happening simultaneously - should handle correctly
+
+---
+
+## ✅ COMPLETED TASKS
+
+### Phase 0: Dashboard Cleanup & Rebranding
+
+- [x] **Dashboard Redirect**: Navigate to `/admindash/amy` - should redirect to `/admindash/amy/hapio`
+- [x] **Dashboard Title**: Header should show "Aura Esthetics Dashboard" (not "Hapio Management Portal")
+- [x] **Footer Link**: Footer should show only "Internal" link (not duplicate "Admin" link) pointing to `/admindash/amy/hapio`
+- [x] **Overview Tab**: Should show welcome message for Amy with explanation, no API calls on load
+- [x] **Quick Actions**: Buttons should navigate to correct tabs (Bookings, Services, Employees, Schedules)
+
+### Phase 5: Stripe Receipt Handling
+
+- [x] **Receipt Note in Confirmation Email**: Booking confirmation email should include note that Stripe sends receipt separately
+- [x] **Receipt Note in Refund Email**: Refund/cancellation email should include note that Stripe sends receipt separately
+- [x] **No PDF Attachments**: Emails should NOT include PDF attachments (Stripe handles this automatically)
+
+### Phase 6: Refund UI Enhancements & Booking Management
+
+- [x] **Refund Modal**: Click "Refund Only" button - modal should open with $/% toggle
+- [x] **Dollar Toggle**: Select $, enter amount - should validate against payment amount
+- [x] **Percent Toggle**: Select %, enter percentage (1-100) - should calculate correctly
+- [x] **Reason Field**: Try submitting without reason - should show error (mandatory field)
+- [x] **Payment Amount Fix**: Booking details should show `payment_amount_cents` correctly (no "No payment found" error)
+- [x] **Refund Button Logic**: "Refund Only" button should only appear if booking is paid AND not already refunded
+- [x] **Cancel Button Logic**: "Cancel & Refund" should change to "Cancel Booking" if already refunded
+- [x] **Refunded Booking Cancellation**: Should be able to cancel a refunded booking (no new refund processed)
+- [x] **Cancelled/Refunded Tab**: Bookings tab should have "Cancelled / Refunded" view showing all cancelled/refunded bookings
+
+### Phase 7: Admin Reschedule Functionality
+
+- [x] **Reschedule Button**: "Reschedule" button should appear in Quick Actions section of booking details
+- [x] **Reschedule Modal**: Clicking "Reschedule" should open modal with date and time inputs
+- [x] **Date Pre-fill**: Modal should pre-fill current booking date and time
+- [x] **Admin Reschedule API**: Admin reschedule endpoint should update Hapio, Neon, and Outlook
+- [x] **Reschedule Email**: Reschedule confirmation email should be sent to customer
+
+### Phase 2: Welcome15 Offer Tracking
+
+- [x] **Database Migration**: Run migration `005_add_welcome_offer_tracking.sql` - should add `used_welcome_offer` column
+- [x] **Graceful Degradation**: Code should work even if `used_welcome_offer` column doesn't exist yet (checks `information_schema`)
+
+### Phase 1: Brevo Client Management Portal
+
+- [x] **Clients Tab**: Navigate to Clients tab in dashboard - should load
+- [x] **View Modes**: Should have 4 view modes: Neon, Brevo, Matched, Unmatched
+- [x] **Neon View**: Default view should show Neon customers (source of truth)
+- [x] **Brevo View**: Click "View Brevo" - should switch to Brevo contacts
+- [x] **Matched View**: Click "Matched" - should show customers present in both Neon and Brevo
+- [x] **Unmatched View**: Click "Unmatched" - should show Neon customers not in Brevo
+- [x] **Search**: Enter search query - should filter all views correctly
+- [x] **Sync Status**: Should display sync status (total, synced, pending) in Unmatched view
+- [x] **Customer Display**: Verify columns show correctly (email, name, phone, marketing opt-in, welcome offer status)
+- [x] **Brevo Display**: Verify Brevo view shows Brevo-specific fields (Brevo ID, list IDs)
+
+### Phase 3: One-Time Discount Code Generation
+
+- [x] **Database Migration**: Run migration `006_create_one_time_discount_codes.sql` - should create table
+- [x] **Graceful Degradation**: Code should work even if `one_time_discount_codes` table doesn't exist yet (checks `information_schema`)
+- [x] **Discount Validation**: Regular discount codes (like WELCOME15) should work even if one-time table doesn't exist
+
+### Phase 4: Outlook Calendar Integration
+
+- [x] **Environment Check**: Verify `OUTLOOK_SYNC_ENABLED` is set (not 'false')
+- [x] **Booking Creation**: Create a new booking - Outlook event should be created
+- [x] **Event ID Storage**: Check `bookings` table - `outlook_event_id` should be populated in metadata
+- [x] **Sync Status**: Check `outlook_sync_status` - should be 'synced' or 'updated'
+- [x] **Outlook Calendar**: Check Outlook calendar - event should appear with correct details
+- [x] **Booking Cancellation**: Cancel booking - Outlook event should be deleted
+- [x] **Event Details**: Verify Outlook event has correct subject, time, client info, service name
+
+### Critical Fixes & Improvements
+
+- [x] **Payment Amount Cents**: Fixed "No payment found" error - booking details now correctly sum all payments
+- [x] **Refunded Cents Display**: Booking details now show `refunded_cents` in response
+- [x] **Multiple Payments**: System correctly handles bookings with multiple payment records
+- [x] **Refund Transaction Safety**: Refund operations use database transactions with `SELECT FOR UPDATE` to prevent race conditions
+- [x] **Missing Column Handling**: Code gracefully handles missing `used_welcome_offer` column
+- [x] **Missing Table Handling**: Code gracefully handles missing `one_time_discount_codes` table
+
+---
 
 ## Notes
 
@@ -87,4 +207,7 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 - Verify email delivery in Brevo dashboard
 - Check Outlook calendar sync in actual Outlook calendar
 - Monitor error logs for any integration failures
-
+- **Important**: Stripe sends receipts automatically when Customer emails → Successful payments/Refunds is enabled in Dashboard
+- **Migration Status**: Check if migrations `005_add_welcome_offer_tracking.sql` and `006_create_one_time_discount_codes.sql` have been run in production
+- **Booking Management**: Customer-facing booking management page is accessible at `/manage-booking`. Booking confirmation emails include direct links with booking ID parameter.
+- **Email Links**: Reschedule and Cancel links in confirmation emails automatically include the booking ID, allowing customers to access their booking directly without searching.

@@ -1,6 +1,6 @@
 'use client';
 
-import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone } from 'lucide-react';
+import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone, Clock as ClockIcon, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { formatInEST } from '@/lib/timezone';
 
@@ -68,6 +68,9 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [refundType, setRefundType] = useState<'dollar' | 'percent'>('dollar');
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState<string>('');
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState<string>('');
+  const [rescheduleTime, setRescheduleTime] = useState<string>('');
 
   // Extract booking ID helper - prioritize internal ID, then Hapio ID
   const getBookingId = useCallback((b: Booking | null) => {
@@ -177,6 +180,102 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
   const handleRefund = () => {
     setShowRefundModal(true);
+  };
+
+  const handleForceSyncOutlook = async () => {
+    if (!booking) return;
+    const effective = bookingDetails || booking;
+    const bookingId = getBookingId(effective);
+    if (!bookingId) return;
+
+    setActionLoading('outlook-sync');
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'force-sync-outlook' }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setActionMessage({ type: 'error', text: data.error || 'Failed to sync with Outlook' });
+        return;
+      }
+
+      setActionMessage({ type: 'success', text: data.message || 'Successfully synced with Outlook' });
+      // Refresh booking details to show updated sync status
+      await fetchBookingDetails();
+    } catch (error: any) {
+      setActionMessage({ type: 'error', text: error.message || 'Failed to sync with Outlook' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReschedule = () => {
+    const effective = bookingDetails || booking;
+    if (!effective) return;
+    if (effective.booking_date) {
+      const date = new Date(effective.booking_date);
+      setRescheduleDate(date.toISOString().split('T')[0]);
+      const timeStr = date.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      setRescheduleTime(timeStr);
+    }
+    setShowRescheduleModal(true);
+  };
+
+  const handleRescheduleSubmit = async () => {
+    if (!booking) return;
+    const effective = bookingDetails || booking;
+    const bookingId = getBookingId(effective);
+    if (!bookingId) return;
+
+    if (!rescheduleDate || !rescheduleTime) {
+      setActionMessage({ type: 'error', text: 'Please select both date and time' });
+      return;
+    }
+
+    try {
+      setActionLoading('reschedule');
+      setActionMessage(null);
+      setShowRescheduleModal(false);
+      
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'reschedule',
+          newDate: rescheduleDate,
+          newTime: rescheduleTime,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setActionMessage({ 
+          type: 'success', 
+          text: 'Booking rescheduled successfully' 
+        });
+        setTimeout(() => {
+          onRefresh();
+          fetchBookingDetails();
+        }, 2000);
+      } else {
+        setActionMessage({ type: 'error', text: data.error || 'Failed to reschedule booking' });
+      }
+    } catch (error: any) {
+      setActionMessage({ type: 'error', text: error.message || 'Failed to reschedule booking' });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleRefundSubmit = async () => {
@@ -402,17 +501,26 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     {effective.payment_status !== 'cancelled' && (
                       <>
                         <button
+                          onClick={handleReschedule}
+                          disabled={actionLoading !== null || !effective.hapio_booking_id}
+                          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        >
+                          <ClockIcon className="w-3.5 h-3.5" />
+                          Reschedule
+                        </button>
+                        <button
                           onClick={handleCancel}
                           disabled={actionLoading === 'cancel' || actionLoading === 'refund'}
                           className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                         >
                           <XCircle className="w-3.5 h-3.5" />
-                          {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id)
+                          {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id && !effective.refunded_cents)
                             ? 'Cancel & Refund' 
                             : 'Cancel Booking'}
                         </button>
                         
-                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id) && (
+                        {/* Only show refund button if paid/succeeded AND not already refunded */}
+                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id && (!effective.refunded_cents || effective.refunded_cents === 0)) && (
                           <button
                             onClick={handleRefund}
                             disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
@@ -431,10 +539,23 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       </div>
                     )}
                     
-                    {effective.payment_status === 'refunded' && (
+                    {(effective.payment_status === 'refunded' || (effective.refunded_cents && effective.refunded_cents > 0)) && effective.payment_status !== 'cancelled' && (
                       <div className="px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded">
                         This booking has been refunded (booking remains active)
                       </div>
+                    )}
+                    
+                    {/* Force Sync to Outlook button */}
+                    {process.env.NEXT_PUBLIC_OUTLOOK_SYNC_ENABLED !== 'false' && (
+                      <button
+                        onClick={handleForceSyncOutlook}
+                        disabled={actionLoading === 'outlook-sync'}
+                        className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        title="Force sync this booking with Outlook calendar"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${actionLoading === 'outlook-sync' ? 'animate-spin' : ''}`} />
+                        {actionLoading === 'outlook-sync' ? 'Syncing...' : 'Sync Outlook'}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -762,6 +883,82 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                   >
                     {actionLoading === 'refund' ? 'Processing...' : 'Process Refund'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-charcoal">Reschedule Booking</h3>
+                <button
+                  onClick={() => {
+                    setShowRescheduleModal(false);
+                    setRescheduleDate('');
+                    setRescheduleTime('');
+                  }}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Date Input */}
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    New Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                {/* Time Input */}
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    New Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={rescheduleTime}
+                    onChange={(e) => setRescheduleTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-warm-gray mt-1">Time is in EST/EDT</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowRescheduleModal(false);
+                      setRescheduleDate('');
+                      setRescheduleTime('');
+                    }}
+                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRescheduleSubmit}
+                    disabled={actionLoading === 'reschedule' || !rescheduleDate || !rescheduleTime}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    {actionLoading === 'reschedule' ? 'Rescheduling...' : 'Reschedule Booking'}
                   </button>
                 </div>
               </div>

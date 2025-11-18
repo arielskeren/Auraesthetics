@@ -99,48 +99,65 @@ export async function finalizeBookingTransactional(args: {
     let oneTimeCodeId: string | null = null;
     if (discountCode && typeof discountCode === 'string') {
       try {
-        const codeUpper = discountCode.toUpperCase();
-        // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
-        // First check if code exists and is valid (with row lock)
-        const oneTimeCodeResult = await sql`
-          SELECT id, customer_id FROM one_time_discount_codes 
-          WHERE code = ${codeUpper} 
-            AND used = false
-            AND (expires_at IS NULL OR expires_at > NOW())
+        // Check if one_time_discount_codes table exists
+        const tableCheck = await sql`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+            AND table_name = 'one_time_discount_codes'
           LIMIT 1
-          FOR UPDATE
         `;
-        const oneTimeRows = Array.isArray(oneTimeCodeResult) 
-          ? oneTimeCodeResult 
-          : (oneTimeCodeResult as any)?.rows || [];
-        if (oneTimeRows.length > 0) {
-          const codeRecord = oneTimeRows[0];
-          // If code is customer-specific, verify customer matches
-          if (codeRecord.customer_id && emailFromPi) {
-            const customerMatch = await sql`
-              SELECT id FROM customers 
-              WHERE id = ${codeRecord.customer_id} 
-                AND LOWER(email) = LOWER(${emailFromPi})
-              LIMIT 1
-            `;
-            const customerRows = Array.isArray(customerMatch) 
-              ? customerMatch 
-              : (customerMatch as any)?.rows || [];
-            if (customerRows.length === 0) {
-              // Customer doesn't match - log but don't mark as used
-              console.error('[finalizeCore] One-time code customer mismatch:', {
-                code: codeUpper,
-                codeCustomerId: codeRecord.customer_id,
-                paymentEmail: emailFromPi,
-              });
-              // Don't set oneTimeCodeId - code won't be marked as used
-            } else {
-              // Customer matches - safe to mark as used
+        const hasOneTimeTable = Array.isArray(tableCheck) 
+          ? tableCheck.length > 0 
+          : ((tableCheck as any)?.rows || []).length > 0;
+        
+        if (!hasOneTimeTable) {
+          // Table doesn't exist - skip one-time code checking
+          console.warn('[finalizeCore] one_time_discount_codes table does not exist, skipping one-time code validation');
+        } else {
+          const codeUpper = discountCode.toUpperCase();
+          // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
+          // First check if code exists and is valid (with row lock)
+          const oneTimeCodeResult = await sql`
+            SELECT id, customer_id FROM one_time_discount_codes 
+            WHERE code = ${codeUpper} 
+              AND used = false
+              AND (expires_at IS NULL OR expires_at > NOW())
+            LIMIT 1
+            FOR UPDATE
+          `;
+          const oneTimeRows = Array.isArray(oneTimeCodeResult) 
+            ? oneTimeCodeResult 
+            : (oneTimeCodeResult as any)?.rows || [];
+          if (oneTimeRows.length > 0) {
+            const codeRecord = oneTimeRows[0];
+            // If code is customer-specific, verify customer matches
+            if (codeRecord.customer_id && emailFromPi) {
+              const customerMatch = await sql`
+                SELECT id FROM customers 
+                WHERE id = ${codeRecord.customer_id} 
+                  AND LOWER(email) = LOWER(${emailFromPi})
+                LIMIT 1
+              `;
+              const customerRows = Array.isArray(customerMatch) 
+                ? customerMatch 
+                : (customerMatch as any)?.rows || [];
+              if (customerRows.length === 0) {
+                // Customer doesn't match - log but don't mark as used
+                console.error('[finalizeCore] One-time code customer mismatch:', {
+                  code: codeUpper,
+                  codeCustomerId: codeRecord.customer_id,
+                  paymentEmail: emailFromPi,
+                });
+                // Don't set oneTimeCodeId - code won't be marked as used
+              } else {
+                // Customer matches - safe to mark as used
+                oneTimeCodeId = codeRecord.id;
+              }
+            } else if (!codeRecord.customer_id) {
+              // Code is not customer-specific - safe to use
               oneTimeCodeId = codeRecord.id;
             }
-          } else if (!codeRecord.customer_id) {
-            // Code is not customer-specific - safe to use
-            oneTimeCodeId = codeRecord.id;
           }
         }
       } catch (e) {
@@ -164,18 +181,49 @@ export async function finalizeBookingTransactional(args: {
           ? [firstName, lastName].filter(Boolean).join(' ')
           : fullNameFromPi || null;
       
-      const custRows = (await sql`
-        INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at, used_welcome_offer)
-        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, ${stripeCustomerId}, NOW(), ${usedWelcomeOffer || false})
-        ON CONFLICT (email) DO UPDATE SET
-          first_name = COALESCE(EXCLUDED.first_name, customers.first_name),
-          last_name = COALESCE(EXCLUDED.last_name, customers.last_name),
-          phone = COALESCE(EXCLUDED.phone, customers.phone),
-          stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id),
-          last_seen_at = NOW(),
-          used_welcome_offer = COALESCE(customers.used_welcome_offer, false) OR ${usedWelcomeOffer || false}
-        RETURNING id
-      `) as any[];
+      // Check if used_welcome_offer column exists
+      let hasWelcomeOfferColumn = false;
+      try {
+        const columnCheck = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'customers' 
+            AND column_name = 'used_welcome_offer'
+          LIMIT 1
+        `;
+        hasWelcomeOfferColumn = Array.isArray(columnCheck) 
+          ? columnCheck.length > 0 
+          : ((columnCheck as any)?.rows || []).length > 0;
+      } catch (e) {
+        // If check fails, assume column doesn't exist
+        hasWelcomeOfferColumn = false;
+      }
+      
+      // Build INSERT/UPDATE query conditionally based on column existence
+      const custRows = hasWelcomeOfferColumn
+        ? (await sql`
+            INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at, used_welcome_offer)
+            VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, ${stripeCustomerId}, NOW(), ${usedWelcomeOffer || false})
+            ON CONFLICT (email) DO UPDATE SET
+              first_name = COALESCE(EXCLUDED.first_name, customers.first_name),
+              last_name = COALESCE(EXCLUDED.last_name, customers.last_name),
+              phone = COALESCE(EXCLUDED.phone, customers.phone),
+              stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id),
+              last_seen_at = NOW(),
+              used_welcome_offer = COALESCE(customers.used_welcome_offer, false) OR ${usedWelcomeOffer || false}
+            RETURNING id
+          `) as any[]
+        : (await sql`
+            INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at)
+            VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, ${stripeCustomerId}, NOW())
+            ON CONFLICT (email) DO UPDATE SET
+              first_name = COALESCE(EXCLUDED.first_name, customers.first_name),
+              last_name = COALESCE(EXCLUDED.last_name, customers.last_name),
+              phone = COALESCE(EXCLUDED.phone, customers.phone),
+              stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id),
+              last_seen_at = NOW()
+            RETURNING id
+          `) as any[];
       customerId = custRows?.[0]?.id || null;
       await sql`
         UPDATE bookings
@@ -231,20 +279,34 @@ export async function finalizeBookingTransactional(args: {
     // CRITICAL: The row is already locked by SELECT FOR UPDATE, so this update is safe
     if (oneTimeCodeId) {
       try {
-        const updateResult = await sql`
-          UPDATE one_time_discount_codes 
-          SET used = true, used_at = NOW()
-          WHERE id = ${oneTimeCodeId} AND used = false
+        // Check if table exists before updating
+        const tableCheck = await sql`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+            AND table_name = 'one_time_discount_codes'
+          LIMIT 1
         `;
-        // Verify the update succeeded (row might have been updated by another transaction)
-        const verifyResult = await sql`
-          SELECT used FROM one_time_discount_codes WHERE id = ${oneTimeCodeId} LIMIT 1
-        `;
-        const verifyRows = Array.isArray(verifyResult) 
-          ? verifyResult 
-          : (verifyResult as any)?.rows || [];
-        if (verifyRows.length > 0 && !verifyRows[0].used) {
-          console.warn('[finalizeCore] One-time code was not marked as used - possible race condition');
+        const hasOneTimeTable = Array.isArray(tableCheck) 
+          ? tableCheck.length > 0 
+          : ((tableCheck as any)?.rows || []).length > 0;
+        
+        if (hasOneTimeTable) {
+          const updateResult = await sql`
+            UPDATE one_time_discount_codes 
+            SET used = true, used_at = NOW()
+            WHERE id = ${oneTimeCodeId} AND used = false
+          `;
+          // Verify the update succeeded (row might have been updated by another transaction)
+          const verifyResult = await sql`
+            SELECT used FROM one_time_discount_codes WHERE id = ${oneTimeCodeId} LIMIT 1
+          `;
+          const verifyRows = Array.isArray(verifyResult) 
+            ? verifyResult 
+            : (verifyResult as any)?.rows || [];
+          if (verifyRows.length > 0 && !verifyRows[0].used) {
+            console.warn('[finalizeCore] One-time code was not marked as used - possible race condition');
+          }
         }
       } catch (e) {
         // Non-critical - log but continue
@@ -252,8 +314,14 @@ export async function finalizeBookingTransactional(args: {
       }
     }
 
-    // Confirm on Hapio
-    await confirmBooking(args.hapioBookingId, { isTemporary: false, metadata: { stripePaymentIntentId: (pi as any).id } });
+    // Confirm on Hapio (critical - must succeed before committing transaction)
+    try {
+      await confirmBooking(args.hapioBookingId, { isTemporary: false, metadata: { stripePaymentIntentId: (pi as any).id } });
+    } catch (hapioError: any) {
+      // Hapio confirmation failure is critical - rollback transaction
+      await sql`ROLLBACK`;
+      throw new Error(`Failed to confirm booking in Hapio: ${hapioError?.message || hapioError}`);
+    }
 
     // Brevo (best-effort, outside of transaction scope but after we COMMIT)
     await sql`COMMIT`;
@@ -365,39 +433,24 @@ export async function finalizeBookingTransactional(args: {
         const calendarLinks = generateCalendarLinks(serviceDisplayName, bookingDate, endDate);
 
         // Generate beautiful email HTML
+        // Use internal booking ID for customer-facing links
         const emailHtml = generateBookingConfirmationEmail({
           serviceName: serviceDisplayName,
           serviceImageUrl,
           clientName: fullNameFromPi,
           bookingDate,
           bookingTime,
+          bookingId: ensuredBookingRowId || args.hapioBookingId, // Use internal ID or fallback to Hapio ID
           calendarLinks,
         });
 
-        // Get receipt PDF attachment if payment intent exists
-        const attachments: Array<{ name: string; content: string }> = [];
-        if (args.paymentIntentId) {
-          try {
-            const { getStripeReceiptPdf } = await import('@/lib/stripeClient');
-            const receiptPdf = await getStripeReceiptPdf(args.paymentIntentId);
-            if (receiptPdf) {
-              attachments.push({
-                name: receiptPdf.filename,
-                content: receiptPdf.content,
-              });
-            }
-          } catch (e) {
-            // Receipt fetch failure is non-critical
-            console.error('[finalizeCore] Failed to fetch receipt PDF:', e);
-          }
-        }
-
+        // Note: Stripe will automatically send receipt emails separately when Customer emails → Successful payments is enabled
+        // We set receipt_email on the PaymentIntent, so Stripe handles receipt delivery
         await sendBrevoEmail({
           to: [{ email: emailFromPi, name: fullNameFromPi || undefined }],
           subject: `Your ${serviceDisplayName} appointment is confirmed`,
           htmlContent: emailHtml,
           tags: ['booking_confirmed'],
-          attachments: attachments.length > 0 ? attachments : undefined,
         });
       } catch (e) {
         // Brevo failures are non-critical - booking is already finalized

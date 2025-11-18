@@ -5,7 +5,8 @@ import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking, ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
 import { generateBookingCancellationEmail } from '@/lib/emails/bookingCancellation';
-import { getStripeReceiptPdf, getStripeRefundReceiptPdf } from '@/lib/stripeClient';
+// Note: Receipt PDF attachment removed - Stripe sends receipts automatically via email
+// when Customer emails → Successful payments / Refunds are enabled in Dashboard
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',
@@ -103,11 +104,12 @@ export async function GET(
         LEFT JOIN customers c ON b.customer_id = c.id
         LEFT JOIN services s ON (b.service_id = s.id::text OR b.service_id = s.slug)
         LEFT JOIN LATERAL (
-          SELECT amount_cents, status, refunded_cents
+          SELECT 
+            SUM(amount_cents) AS amount_cents,
+            MAX(status) AS status,
+            SUM(refunded_cents) AS refunded_cents
           FROM payments
           WHERE booking_id = b.id
-          ORDER BY created_at DESC
-          LIMIT 1
         ) p ON true
         LEFT JOIN LATERAL (
           SELECT data, created_at
@@ -152,7 +154,9 @@ export async function GET(
     }
 
     const row = bookingRows[0];
-    const finalAmount = row.payment_amount_cents ? row.payment_amount_cents / 100 : null;
+    const paymentAmountCents = row.payment_amount_cents ? Number(row.payment_amount_cents) : null;
+    const finalAmount = paymentAmountCents ? paymentAmountCents / 100 : null;
+    const refundedCents = row.refunded_cents ? Number(row.refunded_cents) : null;
     const clientHistory = normalizeRows(historyResult).map((h: any) => ({
       id: h.id,
       service_name: h.service_name,
@@ -168,7 +172,6 @@ export async function GET(
       enriched_client_name,
       enriched_client_email,
       enriched_client_phone,
-      payment_amount_cents: _payment_amount_cents,
       payment_status_override,
       ...restRow
     } = row;
@@ -180,6 +183,8 @@ export async function GET(
       client_phone: enriched_client_phone || row.client_phone,
       amount: finalAmount,
       final_amount: finalAmount,
+      payment_amount_cents: paymentAmountCents, // Include payment_amount_cents in response
+      refunded_cents: refundedCents, // Include refunded_cents in response
       payment_status: payment_status_override || row.payment_status,
       service_display_name: row.service_display_name || row.service_name,
       service_image_url: row.service_image_url,
@@ -225,6 +230,284 @@ export async function POST(
       return NextResponse.json(data);
     }
 
+    if (action === 'force-sync-outlook') {
+      // Force sync booking with Outlook calendar
+      const sql = getSqlClient();
+      const bookingInternalId = await getBookingInternalId(sql, bookingId);
+      if (!bookingInternalId) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+
+      if (process.env.OUTLOOK_SYNC_ENABLED === 'false') {
+        return NextResponse.json({ error: 'Outlook sync is disabled' }, { status: 400 });
+      }
+
+      // Fetch booking data
+      const bookingResult = await sql`
+        SELECT 
+          id, service_id, service_name, client_name, client_email, booking_date, metadata, outlook_event_id
+        FROM bookings
+        WHERE id = ${bookingInternalId}
+        LIMIT 1
+      `;
+      const bookingRows = normalizeRows(bookingResult);
+      if (bookingRows.length === 0) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+      const bookingData = bookingRows[0];
+
+      try {
+        const outlookResult = await ensureOutlookEventForBooking({
+          id: bookingInternalId,
+          service_id: bookingData.service_id,
+          service_name: bookingData.service_name,
+          client_name: bookingData.client_name || null,
+          client_email: bookingData.client_email || null,
+          booking_date: bookingData.booking_date || null,
+          outlook_event_id: bookingData.outlook_event_id || null,
+          metadata: bookingData.metadata || {},
+        });
+
+        // Update booking with Outlook sync status
+        await sql`
+          UPDATE bookings
+          SET 
+            outlook_event_id = ${outlookResult.eventId},
+            outlook_sync_status = ${outlookResult.action === 'created' ? 'synced' : 'updated'},
+            updated_at = NOW()
+          WHERE id = ${bookingInternalId}
+        `;
+
+        return NextResponse.json({
+          success: true,
+          message: `Successfully ${outlookResult.action === 'created' ? 'created' : 'updated'} Outlook event`,
+          outlookEventId: outlookResult.eventId,
+          action: outlookResult.action,
+        });
+      } catch (outlookError: any) {
+        console.error('[Force Sync Outlook] Error:', outlookError);
+        
+        // Update sync status to error
+        await sql`
+          UPDATE bookings
+          SET 
+            outlook_sync_status = 'error',
+            updated_at = NOW()
+          WHERE id = ${bookingInternalId}
+        `;
+
+        return NextResponse.json(
+          { error: `Failed to sync with Outlook: ${outlookError?.message || outlookError}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (action === 'reschedule') {
+      // Reschedule booking
+      const sql = getSqlClient();
+      const bookingInternalId = await getBookingInternalId(sql, bookingId);
+      if (!bookingInternalId) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+
+      const { newDate, newTime } = body;
+      if (!newDate || !newTime) {
+        return NextResponse.json({ error: 'New date and time are required' }, { status: 400 });
+      }
+
+      // Parse new date/time and convert to UTC for Hapio
+      // Note: Assumes time is in EST/EDT (America/New_York timezone)
+      const newDateTime = new Date(`${newDate}T${newTime}`);
+      if (isNaN(newDateTime.getTime())) {
+        return NextResponse.json({ error: 'Invalid date or time format' }, { status: 400 });
+      }
+
+      // Validate date is in the future
+      if (newDateTime <= new Date()) {
+        return NextResponse.json({ error: 'New date and time must be in the future' }, { status: 400 });
+      }
+
+      // Wrap reschedule logic in transaction
+      await sql`BEGIN`;
+      try {
+
+        // Fetch booking to get service duration and Hapio booking ID
+        const bookingResult = await sql`
+          SELECT 
+            id, hapio_booking_id, service_id, service_name, booking_date, metadata, client_email, client_name
+          FROM bookings
+          WHERE id = ${bookingInternalId}
+          LIMIT 1
+        `;
+        const bookingRows = normalizeRows(bookingResult);
+        if (bookingRows.length === 0) {
+          await sql`ROLLBACK`;
+          return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+        }
+        const bookingData = bookingRows[0];
+
+        if (!bookingData.hapio_booking_id) {
+          await sql`ROLLBACK`;
+          return NextResponse.json({ error: 'Booking does not have a Hapio booking ID' }, { status: 400 });
+        }
+
+        // Calculate end time (need service duration - fetch from services table)
+        let durationMinutes = 60; // Default
+        if (bookingData.service_id) {
+          const serviceResult = await sql`
+            SELECT duration_minutes FROM services
+            WHERE id = ${bookingData.service_id} OR slug = ${bookingData.service_id}
+            LIMIT 1
+          `;
+          const serviceRows = normalizeRows(serviceResult);
+          if (serviceRows.length > 0 && serviceRows[0].duration_minutes) {
+            durationMinutes = Number(serviceRows[0].duration_minutes);
+          }
+        }
+
+        const newEndDateTime = new Date(newDateTime);
+        newEndDateTime.setMinutes(newEndDateTime.getMinutes() + durationMinutes);
+
+        // Update Hapio booking (critical - must succeed)
+        const { updateBooking } = await import('@/lib/hapioClient');
+        try {
+          await updateBooking(bookingData.hapio_booking_id, {
+            startsAt: newDateTime.toISOString(),
+            endsAt: newEndDateTime.toISOString(),
+          });
+        } catch (hapioError: any) {
+          await sql`ROLLBACK`;
+          return NextResponse.json(
+            { error: `Failed to update booking in Hapio: ${hapioError?.message || hapioError}` },
+            { status: 500 }
+          );
+        }
+
+        // Update Neon booking
+        await sql`
+          UPDATE bookings
+          SET 
+            booking_date = ${newDateTime.toISOString()},
+            updated_at = NOW(),
+            metadata = jsonb_set(
+              COALESCE(metadata, '{}'::jsonb),
+              '{rescheduled_at}',
+              ${JSON.stringify(new Date().toISOString())}::jsonb
+            )
+          WHERE id = ${bookingInternalId}
+        `;
+
+        // Commit transaction before non-critical operations
+        await sql`COMMIT`;
+
+        // Update Outlook event if it exists (best-effort, after commit)
+        if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.metadata?.outlook?.eventId) {
+          try {
+            const { ensureOutlookEventForBooking } = await import('@/lib/outlookBookingSync');
+            await ensureOutlookEventForBooking({
+              id: bookingInternalId,
+              service_id: bookingData.service_id,
+              service_name: bookingData.service_name,
+              client_name: bookingData.client_name || bookingData.metadata?.client_name || null,
+              client_email: bookingData.client_email || bookingData.metadata?.client_email || null,
+              booking_date: newDateTime.toISOString(),
+              outlook_event_id: bookingData.metadata.outlook.eventId,
+              metadata: bookingData.metadata || {},
+            });
+          } catch (outlookError) {
+            console.error('[Reschedule] Outlook update failed:', outlookError);
+            // Non-critical - continue
+          }
+        }
+
+        // Send reschedule email to customer (best-effort)
+        const clientEmail = bookingData.client_email || bookingData.metadata?.client_email || bookingData.metadata?.attendee?.email;
+        const clientName = bookingData.client_name || bookingData.metadata?.client_name || bookingData.metadata?.attendee?.name;
+        
+        if (clientEmail) {
+          try {
+            // Fetch service details for email
+            let serviceImageUrl: string | null = null;
+            if (bookingData.service_id) {
+              try {
+                const serviceResult = await sql`
+                  SELECT image_url FROM services
+                  WHERE id = ${bookingData.service_id} OR slug = ${bookingData.service_id}
+                  LIMIT 1
+                `;
+                const serviceRows = normalizeRows(serviceResult);
+                if (serviceRows.length > 0) {
+                  serviceImageUrl = serviceRows[0].image_url || null;
+                }
+              } catch (e) {
+                // Service fetch failure is non-critical
+              }
+            }
+
+            // Format dates and times
+            const oldBookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
+            const oldBookingTime = oldBookingDate.toLocaleTimeString('en-US', {
+              timeZone: 'America/New_York',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            });
+
+            const newBookingTime = newDateTime.toLocaleTimeString('en-US', {
+              timeZone: 'America/New_York',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            });
+
+            // Generate reschedule email
+            const { generateBookingRescheduleEmail } = await import('@/lib/emails/bookingReschedule');
+            const emailHtml = generateBookingRescheduleEmail({
+              serviceName: bookingData.service_name || 'Service',
+              serviceImageUrl,
+              clientName: clientName || null,
+              oldBookingDate,
+              oldBookingTime,
+              newBookingDate: newDateTime,
+              newBookingTime,
+            });
+
+            await sendBrevoEmail({
+              to: [{ email: clientEmail, name: clientName || undefined }],
+              subject: `Your ${bookingData.service_name || 'appointment'} has been rescheduled`,
+              htmlContent: emailHtml,
+              tags: ['booking_rescheduled'],
+            });
+          } catch (emailError) {
+            console.error('[Reschedule] Email send failed:', emailError);
+            // Non-critical - continue
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Booking rescheduled successfully',
+          booking: {
+            ...bookingData,
+            booking_date: newDateTime.toISOString(),
+          },
+        });
+      } catch (error: any) {
+        // Rollback transaction on any error
+        try {
+          await sql`ROLLBACK`;
+        } catch (rollbackError) {
+          console.error('[Reschedule] Rollback failed:', rollbackError);
+        }
+        console.error('[Reschedule] Error:', error);
+        return NextResponse.json(
+          { error: 'Failed to reschedule booking', details: error?.message },
+          { status: 500 }
+        );
+      }
+    }
+
     if (action === 'cancel') {
       // Cancel booking
       const sql = getSqlClient();
@@ -249,19 +532,14 @@ export async function POST(
       }
       const bookingData = bookingRows[0];
 
-      // Validate booking status - prevent cancelling already cancelled/refunded bookings
+      // Validate booking status - prevent cancelling already cancelled bookings
       if (bookingData.payment_status === 'cancelled') {
         return NextResponse.json(
           { error: 'Booking is already cancelled' },
           { status: 400 }
         );
       }
-      if (bookingData.payment_status === 'refunded') {
-        return NextResponse.json(
-          { error: 'Cannot cancel a refunded booking. Use refund action instead.' },
-          { status: 400 }
-        );
-      }
+      // Allow canceling refunded bookings (they can still be cancelled, just won't process another refund)
 
       let refundProcessed = false;
       let refundId = null;
@@ -274,30 +552,41 @@ export async function POST(
       let outlookLastAction = existingOutlookMeta.lastAction ?? null;
       let outlookError = existingOutlookMeta.error ?? null;
 
-      // If booking is paid, process refund first (check both 'paid' and 'succeeded')
+      // If booking is paid and NOT already refunded, process refund first (check both 'paid' and 'succeeded')
       const isPaid = (bookingData.payment_status === 'paid' || bookingData.payment_status === 'succeeded') && bookingData.payment_intent_id;
-      if (isPaid) {
+      const isAlreadyRefunded = bookingData.payment_status === 'refunded';
+      if (isPaid && !isAlreadyRefunded) {
+        // CRITICAL: Wrap refund logic in transaction to prevent race conditions
+        await sql`BEGIN`;
         try {
           const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
           
           if (paymentIntent.status === 'succeeded') {
-            // Create refund - get payment amount in single query
-            // Sum all payments to handle multiple payment records
+            // CRITICAL: Use SELECT FOR UPDATE to lock payment rows and prevent race conditions
+            // Get payment amount from payments table with row-level locking
             const paymentResult = await sql`
               SELECT SUM(amount_cents) as total_amount_cents, SUM(refunded_cents) as total_refunded_cents
               FROM payments 
               WHERE booking_id = ${bookingInternalId}
+              FOR UPDATE
             `;
             const paymentRows = normalizeRows(paymentResult);
             if (paymentRows.length === 0 || !paymentRows[0]?.total_amount_cents) {
+              await sql`ROLLBACK`;
               throw new Error('Payment record not found for booking');
             }
             const totalPaymentAmount = Number(paymentRows[0].total_amount_cents);
             const totalAlreadyRefunded = Number(paymentRows[0].total_refunded_cents || 0);
             const remainingRefundable = totalPaymentAmount - totalAlreadyRefunded;
             
+            // Validate remaining refundable amount
+            if (remainingRefundable <= 0) {
+              await sql`ROLLBACK`;
+              throw new Error('No remaining refundable amount');
+            }
+            
             // Use remaining refundable amount (full refund on cancellation)
-            const requestedRefundAmount = remainingRefundable > 0 ? remainingRefundable : totalPaymentAmount;
+            const requestedRefundAmount = remainingRefundable;
             
             const refund = await stripe.refunds.create({
               payment_intent: bookingData.payment_intent_id,
@@ -305,19 +594,31 @@ export async function POST(
               reason: 'requested_by_customer',
             });
             
-            refundProcessed = true;
-            refundId = refund.id;
-            
             // CRITICAL: Use Stripe's actual refund amount (may differ from requested)
             const actualRefundAmount = refund.amount || requestedRefundAmount;
             
+            // CRITICAL: Re-validate with actual refund amount from Stripe
+            if (actualRefundAmount > remainingRefundable) {
+              console.error('[Cancel Booking] Stripe refund amount exceeds remaining refundable:', {
+                actualRefundAmount,
+                remainingRefundable,
+                requestedRefundAmount,
+              });
+              await sql`ROLLBACK`;
+              throw new Error('Stripe refund amount exceeds remaining refundable amount');
+            }
+            
+            refundProcessed = true;
+            refundId = refund.id;
+            
             // Update payments.refunded_cents using actual refund amount from Stripe
-            // Check existing refunded amount to prevent over-refunding
+            // CRITICAL: Use SELECT FOR UPDATE to lock the row
             const existingPaymentCheck = await sql`
               SELECT id, refunded_cents, amount_cents 
               FROM payments 
               WHERE booking_id = ${bookingInternalId} 
               ORDER BY created_at DESC LIMIT 1
+              FOR UPDATE
             `;
             const existingPaymentCheckRows = normalizeRows(existingPaymentCheck);
             if (existingPaymentCheckRows.length > 0) {
@@ -335,24 +636,41 @@ export async function POST(
                     SET refunded_cents = ${newTotalRefundedOnThisPayment}, updated_at = NOW()
                     WHERE id = ${existing.id}
                   `;
+                  await sql`COMMIT`;
                 } else {
+                  await sql`ROLLBACK`;
                   console.error('[Cancel Booking] Refund amount would exceed total payment amount', {
                     totalAlreadyRefunded,
                     actualRefundAmount,
                     totalPayment: totalPaymentAmount,
                   });
+                  throw new Error('Refund amount would exceed total payment amount');
                 }
               } else {
+                await sql`ROLLBACK`;
                 console.error('[Cancel Booking] Refund amount would exceed payment record amount', {
                   alreadyRefundedOnThisPayment,
                   actualRefundAmount,
                   paymentRecordAmount: existing.amount_cents,
                 });
+                throw new Error('Refund amount would exceed payment record amount');
               }
+            } else {
+              await sql`ROLLBACK`;
+              throw new Error('Payment record not found for update');
             }
+          } else {
+            await sql`ROLLBACK`;
           }
         } catch (error: any) {
-          // Continue with cancellation even if refund fails
+          // Rollback transaction on any error
+          try {
+            await sql`ROLLBACK`;
+          } catch (rollbackError) {
+            console.error('[Cancel Booking] Rollback failed:', rollbackError);
+          }
+          // Continue with cancellation even if refund fails (log error)
+          console.error('[Cancel Booking] Refund processing failed:', error);
         }
       }
 
@@ -469,24 +787,8 @@ export async function POST(
             }
           }
 
-          // Get receipt PDF attachment if refund was processed
-          const attachments: Array<{ name: string; content: string }> = [];
-          if (refundProcessed && refundId) {
-            try {
-              const receiptPdf = await getStripeRefundReceiptPdf(refundId);
-              if (receiptPdf) {
-                attachments.push({
-                  name: receiptPdf.filename,
-                  content: receiptPdf.content,
-                });
-              }
-            } catch (e) {
-              // Receipt fetch failure is non-critical
-              console.error('[Cancel Booking] Failed to fetch receipt PDF:', e);
-            }
-          }
-
           // Generate cancellation email
+          // Note: Stripe will automatically send receipt emails separately when Customer emails → Refunds is enabled
            const emailHtml = generateBookingCancellationEmail({
              serviceName: bookingData.service_name || 'Service',
              serviceImageUrl,
@@ -496,7 +798,7 @@ export async function POST(
              refundProcessed,
              refundAmount,
              refundId: refundId || null,
-             receiptUrl: refundProcessed && refundId ? `https://dashboard.stripe.com/refunds/${refundId}` : null,
+             receiptUrl: null, // Stripe sends receipts separately
              refundReason: null, // Cancellation doesn't have a reason field
            });
 
@@ -505,7 +807,6 @@ export async function POST(
             subject: 'Your appointment has been cancelled',
             htmlContent: emailHtml,
             tags: ['booking_cancelled'],
-            attachments: attachments.length > 0 ? attachments : undefined,
           });
           
           await sql`
@@ -831,24 +1132,10 @@ export async function POST(
           }
         }
 
-        // Send refund email with receipt attachment (best-effort)
+        // Send refund email (best-effort)
+        // Note: Stripe will automatically send receipt emails separately when Customer emails → Refunds is enabled
         if (bookingData.client_email) {
           try {
-            // Get receipt PDF attachment
-            const attachments: Array<{ name: string; content: string }> = [];
-            try {
-              const receiptPdf = await getStripeRefundReceiptPdf(refund.id);
-              if (receiptPdf) {
-                attachments.push({
-                  name: receiptPdf.filename,
-                  content: receiptPdf.content,
-                });
-              }
-            } catch (e) {
-              // Receipt fetch failure is non-critical
-              console.error('[Refund] Failed to fetch receipt PDF:', e);
-            }
-
             // Generate cancellation email (refund is similar to cancellation)
             const bookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
             const bookingTime = bookingDate.toLocaleTimeString('en-US', {
@@ -885,7 +1172,7 @@ export async function POST(
               refundProcessed: true,
               refundAmount: actualRefundCents / 100,
               refundId: refund.id,
-              receiptUrl: `https://dashboard.stripe.com/refunds/${refund.id}`,
+              receiptUrl: null, // Stripe sends receipts separately
               refundReason: refundReason,
             });
 
@@ -894,7 +1181,6 @@ export async function POST(
               subject: 'Your refund has been issued',
               htmlContent: emailHtml,
               tags: ['booking_refunded'],
-              attachments: attachments.length > 0 ? attachments : undefined,
             });
             await sql`
               INSERT INTO booking_events (booking_id, type, data)

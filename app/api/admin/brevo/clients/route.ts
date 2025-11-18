@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const BREVO_API_BASE = 'https://api.brevo.com/v3';
 
 function getApiKey(): string {

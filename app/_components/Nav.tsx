@@ -25,6 +25,7 @@ export default function Nav() {
     { href: '/services', label: 'Services' },
     { href: '/forms', label: 'Forms' },
     { href: '/faq', label: 'FAQ' },
+    { href: '/manage-booking', label: 'Manage Booking' },
   ];
 
   return (

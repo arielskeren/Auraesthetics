@@ -24,6 +24,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate date formats
+    const startDate = new Date(slotStart);
+    const endDate = new Date(slotEnd);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid date format for slotStart or slotEnd' },
+        { status: 400 }
+      );
+    }
+
+    // Validate end time is after start time
+    if (endDate <= startDate) {
+      return NextResponse.json(
+        { error: 'End time must be after start time' },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format if provided
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate amountCents if provided (must be positive and reasonable)
+    if (amountCents !== null && amountCents !== undefined) {
+      if (!Number.isFinite(amountCents) || amountCents < 0 || amountCents > 10000000) {
+        return NextResponse.json(
+          { error: 'Invalid amount. Must be between 0 and $100,000' },
+          { status: 400 }
+        );
+      }
+    }
+
     const sql = getSqlClient();
     let svc:
       | {

@@ -145,11 +145,9 @@ export function generateBookingCancellationEmail(params: {
                     <p style="margin: 8px 0 0 0; color: #5A5A5A; font-size: 13px; line-height: 1.6;">
                       Your refund has been processed and should appear in your account within 5-10 business days, depending on your bank's processing time.
                     </p>
-                    ${receiptUrl ? `
-                    <p style="margin: 12px 0 0 0; color: #5A5A5A; font-size: 14px; line-height: 1.6;">
-                      <a href="${escapeHtml(receiptUrl)}" style="color: #6B8E6F; text-decoration: underline;">View Refund Receipt</a>
+                    <p style="margin: 12px 0 0 0; color: #5A5A5A; font-size: 13px; line-height: 1.6; font-style: italic;">
+                      <strong>Note:</strong> You will receive a separate refund receipt email from Stripe with your official receipt.
                     </p>
-                    ` : ''}
                   </td>
                 </tr>
               </table>

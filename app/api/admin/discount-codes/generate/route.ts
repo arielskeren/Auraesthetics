@@ -102,6 +102,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if one_time_discount_codes table exists
+    const tableCheck = await sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+        AND table_name = 'one_time_discount_codes'
+      LIMIT 1
+    `;
+    const hasOneTimeTable = normalizeRows(tableCheck).length > 0;
+    
+    if (!hasOneTimeTable) {
+      return NextResponse.json(
+        { 
+          error: 'One-time discount codes table does not exist. Please run migration 006_create_one_time_discount_codes.sql',
+          details: 'The one_time_discount_codes table is required for generating one-time discount codes.'
+        },
+        { status: 500 }
+      );
+    }
+
     // Generate unique code (check both one_time_discount_codes and discount_codes tables)
     let code: string;
     let attempts = 0;
@@ -207,39 +227,90 @@ export async function POST(request: NextRequest) {
       const safeExpiresAt = expiresAt ? escapeHtml(new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })) : '';
 
       const emailHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Your Special Discount Code</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #2d5016 0%, #4a7c2a 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0;">Aura Wellness Aesthetics</h1>
-          </div>
-          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-            <h2 style="color: #2d5016;">Your Special Discount Code</h2>
-            <p>Hi ${safeCustomerName || 'there'},</p>
-            <p>We're excited to offer you a special discount on your next service!</p>
-            <div style="background: white; border: 2px dashed #4a7c2a; padding: 20px; text-align: center; margin: 20px 0; border-radius: 5px;">
-              <p style="margin: 0; font-size: 14px; color: #666;">Your discount code:</p>
-              <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #2d5016; letter-spacing: 2px;">${safeCode}</p>
-              <p style="margin: 0; font-size: 16px; color: #4a7c2a; font-weight: bold;">${safeDiscountDisplay}</p>
-            </div>
-            <p>Use this code at checkout to redeem your ${safeDiscountDisplay} discount.</p>
-            ${safeExpiresAt ? `<p style="color: #666; font-size: 14px;">This code expires on ${safeExpiresAt}.</p>` : ''}
-            <p style="margin-top: 30px;">
-              <a href="https://theauraesthetics.com/services" style="background: #4a7c2a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Book Your Service</a>
-            </p>
-            <p style="margin-top: 30px; font-size: 14px; color: #666;">
-              Thank you for being a valued client!<br>
-              <strong>Aura Wellness Aesthetics</strong>
-            </p>
-          </div>
-        </body>
-        </html>
-      `;
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Special Discount Code</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f0;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f0;">
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <table role="presentation" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #2d5016 0%, #4a7c2a 100%); padding: 40px 20px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600; letter-spacing: 0.5px;">Aura Wellness Aesthetics</h1>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="margin: 0 0 20px 0; color: #2d5016; font-size: 24px; font-weight: 600;">Your Special Discount Code</h2>
+              
+              <p style="margin: 0 0 15px 0; color: #333333; font-size: 16px; line-height: 1.6;">
+                Hi ${safeCustomerName || 'there'},
+              </p>
+              
+              <p style="margin: 0 0 30px 0; color: #333333; font-size: 16px; line-height: 1.6;">
+                We're excited to offer you a special discount on your next service!
+              </p>
+
+              <!-- Discount Code Box -->
+              <div style="background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%); border: 3px dashed #4a7c2a; padding: 30px 20px; text-align: center; margin: 30px 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(74, 124, 42, 0.1);">
+                <p style="margin: 0 0 10px 0; font-size: 14px; color: #666666; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Your Discount Code</p>
+                <p style="margin: 15px 0; font-size: 42px; font-weight: bold; color: #2d5016; letter-spacing: 4px; font-family: 'Courier New', monospace;">${safeCode}</p>
+                <div style="display: inline-block; background-color: #4a7c2a; color: #ffffff; padding: 8px 20px; border-radius: 20px; margin-top: 10px;">
+                  <p style="margin: 0; font-size: 18px; font-weight: 600;">${safeDiscountDisplay}</p>
+                </div>
+              </div>
+
+              <p style="margin: 25px 0; color: #333333; font-size: 16px; line-height: 1.6; text-align: center;">
+                Use this code at checkout to redeem your <strong style="color: #2d5016;">${safeDiscountDisplay}</strong> discount.
+              </p>
+              
+              ${safeExpiresAt ? `
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 25px 0; border-radius: 4px;">
+                  <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.6;">
+                    <strong>⏰ Expires:</strong> ${safeExpiresAt}
+                  </p>
+                </div>
+              ` : ''}
+
+              <!-- CTA Button -->
+              <table role="presentation" style="width: 100%; margin: 35px 0; border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <a href="https://www.theauraesthetics.com/book" style="display: inline-block; background-color: #4a7c2a; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(74, 124, 42, 0.3); transition: background-color 0.3s;">
+                      Book Your Service
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Footer -->
+              <div style="border-top: 1px solid #e0e0e0; padding-top: 25px; margin-top: 35px;">
+                <p style="margin: 0; color: #666666; font-size: 14px; line-height: 1.6; text-align: center;">
+                  Thank you for being a valued client!
+                </p>
+                <p style="margin: 15px 0 0 0; color: #999999; font-size: 13px; line-height: 1.6; font-style: italic; text-align: center;">
+                  Warm regards,<br>
+                  <strong style="color: #2d5016;">Amy & The Aura Wellness Aesthetics Team</strong>
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `.trim();
 
       await sendBrevoEmail({
         to: [{ email: finalCustomerEmail, name: finalCustomerName || undefined }],
@@ -248,12 +319,17 @@ export async function POST(request: NextRequest) {
         tags: ['discount_code', 'one_time_offer'],
       });
 
-      // Mark email as sent
-      await sql`
-        UPDATE one_time_discount_codes 
-        SET email_sent = true, email_sent_at = NOW()
-        WHERE id = ${inserted.id}
-      `;
+      // Mark email as sent (if column exists)
+      try {
+        await sql`
+          UPDATE one_time_discount_codes 
+          SET email_sent = true, email_sent_at = NOW()
+          WHERE id = ${inserted.id}
+        `;
+      } catch (e) {
+        // Column might not exist - non-critical
+        console.warn('[Generate Discount Code] email_sent column may not exist');
+      }
     } catch (emailError: any) {
       console.error('[Generate Discount Code] Email send failed:', emailError);
       // Don't fail the request if email fails - code is still created

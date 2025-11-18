@@ -42,105 +42,128 @@ export async function POST(request: NextRequest) {
     if (codeUpper === 'WELCOME15') {
       const sql = getSqlClient();
       
+      // Check if used_welcome_offer column exists
+      let hasWelcomeOfferColumn = false;
+      try {
+        const columnCheck = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'customers' 
+            AND column_name = 'used_welcome_offer'
+          LIMIT 1
+        `;
+        hasWelcomeOfferColumn = normalizeRows(columnCheck).length > 0;
+      } catch (e) {
+        // If check fails, assume column doesn't exist
+        hasWelcomeOfferColumn = false;
+      }
+      
       // Check if customer email has already used the welcome offer
       if (customerEmail && typeof customerEmail === 'string') {
         const emailLower = customerEmail.toLowerCase().trim();
-        const customerCheck = await sql`
-          SELECT used_welcome_offer, email, first_name, last_name 
-          FROM customers 
-          WHERE LOWER(email) = ${emailLower}
-          LIMIT 1
-        `;
-        const customerRows = normalizeRows(customerCheck);
         
-        if (customerRows.length > 0) {
-          const customer = customerRows[0];
-          
-          // Check if this customer has already used the welcome offer
-          if (customer.used_welcome_offer === true) {
-            return NextResponse.json(
-              { error: 'This welcome offer has already been used', valid: false },
-              { status: 400 }
-            );
-          }
-          
-          // Check for duplicate name if name is provided
-          if (customerName && typeof customerName === 'string') {
-            const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
-            if (nameParts.length >= 2) {
-              const firstName = nameParts[0];
-              const lastName = nameParts.slice(1).join(' ');
-              
-              // Check if another customer with same name has used the offer
-              const nameCheck = await sql`
-                SELECT used_welcome_offer 
-                FROM customers 
-                WHERE LOWER(first_name) = LOWER(${firstName})
-                  AND LOWER(last_name) = LOWER(${lastName})
-                  AND used_welcome_offer = true
-                  AND LOWER(email) != ${emailLower}
-                LIMIT 1
-              `;
-              const nameRows = normalizeRows(nameCheck);
-              
-              if (nameRows.length > 0) {
-                return NextResponse.json(
-                  { error: 'This welcome offer has already been used by someone with this name', valid: false },
-                  { status: 400 }
-                );
+        if (hasWelcomeOfferColumn) {
+          const customerCheck = await sql`
+            SELECT used_welcome_offer, email, first_name, last_name 
+            FROM customers 
+            WHERE LOWER(email) = ${emailLower}
+            LIMIT 1
+          `;
+          const customerRows = normalizeRows(customerCheck);
+        
+          if (customerRows.length > 0) {
+            const customer = customerRows[0];
+            
+            // Check if this customer has already used the welcome offer
+            if (customer.used_welcome_offer === true) {
+              return NextResponse.json(
+                { error: 'This welcome offer has already been used', valid: false },
+                { status: 400 }
+              );
+            }
+            
+            // Check for duplicate name if name is provided
+            if (customerName && typeof customerName === 'string') {
+              const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
+              if (nameParts.length >= 2) {
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ');
+                
+                // Check if another customer with same name has used the offer
+                const nameCheck = await sql`
+                  SELECT used_welcome_offer 
+                  FROM customers 
+                  WHERE LOWER(first_name) = LOWER(${firstName})
+                    AND LOWER(last_name) = LOWER(${lastName})
+                    AND used_welcome_offer = true
+                    AND LOWER(email) != ${emailLower}
+                  LIMIT 1
+                `;
+                const nameRows = normalizeRows(nameCheck);
+                
+                if (nameRows.length > 0) {
+                  return NextResponse.json(
+                    { error: 'This welcome offer has already been used by someone with this name', valid: false },
+                    { status: 400 }
+                  );
+                }
+              }
+            }
+          } else {
+            // New customer - check if someone with the same email/name combination has used it
+            if (customerName && typeof customerName === 'string') {
+              const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
+              if (nameParts.length >= 2) {
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ');
+                
+                const duplicateCheck = await sql`
+                  SELECT used_welcome_offer 
+                  FROM customers 
+                  WHERE (LOWER(email) = LOWER(${customerEmail}) 
+                     OR (LOWER(first_name) = LOWER(${firstName}) AND LOWER(last_name) = LOWER(${lastName})))
+                    AND used_welcome_offer = true
+                  LIMIT 1
+                `;
+                const duplicateRows = normalizeRows(duplicateCheck);
+                
+                if (duplicateRows.length > 0) {
+                  return NextResponse.json(
+                    { error: 'This welcome offer has already been used', valid: false },
+                    { status: 400 }
+                  );
+                }
               }
             }
           }
         } else {
-          // New customer - check if someone with the same email/name combination has used it
-          if (customerName && typeof customerName === 'string') {
-            const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
-            if (nameParts.length >= 2) {
-              const firstName = nameParts[0];
-              const lastName = nameParts.slice(1).join(' ');
-              
-              const duplicateCheck = await sql`
-                SELECT used_welcome_offer 
-                FROM customers 
-                WHERE (LOWER(email) = LOWER(${customerEmail}) 
-                   OR (LOWER(first_name) = LOWER(${firstName}) AND LOWER(last_name) = LOWER(${lastName})))
-                  AND used_welcome_offer = true
-                LIMIT 1
-              `;
-              const duplicateRows = normalizeRows(duplicateCheck);
-              
-              if (duplicateRows.length > 0) {
-                return NextResponse.json(
-                  { error: 'This welcome offer has already been used', valid: false },
-                  { status: 400 }
-                );
-              }
-            }
-          }
+          // Column doesn't exist - skip welcome offer validation
+          console.warn('[Discount Validation] used_welcome_offer column does not exist, skipping WELCOME15 validation');
         }
       } else if (customerName && typeof customerName === 'string') {
-        // Only name provided - check for duplicates
-        const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
-        if (nameParts.length >= 2) {
-          const firstName = nameParts[0];
-          const lastName = nameParts.slice(1).join(' ');
-          
-          const sql = getSqlClient();
-          const nameCheck = await sql`
-            SELECT used_welcome_offer 
-            FROM customers 
-            WHERE LOWER(first_name) = LOWER(${firstName})
-              AND LOWER(last_name) = LOWER(${lastName})
-              AND used_welcome_offer = true
-            LIMIT 1
-          `;
-          const nameRows = normalizeRows(nameCheck);
-          
-          if (nameRows.length > 0) {
-            return NextResponse.json(
-              { error: 'This welcome offer has already been used by someone with this name', valid: false },
-              { status: 400 }
-            );
+        // Only name provided - check for duplicates (only if column exists)
+        if (hasWelcomeOfferColumn) {
+          const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
+          if (nameParts.length >= 2) {
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ');
+            
+            const nameCheck = await sql`
+              SELECT used_welcome_offer 
+              FROM customers 
+              WHERE LOWER(first_name) = LOWER(${firstName})
+                AND LOWER(last_name) = LOWER(${lastName})
+                AND used_welcome_offer = true
+              LIMIT 1
+            `;
+            const nameRows = normalizeRows(nameCheck);
+            
+            if (nameRows.length > 0) {
+              return NextResponse.json(
+                { error: 'This welcome offer has already been used by someone with this name', valid: false },
+                { status: 400 }
+              );
+            }
           }
         }
       }
@@ -149,42 +172,67 @@ export async function POST(request: NextRequest) {
     // Check database for discount code (both regular and one-time codes)
     const sql = getSqlClient();
     
-    // First check one-time discount codes
-    const oneTimeResult = await sql`
-      SELECT * FROM one_time_discount_codes 
-      WHERE code = ${codeUpper}
-        AND used = false
-        AND (expires_at IS NULL OR expires_at > NOW())
-    `;
-    const oneTimeRows = normalizeRows(oneTimeResult);
+    // Check if one_time_discount_codes table exists
+    let hasOneTimeTable = false;
+    try {
+      const tableCheck = await sql`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_name = 'one_time_discount_codes'
+        LIMIT 1
+      `;
+      hasOneTimeTable = normalizeRows(tableCheck).length > 0;
+    } catch (e) {
+      // If check fails, assume table doesn't exist
+      hasOneTimeTable = false;
+    }
     
     let discountCode: any = null;
     let stripeCouponId: string | null = null;
     let isOneTime = false;
 
-    if (oneTimeRows.length > 0) {
-      // One-time code found
-      discountCode = oneTimeRows[0];
-      stripeCouponId = discountCode.stripe_coupon_id;
-      isOneTime = true;
-      
-      // Check if customer matches (if customerId or email provided)
-      if (customerEmail && discountCode.customer_id) {
-        const customerCheck = await sql`
-          SELECT id FROM customers 
-          WHERE id = ${discountCode.customer_id} 
-            AND LOWER(email) = LOWER(${customerEmail})
-          LIMIT 1
+    // First check one-time discount codes (if table exists)
+    if (hasOneTimeTable) {
+      try {
+        const oneTimeResult = await sql`
+          SELECT * FROM one_time_discount_codes 
+          WHERE code = ${codeUpper}
+            AND used = false
+            AND (expires_at IS NULL OR expires_at > NOW())
         `;
-        if (normalizeRows(customerCheck).length === 0) {
-          return NextResponse.json(
-            { error: 'This discount code is not valid for your account', valid: false },
-            { status: 400 }
-          );
+        const oneTimeRows = normalizeRows(oneTimeResult);
+        
+        if (oneTimeRows.length > 0) {
+          // One-time code found
+          discountCode = oneTimeRows[0];
+          stripeCouponId = discountCode.stripe_coupon_id;
+          isOneTime = true;
+          
+          // Check if customer matches (if customerId or email provided)
+          if (customerEmail && discountCode.customer_id) {
+            const customerCheck = await sql`
+              SELECT id FROM customers 
+              WHERE id = ${discountCode.customer_id} 
+                AND LOWER(email) = LOWER(${customerEmail})
+              LIMIT 1
+            `;
+            if (normalizeRows(customerCheck).length === 0) {
+              return NextResponse.json(
+                { error: 'This discount code is not valid for your account', valid: false },
+                { status: 400 }
+              );
+            }
+          }
         }
+      } catch (e) {
+        // If one-time table query fails, continue to regular discount codes
+        console.warn('[Discount Validation] One-time discount codes table query failed:', e);
       }
-    } else {
-      // Check regular discount codes
+    }
+
+    // If no one-time code found, check regular discount codes
+    if (!discountCode) {
       const dbResult = await sql`
         SELECT * FROM discount_codes 
         WHERE code = ${codeUpper} 
