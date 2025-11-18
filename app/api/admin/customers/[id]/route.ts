@@ -101,19 +101,65 @@ export async function PATCH(
       WHERE id = ${customerId}
     `;
 
-    // Sync to Brevo if marketing opt-in is true (or was just set to true)
+    // CRITICAL: Always sync to Brevo after Neon update (if marketing opt-in is true)
+    // This ensures Brevo stays in sync with Neon (source of truth)
     const shouldSync = marketing_opt_in !== false && (marketing_opt_in || existing.marketing_opt_in);
     if (shouldSync) {
       try {
-        await syncCustomerToBrevo({
+        const syncResult = await syncCustomerToBrevo({
           customerId,
           sql,
           listId: process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined,
           tags: ['customer', 'admin_updated'],
         });
+        
+        // Verify brevo_contact_id was updated in database
+        if (syncResult.brevoId) {
+          const verifyResult = await sql`
+            SELECT brevo_contact_id FROM customers WHERE id = ${customerId} LIMIT 1
+          `;
+          const verify = Array.isArray(verifyResult) ? verifyResult[0] : (verifyResult as any)?.rows?.[0];
+          if (verify && String(verify.brevo_contact_id) !== String(syncResult.brevoId)) {
+            // Update if not already set correctly
+            await sql`
+              UPDATE customers 
+              SET brevo_contact_id = ${String(syncResult.brevoId)}, updated_at = NOW()
+              WHERE id = ${customerId}
+            `;
+            console.log(`[Admin Customers API] Updated brevo_contact_id to ${syncResult.brevoId}`);
+          }
+        }
       } catch (e) {
         // Brevo sync failure is non-critical - customer is already updated
         console.error('[Admin Customers API] Brevo sync failed:', e);
+      }
+    } else if (marketing_opt_in === false && existing.marketing_opt_in) {
+      // Marketing opt-in was turned off - remove from Brevo list (but keep contact)
+      // Note: We don't delete the contact, just remove from list
+      try {
+        const customerResult = await sql`
+          SELECT brevo_contact_id FROM customers WHERE id = ${customerId} LIMIT 1
+        `;
+        const customer = Array.isArray(customerResult) ? customerResult[0] : (customerResult as any)?.rows?.[0];
+        if (customer?.brevo_contact_id) {
+          const apiKey = process.env.BREVO_API_KEY;
+          if (apiKey) {
+            // Remove from list but keep contact
+            const listId = process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined;
+            if (listId) {
+              await fetch(`https://api.brevo.com/v3/contacts/lists/${listId}/contacts/remove`, {
+                method: 'POST',
+                headers: {
+                  'api-key': apiKey,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ emails: [existing.email] }),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[Admin Customers API] Failed to remove from Brevo list:', e);
       }
     }
 
@@ -134,6 +180,72 @@ export async function PATCH(
     console.error('[Admin Customers API] Error updating customer:', error);
     return NextResponse.json(
       { error: 'Failed to update customer', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/admin/customers/[id] - Delete customer from Neon and Brevo (if linked)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const sql = getSqlClient();
+    const customerId = params.id;
+
+    // Fetch customer to get brevo_contact_id
+    const customerResult = await sql`
+      SELECT id, email, brevo_contact_id FROM customers WHERE id = ${customerId} LIMIT 1
+    `;
+    const customers = Array.isArray(customerResult) ? customerResult : (customerResult as any)?.rows || [];
+    
+    if (customers.length === 0) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    const customer = customers[0];
+    const brevoContactId = customer.brevo_contact_id;
+
+    // Delete from Brevo if linked
+    if (brevoContactId) {
+      try {
+        const apiKey = process.env.BREVO_API_KEY;
+        if (apiKey) {
+          const brevoResponse = await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(brevoContactId)}`, {
+            method: 'DELETE',
+            headers: {
+              'api-key': apiKey,
+            },
+          });
+
+          if (!brevoResponse.ok && brevoResponse.status !== 404) {
+            // Log but don't fail - we'll still delete from Neon
+            console.warn(`[Delete Customer] Failed to delete Brevo contact ${brevoContactId}:`, brevoResponse.status);
+          } else {
+            console.log(`[Delete Customer] Successfully deleted Brevo contact ${brevoContactId}`);
+          }
+        }
+      } catch (brevoError) {
+        // Log but don't fail - we'll still delete from Neon
+        console.error('[Delete Customer] Error deleting from Brevo:', brevoError);
+      }
+    }
+
+    // Delete from Neon
+    await sql`
+      DELETE FROM customers WHERE id = ${customerId}
+    `;
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Customer deleted successfully',
+      deletedFromBrevo: !!brevoContactId,
+    });
+  } catch (error: any) {
+    console.error('[Admin Customers API] Error deleting customer:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete customer', details: error.message },
       { status: 500 }
     );
   }

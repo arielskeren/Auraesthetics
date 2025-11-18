@@ -76,13 +76,20 @@ export async function POST(request: NextRequest) {
             brevoId: result.brevoId,
           });
           
-          // Update brevo_contact_id if we got a new ID
-          if (result.brevoId && result.brevoId !== customer.brevo_contact_id) {
-            await sql`
-              UPDATE customers
-              SET brevo_contact_id = ${result.brevoId}, updated_at = NOW()
-              WHERE id = ${customer.id}
-            `;
+          // CRITICAL: Always update brevo_contact_id if we got an ID (even if it matches)
+          // This ensures the link is maintained even if the database was out of sync
+          if (result.brevoId) {
+            const currentBrevoId = customer.brevo_contact_id ? String(customer.brevo_contact_id) : null;
+            const newBrevoId = String(result.brevoId);
+            
+            if (currentBrevoId !== newBrevoId) {
+              await sql`
+                UPDATE customers
+                SET brevo_contact_id = ${newBrevoId}, updated_at = NOW()
+                WHERE id = ${customer.id}
+              `;
+              console.log(`[Sync All] Updated brevo_contact_id for ${customer.email} from ${currentBrevoId || 'null'} to ${newBrevoId}`);
+            }
           }
         } else {
           failedCount++;

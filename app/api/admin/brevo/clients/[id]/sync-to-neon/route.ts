@@ -69,16 +69,40 @@ export async function POST(
     const existing = normalizeRows(existingResult);
     
     if (existing.length > 0) {
-      // Customer already exists - update brevo_contact_id if needed
+      // Customer already exists - update brevo_contact_id and sync data from Brevo to Neon
       const customerId = existing[0].id;
+      
+      // Fetch existing customer data
+      const existingCustomerResult = await sql`
+        SELECT first_name, last_name, phone, marketing_opt_in, brevo_contact_id
+        FROM customers 
+        WHERE id = ${customerId}
+        LIMIT 1
+      `;
+      const existingCustomer = normalizeRows(existingCustomerResult)[0];
+      
+      // Update customer with Brevo data (Brevo may have more recent info)
+      // But preserve Neon data if it's more complete
+      const firstName = contact.attributes?.FIRSTNAME || existingCustomer?.first_name || '';
+      const lastName = contact.attributes?.LASTNAME || existingCustomer?.last_name || '';
+      const phone = contact.attributes?.PHONE || contact.attributes?.SMS || contact.attributes?.LANDLINE_NUMBER || existingCustomer?.phone || null;
+      const marketingOptIn = !contact.emailBlacklisted;
+      
       await sql`
         UPDATE customers 
-        SET brevo_contact_id = ${String(contact.id)}, updated_at = NOW()
+        SET 
+          brevo_contact_id = ${String(contact.id)},
+          first_name = COALESCE(NULLIF(${firstName}, ''), first_name),
+          last_name = COALESCE(NULLIF(${lastName}, ''), last_name),
+          phone = COALESCE(${phone}, phone),
+          marketing_opt_in = ${marketingOptIn},
+          updated_at = NOW()
         WHERE id = ${customerId}
       `;
+      
       return NextResponse.json({
         success: true,
-        message: 'Customer already exists in Neon. Updated brevo_contact_id.',
+        message: 'Customer already exists in Neon. Updated brevo_contact_id and synced data.',
         customerId,
       });
     }

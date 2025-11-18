@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Search, CheckCircle, XCircle, Upload, Download, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Search, CheckCircle, XCircle, Upload, Download, AlertTriangle, Edit, Trash2, X } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 
@@ -33,6 +33,15 @@ export default function ClientsManager() {
   const [syncingToBrevo, setSyncingToBrevo] = useState<string | null>(null);
   const [syncingToNeon, setSyncingToNeon] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [editing, setEditing] = useState<UnifiedClient | null>(null);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    marketingOptIn: false,
+  });
   const [syncStatus, setSyncStatus] = useState<{
     total: number;
     synced: number;
@@ -173,6 +182,131 @@ export default function ClientsManager() {
     }
   };
 
+  const handleEdit = (client: UnifiedClient) => {
+    setEditing(client);
+    setEditForm({
+      firstName: client.firstName || '',
+      lastName: client.lastName || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      marketingOptIn: client.marketingOptIn,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editing) return;
+
+    // Validate email format
+    if (!editForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setError(null);
+
+      // Determine which system to update based on where the client exists
+      // Always prefer Neon if it exists (source of truth)
+      if (editing.inNeon && editing.neonId) {
+        // Update Neon (source of truth) - will auto-sync to Brevo if linked
+        const response = await fetch(`/api/admin/customers/${editing.neonId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: editForm.firstName,
+            last_name: editForm.lastName,
+            email: editForm.email,
+            phone: editForm.phone,
+            marketing_opt_in: editForm.marketingOptIn,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to update customer');
+        }
+
+        // If also in Brevo, sync will happen automatically via the PATCH endpoint
+      } else if (editing.inBrevo && editing.brevoId) {
+        // Update Brevo directly (no Neon record)
+        // Note: If email is being changed, this will fail - user should create in Neon first
+        const response = await fetch(`/api/admin/brevo/clients/${editing.brevoId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: editForm.firstName,
+            lastName: editForm.lastName,
+            email: editForm.email !== editing.email ? editing.email : undefined, // Don't change email in Brevo
+            phone: editForm.phone,
+            marketingOptIn: editForm.marketingOptIn,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to update Brevo contact');
+        }
+      } else {
+        throw new Error('Cannot update: client has no ID in either system');
+      }
+
+      // Reload data
+      await Promise.all([loadData(), loadSyncStatus()]);
+      setEditing(null);
+      alert('Client updated successfully');
+    } catch (err: any) {
+      setError(err);
+      alert(`Update failed: ${err.message}`);
+    }
+  };
+
+  const handleDelete = async (client: UnifiedClient) => {
+    const confirmMessage = client.inNeon && client.inBrevo
+      ? `Delete this client from both Neon and Brevo? This action cannot be undone.`
+      : client.inNeon
+      ? `Delete this client from Neon? This action cannot be undone.`
+      : `Delete this contact from Brevo? This action cannot be undone.`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const deleteKey = client.inNeon ? client.neonId! : client.brevoId!;
+      setDeleting(deleteKey);
+      setError(null);
+
+      let response: Response;
+      if (client.inNeon && client.neonId) {
+        // Delete from Neon (will also delete from Brevo if linked)
+        response = await fetch(`/api/admin/customers/${client.neonId}`, {
+          method: 'DELETE',
+        });
+      } else if (client.inBrevo && client.brevoId) {
+        // Delete from Brevo (will also delete from Neon if linked)
+        response = await fetch(`/api/admin/brevo/clients/${client.brevoId}`, {
+          method: 'DELETE',
+        });
+      } else {
+        throw new Error('Cannot delete: client has no ID');
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete client');
+      }
+
+      // Reload data
+      await loadData();
+      alert('Client deleted successfully');
+    } catch (err: any) {
+      setError(err);
+      alert(`Delete failed: ${err.message}`);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   // Create unified client list with both Neon and Brevo data
   const unifiedClients = useMemo(() => {
     const clientsMap = new Map<string, UnifiedClient>();
@@ -211,13 +345,25 @@ export default function ClientsManager() {
           existing.brevoData = brevo;
           
           // Check for mismatches (display Neon data, but highlight if different)
-          const nameMatch = 
-            (existing.firstName || '').toLowerCase() === (brevo.firstName || '').toLowerCase() &&
-            (existing.lastName || '').toLowerCase() === (brevo.lastName || '').toLowerCase();
-          const phoneMatch = 
-            (existing.phone || '').replace(/\D/g, '') === (brevo.phone || '').replace(/\D/g, '');
+          // Normalize names for comparison
+          const neonFirstName = (existing.firstName || '').trim().toLowerCase();
+          const neonLastName = (existing.lastName || '').trim().toLowerCase();
+          const brevoFirstName = (brevo.firstName || '').trim().toLowerCase();
+          const brevoLastName = (brevo.lastName || '').trim().toLowerCase();
           
-          existing.hasMismatch = !nameMatch || !phoneMatch;
+          const nameMatch = 
+            neonFirstName === brevoFirstName &&
+            neonLastName === brevoLastName;
+          
+          // Normalize phone numbers for comparison (remove all non-digits)
+          const neonPhone = (existing.phone || '').replace(/\D/g, '');
+          const brevoPhone = (brevo.phone || '').replace(/\D/g, '');
+          const phoneMatch = neonPhone === brevoPhone || (!neonPhone && !brevoPhone);
+          
+          // Check marketing opt-in mismatch
+          const marketingMatch = existing.marketingOptIn === !brevo.emailBlacklisted;
+          
+          existing.hasMismatch = !nameMatch || !phoneMatch || !marketingMatch;
         } else {
           // Brevo-only contact
           clientsMap.set(emailLower, {
@@ -469,7 +615,7 @@ export default function ClientsManager() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {client.inNeon && !client.inBrevo && client.marketingOptIn && (
                           <button
                             onClick={() => handleSyncToBrevo(client.neonId!)}
@@ -503,6 +649,23 @@ export default function ClientsManager() {
                             Fix Sync
                           </button>
                         )}
+                        <button
+                          onClick={() => handleEdit(client)}
+                          className="px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
+                          title="Edit client"
+                        >
+                          <Edit className="w-3 h-3" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(client)}
+                          disabled={deleting === (client.neonId || client.brevoId)}
+                          className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
+                          title="Delete client"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -522,6 +685,100 @@ export default function ClientsManager() {
           </span>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-charcoal">Edit Client</h3>
+                <button
+                  onClick={() => setEditing(null)}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-1">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={editForm.firstName}
+                      onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                      className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={editForm.lastName}
+                      onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                      className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="marketing-opt-in"
+                    checked={editForm.marketingOptIn}
+                    onChange={(e) => setEditForm({ ...editForm, marketingOptIn: e.target.checked })}
+                    className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                  />
+                  <label htmlFor="marketing-opt-in" className="text-sm text-charcoal">
+                    Marketing Opt-In
+                  </label>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors font-medium"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
