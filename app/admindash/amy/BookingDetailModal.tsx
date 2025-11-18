@@ -71,6 +71,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<string>('');
   const [rescheduleTime, setRescheduleTime] = useState<string>('');
+  const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [availabilitySlots, setAvailabilitySlots] = useState<any[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [serviceSlug, setServiceSlug] = useState<string | null>(null);
 
   // Extract booking ID helper - prioritize internal ID, then Hapio ID
   const getBookingId = useCallback((b: Booking | null) => {
@@ -520,7 +525,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                         </button>
                         
                         {/* Only show refund button if paid/succeeded AND not already refunded */}
-                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id && (!effective.refunded_cents || effective.refunded_cents === 0)) && (
+                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id && (effective.refunded_cents == null || effective.refunded_cents === 0)) ? (
                           <button
                             onClick={handleRefund}
                             disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
@@ -529,7 +534,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                             <DollarSign className="w-3.5 h-3.5" />
                             Refund Only
                           </button>
-                        )}
+                        ) : null}
                       </>
                     )}
                     
@@ -539,11 +544,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       </div>
                     )}
                     
-                    {(effective.payment_status === 'refunded' || (effective.refunded_cents && effective.refunded_cents > 0)) && effective.payment_status !== 'cancelled' && (
+                    {(effective.payment_status === 'refunded' || (effective.refunded_cents != null && effective.refunded_cents > 0)) && effective.payment_status !== 'cancelled' ? (
                       <div className="px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded">
                         This booking has been refunded (booking remains active)
                       </div>
-                    )}
+                    ) : null}
                     
                     {/* Force Sync to Outlook button */}
                     {process.env.NEXT_PUBLIC_OUTLOOK_SYNC_ENABLED !== 'false' && (
@@ -651,7 +656,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     </div>
                   )}
                   {/* Refund Information */}
-                  {(effective.refunded_cents && effective.refunded_cents > 0) && (
+                  {(effective.refunded_cents != null && effective.refunded_cents > 0) ? (
                     <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                       <label className="text-xs font-semibold text-yellow-800 mb-1 block">Refund Information</label>
                       <div className="space-y-1">
@@ -685,7 +690,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                         )}
                       </div>
                     </div>
-                  )}
+                  ) : null}
                   <div>
                     <label className="text-xs text-warm-gray mb-1">Hapio Booking ID</label>
                     <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">

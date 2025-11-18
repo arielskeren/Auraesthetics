@@ -56,7 +56,7 @@ export async function POST(
     // Fetch booking
     const bookingResult = await sql`
       SELECT 
-        id, hapio_booking_id, service_id, service_name, booking_date, metadata, client_email, client_name
+        id, hapio_booking_id, service_id, service_name, booking_date, metadata, client_email, client_name, payment_status, outlook_event_id
       FROM bookings
       WHERE id = ${bookingId} OR hapio_booking_id = ${bookingId}
       LIMIT 1
@@ -150,17 +150,36 @@ export async function POST(
       await sql`COMMIT`;
 
       // Update Outlook event if it exists (best-effort)
-      if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.metadata?.outlook?.eventId) {
+      // Fetch outlook_event_id from bookings table if not in metadata
+      let outlookEventId = bookingData.metadata?.outlook?.eventId;
+      if (!outlookEventId) {
+        const outlookResult = await sql`
+          SELECT outlook_event_id FROM bookings WHERE id = ${bookingData.id} LIMIT 1
+        `;
+        const outlookRows = normalizeRows(outlookResult);
+        if (outlookRows.length > 0 && outlookRows[0].outlook_event_id) {
+          outlookEventId = outlookRows[0].outlook_event_id;
+        }
+      }
+
+      if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && outlookEventId) {
         try {
           await ensureOutlookEventForBooking({
             id: bookingData.id,
-            service_id: bookingData.service_id,
+            service_id: bookingData.service_id, // Can be UUID or slug, Outlook sync handles both
             service_name: bookingData.service_name,
             client_name: bookingData.client_name || null,
             client_email: bookingData.client_email || null,
             booking_date: newDateTime.toISOString(),
-            outlook_event_id: bookingData.metadata.outlook.eventId,
-            metadata: bookingData.metadata || {},
+            outlook_event_id: outlookEventId,
+            metadata: {
+              ...(bookingData.metadata || {}),
+              slot: {
+                start: newDateTime.toISOString(),
+                end: newEndDateTime.toISOString(),
+                timezone: 'America/New_York',
+              },
+            },
           });
         } catch (outlookError) {
           console.error('[Customer Reschedule] Outlook update failed:', outlookError);

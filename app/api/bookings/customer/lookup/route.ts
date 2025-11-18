@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
           b.booking_date,
           b.payment_status,
           b.payment_intent_id,
+          b.metadata,
           s.name AS service_display_name,
           s.image_url AS service_image_url,
           s.duration_display AS service_duration,
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
           b.booking_date,
           b.payment_status,
           b.payment_intent_id,
+          b.metadata,
           s.name AS service_display_name,
           s.image_url AS service_image_url,
           s.duration_display AS service_duration,
@@ -120,6 +122,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Extract cancellation date from metadata
+    const metadata = booking.metadata || {};
+    const cancelledAt = metadata.cancelledAt || null;
+
     // Return booking without sensitive information
     return NextResponse.json({
       booking: {
@@ -137,6 +143,7 @@ export async function GET(request: NextRequest) {
         payment_status: booking.payment_status,
         payment_amount_cents: booking.payment_amount_cents ? Number(booking.payment_amount_cents) : null,
         refunded_cents: booking.refunded_cents ? Number(booking.refunded_cents) : null,
+        cancelled_at: cancelledAt,
         created_at: booking.created_at,
       },
     });

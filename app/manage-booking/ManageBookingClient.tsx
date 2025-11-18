@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Clock, User, Mail, Phone, MapPin, X, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import Section from '../_components/Section';
@@ -22,6 +22,7 @@ interface Booking {
   payment_status?: string;
   payment_amount_cents?: number | null;
   refunded_cents?: number | null;
+  cancelled_at?: string | null;
   created_at?: string;
 }
 
@@ -130,11 +131,59 @@ export default function ManageBookingClient() {
     }
   };
 
+  // Generate date options (next 120 days, excluding Saturdays)
+  const dateOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    let currentDate = new Date();
+    let daysAdded = 0;
+    
+    while (options.length < 120 && daysAdded < 200) {
+      // Skip Saturdays (day 6)
+      if (currentDate.getDay() !== 6) {
+        const yyyy = String(currentDate.getFullYear());
+        const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(currentDate.getDate()).padStart(2, '0');
+        const value = `${yyyy}-${mm}-${dd}`;
+        
+        if (!seen.has(value)) {
+          seen.add(value);
+          const label = new Intl.DateTimeFormat(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          }).format(currentDate);
+          options.push({ value, label });
+        }
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+      daysAdded++;
+    }
+    return options;
+  }, []);
+
+  // Generate time options (9 AM to 7 PM, 15-minute intervals)
+  const timeOptions = useMemo(() => {
+    if (!rescheduleDate) return [];
+    const start = new Date(`${rescheduleDate}T09:00:00`);
+    const end = new Date(`${rescheduleDate}T19:00:00`);
+    const result: Date[] = [];
+    const cursor = new Date(start);
+    while (cursor.getTime() <= end.getTime()) {
+      result.push(new Date(cursor));
+      cursor.setMinutes(cursor.getMinutes() + 15);
+    }
+    return result;
+  }, [rescheduleDate]);
+
   const handleReschedule = () => {
     if (!booking || !booking.booking_date) return;
     
     const date = new Date(booking.booking_date);
-    setRescheduleDate(date.toISOString().split('T')[0]);
+    const yyyy = String(date.getFullYear());
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    setRescheduleDate(`${yyyy}-${mm}-${dd}`);
     setRescheduleTime('');
     setAvailabilityStatus('idle');
     setAvailabilitySlots([]);
@@ -271,6 +320,60 @@ export default function ManageBookingClient() {
       timeZone: 'America/New_York',
     });
   };
+
+  // Group availability slots by day (similar to BookingModal)
+  const groupedAvailability = useMemo(() => {
+    if (availabilitySlots.length === 0) return [];
+
+    const dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    const getDateKeyInEST = (date: Date): string => {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(date);
+      const year = parts.find((p) => p.type === 'year')?.value ?? '';
+      const month = parts.find((p) => p.type === 'month')?.value ?? '';
+      const day = parts.find((p) => p.type === 'day')?.value ?? '';
+      return `${year}-${month}-${day}`;
+    };
+
+    const groups = new Map<string, { key: string; label: string; slots: AvailabilitySlot[] }>();
+
+    for (const slot of availabilitySlots) {
+      const startDate = new Date(slot.start);
+      if (Number.isNaN(startDate.getTime())) continue;
+
+      const dayKey = getDateKeyInEST(startDate);
+      const dayLabel = dateFormatter.format(startDate);
+
+      if (!groups.has(dayKey)) {
+        groups.set(dayKey, { key: dayKey, label: dayLabel, slots: [] });
+      }
+
+      groups.get(dayKey)!.slots.push(slot);
+    }
+
+    // Sort slots within each day
+    const sortedGroups = Array.from(groups.values()).map((group) => ({
+      ...group,
+      slots: group.slots.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()),
+    }));
+
+    return sortedGroups.sort((a, b) => a.key.localeCompare(b.key));
+  }, [availabilitySlots]);
 
   const handleCancelSubmit = async () => {
     if (!booking) return;
@@ -585,11 +688,11 @@ export default function ManageBookingClient() {
                   <p className="text-xl font-semibold text-charcoal">
                     ${(booking.payment_amount_cents / 100).toFixed(2)}
                   </p>
-                  {booking.refunded_cents && booking.refunded_cents > 0 && (
+                  {booking.refunded_cents != null && booking.refunded_cents > 0 ? (
                     <p className="text-sm text-warm-gray mt-2">
                       Refunded: ${(booking.refunded_cents / 100).toFixed(2)}
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
 
@@ -638,13 +741,32 @@ export default function ManageBookingClient() {
                 </>
               )}
 
-              {/* Cancelled Booking Message */}
+              {/* Cancelled Booking Message - Big Red Container */}
               {isCancelled && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-sm text-red-800 font-medium mb-1">This booking has been cancelled.</p>
-                  <p className="text-xs text-red-700">
-                    If you need to book a new appointment, please visit our booking page.
-                  </p>
+                <div className="bg-red-600 text-white rounded-lg p-6 mb-8">
+                  <div className="flex items-start gap-3">
+                    <X className="w-6 h-6 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold mb-2">This appointment has been cancelled</h3>
+                      {booking.cancelled_at && (
+                        <p className="text-red-100 mb-3">
+                          Cancelled on {formatInEST(new Date(booking.cancelled_at), {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                            timeZone: 'America/New_York',
+                          })} EST
+                        </p>
+                      )}
+                      <p className="text-red-100 text-sm">
+                        If you need to book a new appointment, please visit our booking page.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -695,51 +817,75 @@ export default function ManageBookingClient() {
                           <p className="text-sm text-warm-gray mb-4">
                             Select a date and time to check available slots for rescheduling.
                           </p>
-                          <div>
-                            <label className="block text-sm font-medium text-charcoal mb-2">
-                              Preferred Date <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="date"
-                              value={rescheduleDate}
-                              onChange={(e) => {
-                                setRescheduleDate(e.target.value);
-                                setAvailabilityStatus('idle');
-                                setAvailabilitySlots([]);
-                                setSelectedSlot(null);
-                              }}
-                              min={new Date().toISOString().split('T')[0]}
-                              className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                              required
-                            />
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="flex flex-col">
+                              <label className="text-xs text-warm-gray mb-1">Date</label>
+                              <select
+                                className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                                value={rescheduleDate}
+                                onChange={(e) => {
+                                  setRescheduleDate(e.target.value);
+                                  setRescheduleTime('');
+                                  setAvailabilityStatus('idle');
+                                  setAvailabilitySlots([]);
+                                  setSelectedSlot(null);
+                                }}
+                              >
+                                <option value="" disabled>Select date</option>
+                                {dateOptions.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex flex-col">
+                              <label className="text-xs text-warm-gray mb-1">Preferred time</label>
+                              <select
+                                className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                                value={rescheduleTime}
+                                onChange={(e) => {
+                                  setRescheduleTime(e.target.value);
+                                  setAvailabilityStatus('idle');
+                                  setAvailabilitySlots([]);
+                                  setSelectedSlot(null);
+                                }}
+                                disabled={!rescheduleDate}
+                              >
+                                <option value="" disabled>Select time</option>
+                                {timeOptions.map((d) => {
+                                  const now = new Date();
+                                  const isPast =
+                                    d.getFullYear() === now.getFullYear() &&
+                                    d.getMonth() === now.getMonth() &&
+                                    d.getDate() === now.getDate() &&
+                                    d.getTime() < now.getTime();
+                                  const hh = String(d.getHours()).padStart(2, '0');
+                                  const mi = String(d.getMinutes()).padStart(2, '0');
+                                  const value = `${hh}:${mi}`;
+                                  const label = new Intl.DateTimeFormat(undefined, {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                  }).format(d);
+                                  return (
+                                    <option key={value + d.toISOString()} value={value} disabled={isPast}>
+                                      {label}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                            <div className="flex flex-col">
+                              <label className="text-xs text-warm-gray mb-1 opacity-0">Find times</label>
+                              <Button
+                                variant={!rescheduleDate || !rescheduleTime || !serviceSlug ? 'disabled' : 'primary'}
+                                onClick={handleCheckAvailability}
+                                className="w-full h-11"
+                              >
+                                Find times
+                              </Button>
+                            </div>
                           </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-charcoal mb-2">
-                              Preferred Time <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="time"
-                              value={rescheduleTime}
-                              onChange={(e) => {
-                                setRescheduleTime(e.target.value);
-                                setAvailabilityStatus('idle');
-                                setAvailabilitySlots([]);
-                                setSelectedSlot(null);
-                              }}
-                              className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                              required
-                            />
-                            <p className="mt-2 text-xs text-warm-gray">Time is in EST/EDT</p>
-                          </div>
-
-                          <Button
-                            variant={!rescheduleDate || !rescheduleTime || !serviceSlug ? 'disabled' : 'primary'}
-                            onClick={handleCheckAvailability}
-                            className="w-full"
-                          >
-                            Check Availability
-                          </Button>
                         </>
                       )}
 
@@ -788,41 +934,51 @@ export default function ManageBookingClient() {
                                 <label className="block text-sm font-medium text-charcoal mb-2">
                                   Select Available Time Slot <span className="text-red-500">*</span>
                                 </label>
-                                <div className="max-h-60 overflow-y-auto border border-sage-dark/20 rounded-lg">
-                                  {availabilitySlots.map((slot, index) => {
-                                    const slotDate = new Date(slot.start);
-                                    const isSelected = selectedSlot?.start === slot.start;
-                                    const isToday = slotDate.toDateString() === new Date().toDateString();
-                                    const slotDateStr = formatInEST(slotDate, {
-                                      weekday: 'short',
-                                      month: 'short',
-                                      day: 'numeric',
-                                    });
-                                    
-                                    return (
-                                      <button
-                                        key={index}
-                                        onClick={() => setSelectedSlot(slot)}
-                                        className={`w-full text-left px-4 py-3 border-b border-sage-dark/10 last:border-b-0 transition-colors ${
-                                          isSelected
-                                            ? 'bg-dark-sage text-white'
-                                            : 'hover:bg-sage-light/30 text-charcoal'
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <div>
-                                            <p className="font-medium">{formatSlotTime(slot)} EST</p>
-                                            <p className={`text-xs ${isSelected ? 'text-white/80' : 'text-warm-gray'}`}>
-                                              {slotDateStr} {isToday && '(Today)'}
-                                            </p>
-                                          </div>
-                                          {isSelected && (
-                                            <CheckCircle className="w-5 h-5" />
-                                          )}
+                                {/* Grouped by day grid (similar to BookingModal) */}
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 max-h-96 overflow-y-auto">
+                                  {groupedAvailability.map((day) => (
+                                    <div key={day.key} className="border border-dark-sage/40 bg-sand/20 rounded-lg p-3">
+                                      <div className="text-sm font-semibold text-charcoal mb-2">{day.label}</div>
+                                      {day.slots.length > 0 ? (
+                                        <div className="flex flex-col gap-2">
+                                          {day.slots.map((slot) => {
+                                            const isSelected = selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
+                                            const startDate = new Date(slot.start);
+                                            const endDate = new Date(slot.end);
+                                            const startLabel = formatInEST(startDate, {
+                                              hour: 'numeric',
+                                              minute: '2-digit',
+                                              hour12: true,
+                                              timeZone: 'America/New_York',
+                                            });
+                                            const endLabel = formatInEST(endDate, {
+                                              hour: 'numeric',
+                                              minute: '2-digit',
+                                              hour12: true,
+                                              timeZone: 'America/New_York',
+                                            });
+                                            
+                                            return (
+                                              <button
+                                                key={`${slot.start}-${slot.end}`}
+                                                type="button"
+                                                onClick={() => setSelectedSlot(isSelected ? null : slot)}
+                                                className={`w-full text-left px-3 py-2 rounded-md border text-xs font-semibold transition-colors shadow-sm ${
+                                                  isSelected
+                                                    ? 'bg-dark-sage text-white border-dark-sage'
+                                                    : 'bg-white/90 border-dark-sage/30 text-charcoal hover:bg-dark-sage/10 hover:border-dark-sage/60'
+                                                }`}
+                                              >
+                                                {startLabel} – {endLabel}
+                                              </button>
+                                            );
+                                          })}
                                         </div>
-                                      </button>
-                                    );
-                                  })}
+                                      ) : (
+                                        <div className="text-xs text-warm-gray italic">No availability</div>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
 
