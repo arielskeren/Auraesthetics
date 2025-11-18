@@ -106,14 +106,26 @@ export async function PATCH(
 
     // If customer found, update Neon first (source of truth)
     if (customerId) {
-      // Build dynamic update using COALESCE to only update provided fields
+      // Fetch existing customer to preserve values for fields not being updated
+      const existingResult = await sql`
+        SELECT first_name, last_name, phone, email, marketing_opt_in 
+        FROM customers 
+        WHERE id = ${customerId} 
+        LIMIT 1
+      `;
+      const existing = normalizeRows(existingResult)[0];
+      if (!existing) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      }
+
+      // Build update - only update fields that are explicitly provided
       await sql`
         UPDATE customers SET
-          first_name = COALESCE(${firstName !== undefined ? firstName : null}, first_name),
-          last_name = COALESCE(${lastName !== undefined ? lastName : null}, last_name),
-          phone = COALESCE(${phone !== undefined ? phone : null}, phone),
-          email = COALESCE(${email && email !== undefined ? email : null}, email),
-          marketing_opt_in = COALESCE(${marketingOptIn !== undefined ? marketingOptIn : null}, marketing_opt_in),
+          first_name = ${firstName !== undefined ? (firstName || null) : existing.first_name},
+          last_name = ${lastName !== undefined ? (lastName || null) : existing.last_name},
+          phone = ${phone !== undefined ? (phone || null) : existing.phone},
+          email = ${email !== undefined && email ? email : existing.email},
+          marketing_opt_in = ${marketingOptIn !== undefined ? marketingOptIn : existing.marketing_opt_in},
           updated_at = NOW()
         WHERE id = ${customerId}
       `;

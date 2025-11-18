@@ -3,6 +3,7 @@ import { confirmBooking } from '@/lib/hapioClient';
 import { getSqlClient } from '@/app/_utils/db';
 import { upsertBrevoContact, sendBrevoEmail, syncCustomerToBrevo } from '@/lib/brevoClient';
 import { generateBookingConfirmationEmail, generateCalendarLinks } from '@/lib/emails/bookingConfirmation';
+import { ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 
 export type FinalizeResult = {
   bookingId: string;
@@ -91,15 +92,74 @@ export async function finalizeBookingTransactional(args: {
     // Check if WELCOME15 discount code was used
     const discountCode = pim.discountCode || pim.discount_code || null;
     const usedWelcomeOffer = discountCode && typeof discountCode === 'string' && discountCode.toUpperCase() === 'WELCOME15';
+    
+    // Mark one-time discount code as used if payment succeeds
+    // CRITICAL: Must validate customer match to prevent code theft
+    let oneTimeCodeId: string | null = null;
+    if (discountCode && typeof discountCode === 'string') {
+      try {
+        const codeUpper = discountCode.toUpperCase();
+        // First check if code exists and is valid
+        const oneTimeCodeResult = await sql`
+          SELECT id, customer_id FROM one_time_discount_codes 
+          WHERE code = ${codeUpper} 
+            AND used = false
+            AND (expires_at IS NULL OR expires_at > NOW())
+          LIMIT 1
+        `;
+        const oneTimeRows = Array.isArray(oneTimeCodeResult) 
+          ? oneTimeCodeResult 
+          : (oneTimeCodeResult as any)?.rows || [];
+        if (oneTimeRows.length > 0) {
+          const codeRecord = oneTimeRows[0];
+          // If code is customer-specific, verify customer matches
+          if (codeRecord.customer_id && emailFromPi) {
+            const customerMatch = await sql`
+              SELECT id FROM customers 
+              WHERE id = ${codeRecord.customer_id} 
+                AND LOWER(email) = LOWER(${emailFromPi})
+              LIMIT 1
+            `;
+            const customerRows = Array.isArray(customerMatch) 
+              ? customerMatch 
+              : (customerMatch as any)?.rows || [];
+            if (customerRows.length === 0) {
+              // Customer doesn't match - log but don't mark as used
+              console.error('[finalizeCore] One-time code customer mismatch:', {
+                code: codeUpper,
+                codeCustomerId: codeRecord.customer_id,
+                paymentEmail: emailFromPi,
+              });
+              // Don't set oneTimeCodeId - code won't be marked as used
+            } else {
+              // Customer matches - safe to mark as used
+              oneTimeCodeId = codeRecord.id;
+            }
+          } else if (!codeRecord.customer_id) {
+            // Code is not customer-specific - safe to use
+            oneTimeCodeId = codeRecord.id;
+          }
+        }
+      } catch (e) {
+        // Non-critical - continue
+        console.error('[finalizeCore] Failed to check one-time code:', e);
+      }
+    }
 
     // Upsert customer if email
     let customerId: string | null = null;
     let stripeCustomerId: string | null = null;
+    let displayName: string | null = null;
     if (emailFromPi) {
       const [firstName, ...lastParts] = (fullNameFromPi || '').split(' ').filter(Boolean);
       const lastName = lastParts.join(' ') || null;
       // Extract Stripe customer ID from payment intent if available
       stripeCustomerId = (pi as any).customer || null;
+      
+      displayName =
+        firstName || lastName
+          ? [firstName, lastName].filter(Boolean).join(' ')
+          : fullNameFromPi || null;
       
       const custRows = (await sql`
         INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at, used_welcome_offer)
@@ -114,10 +174,6 @@ export async function finalizeBookingTransactional(args: {
         RETURNING id
       `) as any[];
       customerId = custRows?.[0]?.id || null;
-      const displayName =
-        firstName || lastName
-          ? [firstName, lastName].filter(Boolean).join(' ')
-          : fullNameFromPi || null;
       await sql`
         UPDATE bookings
         SET 
@@ -168,11 +224,67 @@ export async function finalizeBookingTransactional(args: {
       VALUES (${ensuredBookingRowId}, ${'finalized'}, ${JSON.stringify({ stripe_pi_id: (pi as any).id, amount_cents, currency, traceId })}::jsonb)
     `;
 
+    // Mark one-time discount code as used (inside transaction to ensure atomicity)
+    if (oneTimeCodeId) {
+      try {
+        await sql`
+          UPDATE one_time_discount_codes 
+          SET used = true, used_at = NOW()
+          WHERE id = ${oneTimeCodeId} AND used = false
+        `;
+      } catch (e) {
+        // Non-critical - log but continue
+        console.error('[finalizeCore] Failed to mark one-time code as used:', e);
+      }
+    }
+
     // Confirm on Hapio
     await confirmBooking(args.hapioBookingId, { isTemporary: false, metadata: { stripePaymentIntentId: (pi as any).id } });
 
     // Brevo (best-effort, outside of transaction scope but after we COMMIT)
     await sql`COMMIT`;
+
+    // Sync to Outlook Calendar (best-effort, after commit)
+    let outlookEventId: string | null = null;
+    if (process.env.OUTLOOK_SYNC_ENABLED !== 'false') {
+      try {
+        const bookingForOutlook = {
+          id: ensuredBookingRowId,
+          service_id: svcId,
+          service_name: svcName,
+          client_name: displayName || fullNameFromPi,
+          client_email: emailFromPi,
+          booking_date: slotStart,
+          metadata: {
+            ...minimalMeta,
+            slot: {
+              start: slotStart,
+              end: pim.slot_end || null,
+            },
+            timezone: timezone || 'America/New_York',
+          },
+        };
+        const outlookResult = await ensureOutlookEventForBooking(bookingForOutlook);
+        outlookEventId = outlookResult.eventId;
+        
+        // Update booking with Outlook event ID
+        if (outlookEventId) {
+          await sql`
+            UPDATE bookings 
+            SET outlook_event_id = ${outlookEventId}, outlook_sync_status = ${outlookResult.action === 'created' ? 'synced' : 'updated'}
+            WHERE id = ${ensuredBookingRowId}
+          `;
+        }
+      } catch (outlookError) {
+        // Outlook sync failure is non-critical - booking is already finalized
+        console.error('[finalizeCore] Outlook sync failed:', outlookError);
+        await sql`
+          UPDATE bookings 
+          SET outlook_sync_status = 'failed'
+          WHERE id = ${ensuredBookingRowId}
+        `;
+      }
+    }
 
     // Sync customer to Brevo using database data (ensures we sync latest data, not just payment intent metadata)
     // Also sync used_welcome_offer status to Brevo

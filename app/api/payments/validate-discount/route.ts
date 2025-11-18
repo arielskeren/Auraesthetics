@@ -146,28 +146,71 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check database for discount code
+    // Check database for discount code (both regular and one-time codes)
     const sql = getSqlClient();
-    const dbResult = await sql`
-      SELECT * FROM discount_codes 
-      WHERE code = ${codeUpper} 
-      AND is_active = true
+    
+    // First check one-time discount codes
+    const oneTimeResult = await sql`
+      SELECT * FROM one_time_discount_codes 
+      WHERE code = ${codeUpper}
+        AND used = false
+        AND (expires_at IS NULL OR expires_at > NOW())
     `;
+    const oneTimeRows = normalizeRows(oneTimeResult);
+    
+    let discountCode: any = null;
+    let stripeCouponId: string | null = null;
+    let isOneTime = false;
 
-    const discountRows = normalizeRows(dbResult);
+    if (oneTimeRows.length > 0) {
+      // One-time code found
+      discountCode = oneTimeRows[0];
+      stripeCouponId = discountCode.stripe_coupon_id;
+      isOneTime = true;
+      
+      // Check if customer matches (if customerId or email provided)
+      if (customerEmail && discountCode.customer_id) {
+        const customerCheck = await sql`
+          SELECT id FROM customers 
+          WHERE id = ${discountCode.customer_id} 
+            AND LOWER(email) = LOWER(${customerEmail})
+          LIMIT 1
+        `;
+        if (normalizeRows(customerCheck).length === 0) {
+          return NextResponse.json(
+            { error: 'This discount code is not valid for your account', valid: false },
+            { status: 400 }
+          );
+        }
+      }
+    } else {
+      // Check regular discount codes
+      const dbResult = await sql`
+        SELECT * FROM discount_codes 
+        WHERE code = ${codeUpper} 
+        AND is_active = true
+      `;
+      const discountRows = normalizeRows(dbResult);
 
-    if (discountRows.length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid discount code', valid: false },
-        { status: 400 }
-      );
+      if (discountRows.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid discount code', valid: false },
+          { status: 400 }
+        );
+      }
+
+      discountCode = discountRows[0];
+      stripeCouponId = discountCode.stripe_coupon_id;
     }
-
-    const discountCode = discountRows[0];
-    const stripeCouponId = discountCode.stripe_coupon_id;
 
     // Validate coupon with Stripe
     try {
+      if (!stripeCouponId) {
+        return NextResponse.json(
+          { error: 'Invalid discount code - no Stripe coupon ID', valid: false },
+          { status: 400 }
+        );
+      }
       const coupon = await stripe.coupons.retrieve(stripeCouponId);
 
       // Check if coupon is valid
@@ -207,12 +250,19 @@ export async function POST(request: NextRequest) {
         finalAmount = Math.max(0, amount - discountAmount);
       }
 
+      // NOTE: We do NOT mark one-time codes as used here
+      // Codes should only be marked as used AFTER successful payment
+      // This validation is just checking if the code is valid
+      // The code will be marked as used in finalizeCore when payment succeeds
+      
+      // Return validation result (code is valid, but not yet used)
       return NextResponse.json({
         valid: true,
         code: code.toUpperCase(),
         discountAmount: Math.round(discountAmount * 100) / 100,
         originalAmount: amount,
         finalAmount: Math.round(finalAmount * 100) / 100,
+        isOneTime,
         coupon: {
           id: coupon.id,
           name: coupon.name,

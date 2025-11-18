@@ -200,6 +200,10 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
     // Get payment amount to validate against
     const paymentAmountCents = effective.payment_amount_cents || 0;
+    if (paymentAmountCents <= 0) {
+      setActionMessage({ type: 'error', text: 'No payment found for this booking' });
+      return;
+    }
     const paymentAmountDollars = paymentAmountCents / 100;
 
     let percentage: number | null = null;

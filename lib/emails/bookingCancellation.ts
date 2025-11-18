@@ -22,6 +22,7 @@ export function generateBookingCancellationEmail(params: {
   refundAmount?: number | null; // in dollars
   refundId?: string | null;
   receiptUrl?: string | null; // Stripe receipt URL
+  refundReason?: string | null; // Reason for refund
   address?: string;
   bookUrl?: string;
 }) {
@@ -35,6 +36,7 @@ export function generateBookingCancellationEmail(params: {
     refundAmount,
     refundId,
     receiptUrl,
+    refundReason,
     address = '2998 Green Palm Court, Dania Beach, FL, 33312',
     bookUrl = 'https://www.theauraesthetics.com/book',
   } = params;
@@ -133,6 +135,11 @@ export function generateBookingCancellationEmail(params: {
                     ${refundId ? `
                     <p style="margin: 0 0 8px 0; color: #5A5A5A; font-size: 14px; line-height: 1.6;">
                       <strong>Refund ID:</strong> ${escapeHtml(refundId)}
+                    </p>
+                    ` : ''}
+                    ${refundReason ? `
+                    <p style="margin: 0 0 8px 0; color: #5A5A5A; font-size: 14px; line-height: 1.6;">
+                      <strong>Reason:</strong> ${escapeHtml(refundReason)}
                     </p>
                     ` : ''}
                     <p style="margin: 8px 0 0 0; color: #5A5A5A; font-size: 13px; line-height: 1.6;">

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
-import { deleteOutlookEventForBooking } from '@/lib/outlookBookingSync';
+import { deleteOutlookEventForBooking, ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
 import { generateBookingCancellationEmail } from '@/lib/emails/bookingCancellation';
 import { getStripeReceiptPdf, getStripeRefundReceiptPdf } from '@/lib/stripeClient';
@@ -249,6 +249,20 @@ export async function POST(
       }
       const bookingData = bookingRows[0];
 
+      // Validate booking status - prevent cancelling already cancelled/refunded bookings
+      if (bookingData.payment_status === 'cancelled') {
+        return NextResponse.json(
+          { error: 'Booking is already cancelled' },
+          { status: 400 }
+        );
+      }
+      if (bookingData.payment_status === 'refunded') {
+        return NextResponse.json(
+          { error: 'Cannot cancel a refunded booking. Use refund action instead.' },
+          { status: 400 }
+        );
+      }
+
       let refundProcessed = false;
       let refundId = null;
 
@@ -268,16 +282,22 @@ export async function POST(
           
           if (paymentIntent.status === 'succeeded') {
             // Create refund - get payment amount in single query
+            // Sum all payments to handle multiple payment records
             const paymentResult = await sql`
-              SELECT amount_cents FROM payments 
-              WHERE booking_id = ${bookingInternalId} 
-              ORDER BY created_at DESC LIMIT 1
+              SELECT SUM(amount_cents) as total_amount_cents, SUM(refunded_cents) as total_refunded_cents
+              FROM payments 
+              WHERE booking_id = ${bookingInternalId}
             `;
             const paymentRows = normalizeRows(paymentResult);
-            if (paymentRows.length === 0 || !paymentRows[0]?.amount_cents) {
+            if (paymentRows.length === 0 || !paymentRows[0]?.total_amount_cents) {
               throw new Error('Payment record not found for booking');
             }
-            const paymentAmount = paymentRows[0].amount_cents;
+            const totalPaymentAmount = Number(paymentRows[0].total_amount_cents);
+            const totalAlreadyRefunded = Number(paymentRows[0].total_refunded_cents || 0);
+            const remainingRefundable = totalPaymentAmount - totalAlreadyRefunded;
+            
+            // Use remaining refundable amount (full refund on cancellation)
+            const paymentAmount = remainingRefundable > 0 ? remainingRefundable : totalPaymentAmount;
             
             const refund = await stripe.refunds.create({
               payment_intent: bookingData.payment_intent_id,
@@ -289,15 +309,45 @@ export async function POST(
             refundId = refund.id;
             
             // Update payments.refunded_cents using actual refund amount from Stripe
-            await sql`
-              UPDATE payments 
-              SET refunded_cents = ${refund.amount || paymentAmount}, updated_at = NOW()
-              WHERE id = (
-                SELECT id FROM payments 
-                WHERE booking_id = ${bookingInternalId} 
-                ORDER BY created_at DESC LIMIT 1
-              )
+            // Check existing refunded amount to prevent over-refunding
+            const existingPaymentCheck = await sql`
+              SELECT id, refunded_cents, amount_cents 
+              FROM payments 
+              WHERE booking_id = ${bookingInternalId} 
+              ORDER BY created_at DESC LIMIT 1
             `;
+            const existingPaymentCheckRows = normalizeRows(existingPaymentCheck);
+            if (existingPaymentCheckRows.length > 0) {
+              const existing = existingPaymentCheckRows[0];
+              const alreadyRefundedOnThisPayment = existing.refunded_cents || 0;
+              const refundAmount = refund.amount || paymentAmount;
+              const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + refundAmount;
+              
+              // Safety check: ensure we don't exceed this payment record's amount
+              if (newTotalRefundedOnThisPayment <= existing.amount_cents) {
+                // Also check total across all payments
+                const totalRefundedAfter = totalAlreadyRefunded + refundAmount;
+                if (totalRefundedAfter <= totalPaymentAmount) {
+                  await sql`
+                    UPDATE payments 
+                    SET refunded_cents = ${newTotalRefundedOnThisPayment}, updated_at = NOW()
+                    WHERE id = ${existing.id}
+                  `;
+                } else {
+                  console.error('[Cancel Booking] Refund amount would exceed total payment amount', {
+                    totalAlreadyRefunded,
+                    refundAmount,
+                    totalPayment: totalPaymentAmount,
+                  });
+                }
+              } else {
+                console.error('[Cancel Booking] Refund amount would exceed payment record amount', {
+                  alreadyRefundedOnThisPayment,
+                  refundAmount,
+                  paymentRecordAmount: existing.amount_cents,
+                });
+              }
+            }
           }
         } catch (error: any) {
           // Continue with cancellation even if refund fails
@@ -435,17 +485,18 @@ export async function POST(
           }
 
           // Generate cancellation email
-          const emailHtml = generateBookingCancellationEmail({
-            serviceName: bookingData.service_name || 'Service',
-            serviceImageUrl,
-            clientName: bookingData.client_name || null,
-            bookingDate,
-            bookingTime,
-            refundProcessed,
-            refundAmount,
-            refundId: refundId || null,
-            receiptUrl: refundProcessed && refundId ? `https://dashboard.stripe.com/refunds/${refundId}` : null,
-          });
+           const emailHtml = generateBookingCancellationEmail({
+             serviceName: bookingData.service_name || 'Service',
+             serviceImageUrl,
+             clientName: bookingData.client_name || null,
+             bookingDate,
+             bookingTime,
+             refundProcessed,
+             refundAmount,
+             refundId: refundId || null,
+             receiptUrl: refundProcessed && refundId ? `https://dashboard.stripe.com/refunds/${refundId}` : null,
+             refundReason: null, // Cancellation doesn't have a reason field
+           });
 
           await sendBrevoEmail({
             to: [{ email: bookingData.client_email, name: bookingData.client_name || undefined }],
@@ -486,10 +537,11 @@ export async function POST(
         );
       }
       
-      // Fetch booking data in single optimized query
+      // Fetch booking data in single optimized query (include all fields needed for Outlook sync and status validation)
       const bookingResult = await sql`
         SELECT 
-          id, payment_intent_id, client_email, client_name, service_name
+          id, payment_intent_id, client_email, client_name, service_name,
+          service_id, booking_date, outlook_event_id, metadata, payment_status
         FROM bookings
         WHERE id = ${bookingInternalId}
         LIMIT 1
@@ -502,6 +554,37 @@ export async function POST(
         );
       }
       const bookingData = bookingRows[0];
+
+      // Validate booking status - prevent refunding cancelled bookings
+      if (bookingData.payment_status === 'cancelled') {
+        return NextResponse.json(
+          { error: 'Cannot refund a cancelled booking' },
+          { status: 400 }
+        );
+      }
+
+      // Allow partial refunds even if already partially refunded, but check status
+      if (bookingData.payment_status === 'refunded') {
+        // Check if fully refunded - if so, prevent additional refunds
+        // Sum all payments to get accurate total
+        const paymentCheck = await sql`
+          SELECT SUM(refunded_cents) as total_refunded, SUM(amount_cents) as total_amount
+          FROM payments 
+          WHERE booking_id = ${bookingInternalId}
+        `;
+        const paymentCheckRows = normalizeRows(paymentCheck);
+        if (paymentCheckRows.length > 0 && paymentCheckRows[0]) {
+          const payment = paymentCheckRows[0];
+          const totalRefunded = Number(payment.total_refunded || 0);
+          const totalAmount = Number(payment.total_amount || 0);
+          if (totalRefunded >= totalAmount && totalAmount > 0) {
+            return NextResponse.json(
+              { error: 'Booking is already fully refunded' },
+              { status: 400 }
+            );
+          }
+        }
+      }
 
       if (!bookingData.payment_intent_id) {
         return NextResponse.json(
@@ -534,42 +617,103 @@ export async function POST(
         }
 
         // Get payment amount from payments table
+        // Handle multiple payments by summing them (though typically there's only one)
         const paymentRows = await sql`
-          SELECT amount_cents FROM payments 
-          WHERE booking_id = ${bookingInternalId} 
-          ORDER BY created_at DESC LIMIT 1
+          SELECT SUM(amount_cents) as total_amount_cents, SUM(refunded_cents) as total_refunded_cents
+          FROM payments 
+          WHERE booking_id = ${bookingInternalId}
         `;
         const paymentRow = normalizeRows(paymentRows)[0];
-        if (!paymentRow || !paymentRow.amount_cents) {
+        if (!paymentRow || !paymentRow.total_amount_cents) {
           return NextResponse.json(
             { error: 'Payment record not found for this booking' },
             { status: 400 }
           );
         }
-        const totalCents = paymentRow.amount_cents;
-        let refundCents = totalCents;
-        if (requestedAmountCents && requestedAmountCents > 0 && requestedAmountCents <= totalCents) {
+        const totalCents = Number(paymentRow.total_amount_cents);
+        const alreadyRefundedTotal = Number(paymentRow.total_refunded_cents || 0);
+        const remainingRefundable = totalCents - alreadyRefundedTotal;
+        
+        // Calculate refund amount based on request
+        let refundCents = remainingRefundable; // Default to remaining refundable amount
+        if (requestedAmountCents && requestedAmountCents > 0 && requestedAmountCents <= remainingRefundable) {
           refundCents = requestedAmountCents;
         } else if (requestedPercent && requestedPercent > 0 && requestedPercent <= 100) {
-          refundCents = Math.round((requestedPercent / 100) * totalCents);
+          // Calculate percentage of remaining (not yet refunded) amount
+          refundCents = Math.round((requestedPercent / 100) * remainingRefundable);
+        }
+        
+        // Validate refund amount is positive
+        if (refundCents <= 0) {
+          return NextResponse.json(
+            { error: 'Refund amount must be greater than 0' },
+            { status: 400 }
+          );
+        }
+        
+        // Check if refund would exceed remaining refundable amount
+        if (refundCents > remainingRefundable) {
+          return NextResponse.json(
+            { error: `Refund amount ($${(refundCents / 100).toFixed(2)}) cannot exceed remaining refundable amount ($${(remainingRefundable / 100).toFixed(2)}). Already refunded: $${(alreadyRefundedTotal / 100).toFixed(2)}` },
+            { status: 400 }
+          );
         }
 
-        // Create refund
+        // Create refund with metadata for tracking
         const refund = await stripe.refunds.create({
           payment_intent: bookingData.payment_intent_id,
           amount: refundCents,
           reason: 'requested_by_customer',
+          metadata: {
+            booking_id: bookingInternalId,
+            refund_reason: refundReason,
+            refund_type: requestedPercent ? 'percentage' : 'amount',
+            refund_percentage: requestedPercent ? String(requestedPercent) : '',
+            refund_amount_cents: String(refundCents),
+          },
         });
 
-        // Update payments.refunded_cents (use subquery for LIMIT in UPDATE)
+        // Update payments.refunded_cents across all payment records for this booking
+        // Distribute refund proportionally or to the most recent payment
+        // For simplicity, we'll add to the most recent payment record
+        const existingRefundCheck = await sql`
+          SELECT id, refunded_cents, amount_cents 
+          FROM payments 
+          WHERE booking_id = ${bookingInternalId} 
+          ORDER BY created_at DESC LIMIT 1
+        `;
+        const existingRefundCheckRows = normalizeRows(existingRefundCheck);
+        if (existingRefundCheckRows.length === 0) {
+          return NextResponse.json(
+            { error: 'Payment record not found for this booking' },
+            { status: 400 }
+          );
+        }
+        const existingRefund = existingRefundCheckRows[0];
+        const alreadyRefundedOnThisPayment = existingRefund.refunded_cents || 0;
+        const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + refundCents;
+        
+        // Safety check: ensure we don't refund more than this payment record's amount
+        if (newTotalRefundedOnThisPayment > existingRefund.amount_cents) {
+          return NextResponse.json(
+            { error: `Cannot refund $${(refundCents / 100).toFixed(2)}. Would exceed this payment record's amount. Payment: $${(existingRefund.amount_cents / 100).toFixed(2)}, Already refunded on this payment: $${(alreadyRefundedOnThisPayment / 100).toFixed(2)}` },
+            { status: 400 }
+          );
+        }
+        
+        // Final safety check: ensure total refunded across all payments doesn't exceed total paid
+        const newTotalRefundedAcrossAll = alreadyRefundedTotal + refundCents;
+        if (newTotalRefundedAcrossAll > totalCents) {
+          return NextResponse.json(
+            { error: `Cannot refund $${(refundCents / 100).toFixed(2)}. Total refunded across all payments would exceed total paid. Total paid: $${(totalCents / 100).toFixed(2)}, Already refunded: $${(alreadyRefundedTotal / 100).toFixed(2)}` },
+            { status: 400 }
+          );
+        }
+        
         await sql`
           UPDATE payments 
-          SET refunded_cents = refunded_cents + ${refundCents}, updated_at = NOW()
-          WHERE id = (
-            SELECT id FROM payments 
-            WHERE booking_id = ${bookingInternalId} 
-            ORDER BY created_at DESC LIMIT 1
-          )
+          SET refunded_cents = ${newTotalRefundedOnThisPayment}, updated_at = NOW()
+          WHERE id = ${existingRefund.id}
         `;
 
         // Update booking status to refunded (but do NOT cancel the booking)
@@ -580,25 +724,65 @@ export async function POST(
             metadata = jsonb_set(
               jsonb_set(
                 jsonb_set(
-                  COALESCE(metadata, '{}'::jsonb),
-                  '{refundId}',
-                  ${JSON.stringify(refund.id)}::jsonb
+                  jsonb_set(
+                    COALESCE(metadata, '{}'::jsonb),
+                    '{refundId}',
+                    ${JSON.stringify(refund.id)}::jsonb
+                  ),
+                  '{refundedAt}',
+                  ${JSON.stringify(new Date().toISOString())}::jsonb
                 ),
-                '{refundedAt}',
-                ${JSON.stringify(new Date().toISOString())}::jsonb
+                '{refundAmountCents}',
+                ${JSON.stringify(refundCents)}::jsonb
               ),
-              '{refundAmountCents}',
-              ${JSON.stringify(refundCents)}::jsonb
+              '{refundReason}',
+              ${JSON.stringify(refundReason)}::jsonb
             ),
             updated_at = NOW()
           WHERE id = ${bookingInternalId}
         `;
 
-        // Record event with reason
+        // Record event with reason and full refund details
         await sql`
           INSERT INTO booking_events (booking_id, type, data)
-          VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents, reason: refundReason })}::jsonb)
+          VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ 
+            refundId: refund.id, 
+            amount_cents: refundCents, 
+            reason: refundReason,
+            refund_type: requestedPercent ? 'percentage' : 'amount',
+            refund_percentage: requestedPercent || null,
+            total_refunded_cents: newTotalRefundedAcrossAll,
+            total_payment_cents: totalCents,
+            already_refunded_before: alreadyRefundedTotal,
+            refunded_on_this_payment: newTotalRefundedOnThisPayment,
+            payment_record_id: existingRefund.id,
+          })}::jsonb)
         `;
+
+        // Update Outlook event if it exists (best-effort)
+        if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.outlook_event_id) {
+          try {
+            const bookingForOutlook = {
+              id: bookingInternalId,
+              service_id: bookingData.service_id,
+              service_name: bookingData.service_name,
+              client_name: bookingData.client_name,
+              client_email: bookingData.client_email,
+              booking_date: bookingData.booking_date,
+              outlook_event_id: bookingData.outlook_event_id,
+              metadata: bookingData.metadata || {},
+            };
+            await ensureOutlookEventForBooking(bookingForOutlook);
+            await sql`
+              UPDATE bookings 
+              SET outlook_sync_status = 'updated'
+              WHERE id = ${bookingInternalId}
+            `;
+          } catch (outlookError) {
+            console.error('[Refund Booking] Outlook update failed:', outlookError);
+            // Non-critical - continue
+          }
+        }
 
         // Send refund email with receipt attachment (best-effort)
         if (bookingData.client_email) {
@@ -655,6 +839,7 @@ export async function POST(
               refundAmount: refundCents / 100,
               refundId: refund.id,
               receiptUrl: `https://dashboard.stripe.com/refunds/${refund.id}`,
+              refundReason: refundReason,
             });
 
             await sendBrevoEmail({
