@@ -728,10 +728,38 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   };
 
   // Format time in EST
+  // IMPORTANT: booking_date is stored in UTC in the database (PostgreSQL timestamps are UTC)
+  // When retrieved, it may or may not have timezone info, but we need to treat it as UTC
   const formatTimeEST = (dateString: string | null | undefined): string => {
     if (!dateString) return 'N/A';
     try {
-      const date = new Date(dateString);
+      let date: Date;
+      
+      // PostgreSQL returns timestamps in ISO format, but may not include 'Z'
+      // If it's a string without timezone, PostgreSQL timestamps are always UTC
+      if (typeof dateString === 'string') {
+        // Check if it already has timezone info
+        const hasTimezone = dateString.includes('Z') || 
+                           dateString.includes('+') || 
+                           (dateString.match(/[+-]\d{2}:\d{2}$/) !== null);
+        
+        if (!hasTimezone && dateString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+          // ISO format without timezone - PostgreSQL timestamp, treat as UTC
+          date = new Date(dateString + 'Z');
+        } else {
+          // Has timezone info or is already a Date object, use as-is
+          date = new Date(dateString);
+        }
+      } else {
+        date = new Date(dateString);
+      }
+      
+      // Validate the date
+      if (Number.isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      
+      // Format in EST timezone
       return new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/New_York',
         hour: 'numeric',

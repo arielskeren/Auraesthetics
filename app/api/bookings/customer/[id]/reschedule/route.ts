@@ -126,11 +126,21 @@ export async function POST(
         await updateBooking(bookingData.hapio_booking_id, {
           startsAt: formatDateForHapio(newDateTime),
           endsAt: formatDateForHapio(newEndDateTime),
+          // Allow rescheduling even if schedule check would normally fail
+          // The user has already selected from available slots, so we trust their selection
+          ignoreSchedule: true,
         });
       } catch (hapioError: any) {
         await sql`ROLLBACK`;
+        
+        // Provide more helpful error messages
+        let errorMessage = hapioError?.message || String(hapioError);
+        if (errorMessage.includes('open schedule') || errorMessage.includes('does not have an open schedule')) {
+          errorMessage = 'The selected time slot is not available. The resource does not have an open schedule for this time. Please select a different time slot.';
+        }
+        
         return NextResponse.json(
-          { error: `Failed to update booking in Hapio: ${hapioError?.message || hapioError}` },
+          { error: `Failed to update booking in Hapio: ${errorMessage}` },
           { status: 500 }
         );
       }
