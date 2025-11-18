@@ -1,20 +1,37 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Search, UserCircle, Mail, Phone, CheckCircle, XCircle, Upload, Users } from 'lucide-react';
+import { RefreshCw, Search, CheckCircle, XCircle, Upload, Download, AlertTriangle } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 
-type ViewMode = 'neon' | 'brevo' | 'matched' | 'unmatched';
+type ViewMode = 'all' | 'matched' | 'unmatched';
+
+interface UnifiedClient {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  neonId: string | null;
+  brevoId: string | null;
+  marketingOptIn: boolean;
+  usedWelcomeOffer: boolean;
+  inNeon: boolean;
+  inBrevo: boolean;
+  hasMismatch: boolean; // Data differs between Neon and Brevo
+  neonData?: any;
+  brevoData?: any;
+}
 
 export default function ClientsManager() {
-  const [viewMode, setViewMode] = useState<ViewMode>('neon');
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [neonCustomers, setNeonCustomers] = useState<any[]>([]);
   const [brevoContacts, setBrevoContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [syncingToBrevo, setSyncingToBrevo] = useState<string | null>(null);
+  const [syncingToNeon, setSyncingToNeon] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{
     total: number;
@@ -97,6 +114,32 @@ export default function ClientsManager() {
     }
   };
 
+  const handleSyncToNeon = async (brevoContactId: string) => {
+    try {
+      setSyncingToNeon(brevoContactId);
+      setError(null);
+
+      const response = await fetch(`/api/admin/brevo/clients/${brevoContactId}/sync-to-neon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync to Neon');
+      }
+
+      // Reload data and status
+      await Promise.all([loadData(), loadSyncStatus()]);
+      alert('Contact synced to Neon successfully');
+    } catch (err: any) {
+      setError(err);
+      alert(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncingToNeon(null);
+    }
+  };
+
   const handleSyncAll = async () => {
     if (!confirm(`Sync all ${syncStatus?.pending || 0} pending customers to Brevo? This may take a few minutes.`)) {
       return;
@@ -130,87 +173,112 @@ export default function ClientsManager() {
     }
   };
 
-  // Create a map of Brevo contacts by email for quick lookup
-  const brevoByEmail = useMemo(() => {
-    const map = new Map<string, any>();
-    brevoContacts.forEach((contact) => {
-      if (contact.email) {
-        map.set(contact.email.toLowerCase(), contact);
-      }
-    });
-    return map;
-  }, [brevoContacts]);
+  // Create unified client list with both Neon and Brevo data
+  const unifiedClients = useMemo(() => {
+    const clientsMap = new Map<string, UnifiedClient>();
 
-  // Calculate matched and unmatched records
-  const { matchedRecords, unmatchedNeon, unmatchedBrevo } = useMemo(() => {
-    const matched: Array<{ neon: any; brevo: any }> = [];
-    const unmatchedN: any[] = [];
-    const unmatchedB: any[] = [...brevoContacts];
-
+    // Add all Neon customers
     neonCustomers.forEach((neon) => {
       if (neon.email) {
-        const brevo = brevoByEmail.get(neon.email.toLowerCase());
-        if (brevo) {
-          matched.push({ neon, brevo });
-          // Remove from unmatchedBrevo
-          const index = unmatchedB.findIndex((b) => b.email?.toLowerCase() === neon.email.toLowerCase());
-          if (index >= 0) {
-            unmatchedB.splice(index, 1);
-          }
+        const emailLower = neon.email.toLowerCase();
+        clientsMap.set(emailLower, {
+          email: neon.email,
+          firstName: neon.first_name || '',
+          lastName: neon.last_name || '',
+          phone: neon.phone || null,
+          neonId: neon.id,
+          brevoId: neon.brevo_contact_id || null,
+          marketingOptIn: neon.marketing_opt_in || false,
+          usedWelcomeOffer: neon.used_welcome_offer || false,
+          inNeon: true,
+          inBrevo: !!neon.brevo_contact_id,
+          hasMismatch: false,
+          neonData: neon,
+        });
+      }
+    });
+
+    // Add/merge Brevo contacts
+    brevoContacts.forEach((brevo) => {
+      if (brevo.email) {
+        const emailLower = brevo.email.toLowerCase();
+        const existing = clientsMap.get(emailLower);
+        
+        if (existing) {
+          // Merge with existing Neon record
+          existing.brevoId = brevo.id;
+          existing.inBrevo = true;
+          existing.brevoData = brevo;
+          
+          // Check for mismatches (display Neon data, but highlight if different)
+          const nameMatch = 
+            (existing.firstName || '').toLowerCase() === (brevo.firstName || '').toLowerCase() &&
+            (existing.lastName || '').toLowerCase() === (brevo.lastName || '').toLowerCase();
+          const phoneMatch = 
+            (existing.phone || '').replace(/\D/g, '') === (brevo.phone || '').replace(/\D/g, '');
+          
+          existing.hasMismatch = !nameMatch || !phoneMatch;
         } else {
-          unmatchedN.push(neon);
+          // Brevo-only contact
+          clientsMap.set(emailLower, {
+            email: brevo.email,
+            firstName: brevo.firstName || '',
+            lastName: brevo.lastName || '',
+            phone: brevo.phone || null,
+            neonId: null,
+            brevoId: brevo.id,
+            marketingOptIn: !brevo.emailBlacklisted,
+            usedWelcomeOffer: brevo.usedWelcomeOffer || false,
+            inNeon: false,
+            inBrevo: true,
+            hasMismatch: false,
+            brevoData: brevo,
+          });
         }
       }
     });
 
-    return {
-      matchedRecords: matched,
-      unmatchedNeon: unmatchedN,
-      unmatchedBrevo: unmatchedB,
-    };
-  }, [neonCustomers, brevoContacts, brevoByEmail]);
+    return Array.from(clientsMap.values()).sort((a, b) => {
+      // Sort by email
+      return a.email.localeCompare(b.email);
+    });
+  }, [neonCustomers, brevoContacts]);
 
-  const filteredData = useMemo(() => {
-    let data: any[] = [];
-
+  // Filter by view mode
+  const filteredByMode = useMemo(() => {
     switch (viewMode) {
-      case 'neon':
-        data = neonCustomers;
-        break;
-      case 'brevo':
-        data = brevoContacts;
-        break;
       case 'matched':
-        data = matchedRecords.map((m) => ({
-          ...m.neon,
-          brevoId: m.brevo.id,
-          brevoName: `${m.brevo.firstName || ''} ${m.brevo.lastName || ''}`.trim(),
-          inBrevo: true,
-        }));
-        break;
+        return unifiedClients.filter(c => c.inNeon && c.inBrevo);
       case 'unmatched':
-        data = unmatchedNeon.map((n) => ({
-          ...n,
-          inBrevo: false,
-        }));
-        break;
+        return unifiedClients.filter(c => (c.inNeon && !c.inBrevo) || (!c.inNeon && c.inBrevo));
+      case 'all':
+      default:
+        return unifiedClients;
     }
+  }, [unifiedClients, viewMode]);
 
-    if (!searchQuery.trim()) return data;
+  // Apply search filter
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) return filteredByMode;
 
     const query = searchQuery.toLowerCase();
-    return data.filter((item: any) => {
-      const email = (item.email || '').toLowerCase();
-      const firstName = (item.first_name || item.firstName || '').toLowerCase();
-      const lastName = (item.last_name || item.lastName || '').toLowerCase();
-      const phone = (item.phone || '').toLowerCase();
+    return filteredByMode.filter((client) => {
+      const email = (client.email || '').toLowerCase();
+      const firstName = (client.firstName || '').toLowerCase();
+      const lastName = (client.lastName || '').toLowerCase();
+      const phone = (client.phone || '').toLowerCase();
       
       return email.includes(query) || 
              firstName.includes(query) || 
-             lastName.includes(query) || 
+             lastName.includes(query) ||
              phone.includes(query);
     });
-  }, [viewMode, neonCustomers, brevoContacts, matchedRecords, unmatchedNeon, searchQuery]);
+  }, [filteredByMode, searchQuery]);
+
+  // Calculate counts
+  const matchedCount = unifiedClients.filter(c => c.inNeon && c.inBrevo).length;
+  const unmatchedCount = unifiedClients.filter(c => (c.inNeon && !c.inBrevo) || (!c.inNeon && c.inBrevo)).length;
+  const mismatchCount = unifiedClients.filter(c => c.hasMismatch).length;
 
   if (loading) {
     return <LoadingState message="Loading clients..." />;
@@ -222,20 +290,14 @@ export default function ClientsManager() {
 
   return (
     <div className="space-y-4">
-      {/* Header with View Mode Toggle */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-charcoal">
-            {viewMode === 'neon' && 'Neon Customers (Source of Truth)'}
-            {viewMode === 'brevo' && 'Brevo Contacts'}
-            {viewMode === 'matched' && 'Matched Records (Neon ↔ Brevo)'}
-            {viewMode === 'unmatched' && 'Unmatched Neon Customers'}
-          </h2>
+          <h2 className="text-xl font-semibold text-charcoal">Clients</h2>
           <p className="text-sm text-warm-gray mt-1">
-            {viewMode === 'neon' && 'Viewing customers from Neon database (source of truth)'}
-            {viewMode === 'brevo' && 'Viewing contacts from Brevo email marketing platform'}
-            {viewMode === 'matched' && `Showing ${matchedRecords.length} customers that exist in both Neon and Brevo`}
-            {viewMode === 'unmatched' && `Showing ${unmatchedNeon.length} Neon customers not yet in Brevo (need sync)`}
+            {viewMode === 'all' && `Showing all ${unifiedClients.length} clients (Neon and Brevo)`}
+            {viewMode === 'matched' && `Showing ${matchedCount} clients in both Neon and Brevo`}
+            {viewMode === 'unmatched' && `Showing ${unmatchedCount} clients not in both systems`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -252,24 +314,14 @@ export default function ClientsManager() {
       {/* View Mode Tabs */}
       <div className="flex items-center gap-2 border-b border-sand">
         <button
-          onClick={() => setViewMode('neon')}
+          onClick={() => setViewMode('all')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-            viewMode === 'neon'
+            viewMode === 'all'
               ? 'border-dark-sage text-dark-sage'
               : 'border-transparent text-warm-gray hover:text-charcoal'
           }`}
         >
-          Neon ({neonCustomers.length})
-        </button>
-        <button
-          onClick={() => setViewMode('brevo')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-            viewMode === 'brevo'
-              ? 'border-dark-sage text-dark-sage'
-              : 'border-transparent text-warm-gray hover:text-charcoal'
-          }`}
-        >
-          Brevo ({brevoContacts.length})
+          All ({unifiedClients.length})
         </button>
         <button
           onClick={() => setViewMode('matched')}
@@ -279,7 +331,7 @@ export default function ClientsManager() {
               : 'border-transparent text-warm-gray hover:text-charcoal'
           }`}
         >
-          Matched ({matchedRecords.length})
+          Matched ({matchedCount})
         </button>
         <button
           onClick={() => setViewMode('unmatched')}
@@ -289,9 +341,21 @@ export default function ClientsManager() {
               : 'border-transparent text-warm-gray hover:text-charcoal'
           }`}
         >
-          Unmatched ({unmatchedNeon.length})
+          Unmatched ({unmatchedCount})
         </button>
       </div>
+
+      {/* Mismatch Warning */}
+      {mismatchCount > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-yellow-600" />
+            <p className="text-sm text-yellow-800">
+              {mismatchCount} client{mismatchCount !== 1 ? 's' : ''} have data mismatches between Neon and Brevo. Rows are highlighted in yellow.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Sync Status and Actions */}
       {viewMode === 'unmatched' && syncStatus && (
@@ -349,125 +413,98 @@ export default function ClientsManager() {
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Phone</th>
-                {viewMode === 'neon' && (
-                  <>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Marketing Opt-In</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Used Welcome Offer</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">In Brevo</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-                  </>
-                )}
-                {viewMode === 'brevo' && (
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Brevo ID</th>
-                )}
-                {viewMode === 'matched' && (
-                  <>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Marketing Opt-In</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Brevo ID</th>
-                  </>
-                )}
-                {viewMode === 'unmatched' && (
-                  <>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Marketing Opt-In</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-                  </>
-                )}
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Neon ID</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Brevo ID</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Marketing Opt-In</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Used Welcome Offer</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={viewMode === 'neon' ? 7 : viewMode === 'brevo' ? 4 : viewMode === 'matched' ? 5 : 5} className="px-4 py-8 text-center text-warm-gray">
+                  <td colSpan={8} className="px-4 py-8 text-center text-warm-gray">
                     No clients found
                   </td>
                 </tr>
               ) : (
-                filteredData.map((item: any) => (
-                  <tr key={item.id || item.email} className="hover:bg-sand/10">
-                    <td className="px-4 py-3 text-sm text-charcoal">{item.email || 'N/A'}</td>
+                filteredData.map((client) => (
+                  <tr 
+                    key={client.email} 
+                    className={`hover:bg-sand/10 ${
+                      client.hasMismatch ? 'bg-yellow-50/50' : ''
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-sm text-charcoal">{client.email}</td>
                     <td className="px-4 py-3 text-sm text-charcoal">
-                      {viewMode === 'brevo'
-                        ? `${item.firstName || ''} ${item.lastName || ''}`.trim() || 'N/A'
-                        : `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A'}
+                      {`${client.firstName} ${client.lastName}`.trim() || 'N/A'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-charcoal">{item.phone || 'N/A'}</td>
-                    {viewMode === 'neon' && (
-                      <>
-                        <td className="px-4 py-3 text-sm">
-                          {item.marketing_opt_in ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-gray-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {item.used_welcome_offer ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-gray-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {brevoByEmail.has(item.email?.toLowerCase() || '') ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-gray-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {item.marketing_opt_in && (
-                            <button
-                              onClick={() => handleSyncToBrevo(item.id)}
-                              disabled={syncingToBrevo === item.id || brevoByEmail.has(item.email?.toLowerCase() || '')}
-                              className="px-3 py-1 bg-dark-sage text-white rounded hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                            >
-                              {syncingToBrevo === item.id ? 'Syncing...' : 'Push to Brevo'}
-                            </button>
-                          )}
-                        </td>
-                      </>
-                    )}
-                    {viewMode === 'brevo' && (
-                      <td className="px-4 py-3 text-sm text-warm-gray font-mono text-xs">
-                        {item.id}
-                      </td>
-                    )}
-                    {viewMode === 'matched' && (
-                      <>
-                        <td className="px-4 py-3 text-sm">
-                          {item.marketing_opt_in ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-gray-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-warm-gray font-mono text-xs">
-                          {item.brevoId}
-                        </td>
-                      </>
-                    )}
-                    {viewMode === 'unmatched' && (
-                      <>
-                        <td className="px-4 py-3 text-sm">
-                          {item.marketing_opt_in ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-gray-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {item.marketing_opt_in && (
-                            <button
-                              onClick={() => handleSyncToBrevo(item.id)}
-                              disabled={syncingToBrevo === item.id}
-                              className="px-3 py-1 bg-dark-sage text-white rounded hover:bg-dark-sage/80 disabled:opacity-50 text-xs"
-                            >
-                              {syncingToBrevo === item.id ? 'Syncing...' : 'Push to Brevo'}
-                            </button>
-                          )}
-                        </td>
-                      </>
-                    )}
+                    <td className="px-4 py-3 text-sm text-charcoal">{client.phone || 'N/A'}</td>
+                    <td className="px-4 py-3 text-sm text-warm-gray font-mono text-xs">
+                      {client.neonId ? (
+                        <span className="text-charcoal">{client.neonId}</span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-warm-gray font-mono text-xs">
+                      {client.brevoId ? (
+                        <span className="text-charcoal">{client.brevoId}</span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {client.marketingOptIn ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {client.usedWelcomeOffer ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        {client.inNeon && !client.inBrevo && client.marketingOptIn && (
+                          <button
+                            onClick={() => handleSyncToBrevo(client.neonId!)}
+                            disabled={syncingToBrevo === client.neonId}
+                            className="px-2 py-1 bg-dark-sage text-white rounded hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
+                            title="Sync to Brevo"
+                          >
+                            <Upload className="w-3 h-3" />
+                            To Brevo
+                          </button>
+                        )}
+                        {!client.inNeon && client.inBrevo && (
+                          <button
+                            onClick={() => handleSyncToNeon(client.brevoId!)}
+                            disabled={syncingToNeon === client.brevoId}
+                            className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
+                            title="Create in Neon from Brevo"
+                          >
+                            <Download className="w-3 h-3" />
+                            To Neon
+                          </button>
+                        )}
+                        {client.inNeon && client.inBrevo && client.hasMismatch && (
+                          <button
+                            onClick={() => handleSyncToBrevo(client.neonId!)}
+                            disabled={syncingToBrevo === client.neonId}
+                            className="px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
+                            title="Sync Neon data to Brevo (fix mismatch)"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Fix Sync
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -478,15 +515,10 @@ export default function ClientsManager() {
 
       {/* Summary */}
       <div className="text-sm text-warm-gray">
-        Showing {filteredData.length} of {
-          viewMode === 'neon' ? neonCustomers.length :
-          viewMode === 'brevo' ? brevoContacts.length :
-          viewMode === 'matched' ? matchedRecords.length :
-          unmatchedNeon.length
-        } clients
-        {viewMode === 'unmatched' && syncStatus && (
-          <span className="ml-2">
-            ({syncStatus.pending} pending sync)
+        Showing {filteredData.length} of {filteredByMode.length} clients
+        {mismatchCount > 0 && (
+          <span className="ml-2 text-yellow-700">
+            ({mismatchCount} with data mismatches)
           </span>
         )}
       </div>

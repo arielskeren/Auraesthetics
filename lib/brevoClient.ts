@@ -221,6 +221,8 @@ export async function syncCustomerToBrevo(params: {
     
     // Try POST first, then PUT if contact exists
     let brevoResult: { id?: number; success: boolean } = { success: false };
+    let brevoContactId: number | undefined = undefined;
+    
     const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
@@ -229,15 +231,18 @@ export async function syncCustomerToBrevo(params: {
     
     if (resp.status === 200 || resp.status === 201) {
       const data = await resp.json().catch(() => ({}));
-      brevoResult = { id: data?.id, success: true };
+      brevoContactId = data?.id;
+      brevoResult = { id: brevoContactId, success: true };
     } else if (resp.status === 400) {
-      // Contact exists - update it
+      // Contact exists - fetch it first to get the ID, then update
       const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
         headers: { 'api-key': apiKey, 'Accept': 'application/json' },
       });
       
       if (existingResp.ok) {
         const existing = await existingResp.json();
+        brevoContactId = existing.id;
+        
         const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
         const updateBody: any = { attributes: mergedAttributes };
         
@@ -254,18 +259,28 @@ export async function syncCustomerToBrevo(params: {
         });
         
         if (update.ok) {
-          brevoResult = { id: existing.id, success: true };
+          brevoResult = { id: brevoContactId, success: true };
+        } else {
+          // Update failed, but we still have the contact ID - mark as partial success
+          console.warn(`[syncCustomerToBrevo] Contact exists but update failed for ${customer.email}. Contact ID: ${brevoContactId}`);
+          brevoResult = { id: brevoContactId, success: false };
         }
       }
     }
     
-    // Update brevo_contact_id in database if we got a new ID
-    if (brevoResult.id && brevoResult.id !== customer.brevo_contact_id) {
-      await sql`
-        UPDATE customers 
-        SET brevo_contact_id = ${String(brevoResult.id)}, updated_at = NOW()
-        WHERE id = ${customerId}
-      `;
+    // Always update brevo_contact_id in database if we have a contact ID (even if update partially failed)
+    // This ensures we maintain the link between Neon and Brevo
+    if (brevoContactId && String(brevoContactId) !== customer.brevo_contact_id) {
+      try {
+        await sql`
+          UPDATE customers 
+          SET brevo_contact_id = ${String(brevoContactId)}, updated_at = NOW()
+          WHERE id = ${customerId}
+        `;
+        console.log(`[syncCustomerToBrevo] Updated brevo_contact_id for customer ${customerId} to ${brevoContactId}`);
+      } catch (dbError) {
+        console.error(`[syncCustomerToBrevo] Failed to update brevo_contact_id in database:`, dbError);
+      }
     }
     
     return { success: true, brevoId: brevoResult.id };
