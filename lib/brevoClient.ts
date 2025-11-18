@@ -148,7 +148,7 @@ export async function syncCustomerToBrevo(params: {
   try {
     // Fetch customer from database
     const customerResult = await sql`
-      SELECT email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id
+      SELECT email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id, used_welcome_offer
       FROM customers
       WHERE id = ${customerId}
       LIMIT 1
@@ -172,15 +172,67 @@ export async function syncCustomerToBrevo(params: {
     // Use listId from params, or fallback to env, or preserve existing
     const finalListId = listId ?? (process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined);
     
-    // Sync to Brevo
-    const brevoResult = await upsertBrevoContact({
+    // Sync to Brevo with used_welcome_offer attribute
+    const apiKey = getApiKey();
+    const attributes: Record<string, any> = {
+      FIRSTNAME: customer.first_name || '',
+      LASTNAME: customer.last_name || '',
+      USED_WELCOME_OFFER: customer.used_welcome_offer === true ? 'true' : 'false',
+    };
+    
+    if (customer.phone) {
+      attributes.PHONE = customer.phone;
+      attributes.LANDLINE_NUMBER = customer.phone;
+      attributes.SMS = customer.phone;
+    }
+    
+    const body: any = {
       email: customer.email,
-      firstName: customer.first_name || null,
-      lastName: customer.last_name || null,
-      phone: customer.phone || null,
-      listId: finalListId && Number.isFinite(finalListId) ? finalListId : undefined,
-      tags: tags || ['customer'],
+      attributes,
+      updateEnabled: true,
+    };
+    if (finalListId && Number.isFinite(finalListId)) body.listIds = [finalListId];
+    if (tags?.length) body.tags = tags;
+    
+    // Try POST first, then PUT if contact exists
+    let brevoResult: { id?: number; success: boolean } = { success: false };
+    const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+      body: JSON.stringify(body),
     });
+    
+    if (resp.status === 200 || resp.status === 201) {
+      const data = await resp.json().catch(() => ({}));
+      brevoResult = { id: data?.id, success: true };
+    } else if (resp.status === 400) {
+      // Contact exists - update it
+      const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+        headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+      });
+      
+      if (existingResp.ok) {
+        const existing = await existingResp.json();
+        const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
+        const updateBody: any = { attributes: mergedAttributes };
+        
+        if (finalListId && Number.isFinite(finalListId)) {
+          updateBody.listIds = [finalListId];
+        } else if (existing.listIds?.length) {
+          updateBody.listIds = existing.listIds;
+        }
+        
+        const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+          body: JSON.stringify(updateBody),
+        });
+        
+        if (update.ok) {
+          brevoResult = { id: existing.id, success: true };
+        }
+      }
+    }
     
     // Update brevo_contact_id in database if we got a new ID
     if (brevoResult.id && brevoResult.id !== customer.brevo_contact_id) {

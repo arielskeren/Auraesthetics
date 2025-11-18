@@ -46,7 +46,7 @@ export async function PATCH(
     const customerId = params.id;
     const body = await request.json();
 
-    const { first_name, last_name, phone, email, marketing_opt_in } = body;
+    const { first_name, last_name, phone, email, marketing_opt_in, syncToBrevo } = body;
 
     // Validate email if provided
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -60,6 +60,25 @@ export async function PATCH(
     const existing = Array.isArray(existingResult) ? existingResult[0] : (existingResult as any)?.rows?.[0];
     if (!existing) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    // Handle syncToBrevo request (no field updates needed)
+    if (syncToBrevo === true) {
+      try {
+        await syncCustomerToBrevo({
+          customerId,
+          sql,
+          listId: process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined,
+          tags: ['customer', 'admin_synced'],
+        });
+        return NextResponse.json({ success: true, message: 'Customer synced to Brevo successfully' });
+      } catch (e) {
+        console.error('[Admin Customers API] Brevo sync failed:', e);
+        return NextResponse.json(
+          { error: 'Failed to sync to Brevo', details: e instanceof Error ? e.message : 'Unknown error' },
+          { status: 500 }
+        );
+      }
     }
 
     // Build update query - only update fields that are provided

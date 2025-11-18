@@ -94,17 +94,28 @@ export async function GET(
           s.image_url AS service_image_url,
           s.duration_display AS service_duration,
           p.amount_cents AS payment_amount_cents,
-          p.status AS payment_status_override
+          p.status AS payment_status_override,
+          p.refunded_cents AS refunded_cents,
+          refund_event.data->>'refundId' AS refund_id,
+          refund_event.data->>'reason' AS refund_reason,
+          refund_event.created_at AS refund_date
         FROM bookings b
         LEFT JOIN customers c ON b.customer_id = c.id
         LEFT JOIN services s ON (b.service_id = s.id::text OR b.service_id = s.slug)
         LEFT JOIN LATERAL (
-          SELECT amount_cents, status
+          SELECT amount_cents, status, refunded_cents
           FROM payments
           WHERE booking_id = b.id
           ORDER BY created_at DESC
           LIMIT 1
         ) p ON true
+        LEFT JOIN LATERAL (
+          SELECT data, created_at
+          FROM booking_events
+          WHERE booking_id = b.id AND type = 'refund'
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) refund_event ON true
         WHERE b.id = ${internalId}
         LIMIT 1
       `,
@@ -502,6 +513,15 @@ export async function POST(
       try {
         const requestedPercent = typeof body?.percentage === 'number' ? body.percentage : null;
         const requestedAmountCents = typeof body?.amountCents === 'number' ? body.amountCents : null;
+        const refundReason = typeof body?.reason === 'string' && body.reason.trim() ? body.reason.trim() : null;
+        
+        // Reason is required for refunds
+        if (!refundReason) {
+          return NextResponse.json(
+            { error: 'Refund reason is required' },
+            { status: 400 }
+          );
+        }
 
         // Retrieve payment intent
         const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
@@ -574,10 +594,10 @@ export async function POST(
           WHERE id = ${bookingInternalId}
         `;
 
-        // Record event
+        // Record event with reason
         await sql`
           INSERT INTO booking_events (booking_id, type, data)
-          VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents })}::jsonb)
+          VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ refundId: refund.id, amount_cents: refundCents, reason: refundReason })}::jsonb)
         `;
 
         // Send refund email with receipt attachment (best-effort)

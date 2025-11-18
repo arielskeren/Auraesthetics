@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Users, Settings, BookOpen, Clock, Layers } from 'lucide-react';
+import { Calendar, Users, Settings, BookOpen, Clock, Layers, UserCircle } from 'lucide-react';
 import HapioOverview from './_components/HapioOverview';
 import BookingsManager from './_components/BookingsManager';
 import ServicesManager from './_components/ServicesManager';
 import SchedulesManager from './_components/SchedulesManager';
 import ResourcesAndLocationsManager from './_components/ResourcesAndLocationsManager';
+import ClientsManager from './_components/ClientsManager';
 
-type Tab = 'overview' | 'bookings' | 'resources-locations' | 'services' | 'schedules';
+type Tab = 'overview' | 'bookings' | 'resources-locations' | 'services' | 'schedules' | 'clients';
 
 export default function HapioManagementClient() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -16,6 +17,7 @@ export default function HapioManagementClient() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: <Calendar className="w-4 h-4" /> },
     { id: 'bookings', label: 'Bookings', icon: <BookOpen className="w-4 h-4" /> },
+    { id: 'clients', label: 'Clients', icon: <UserCircle className="w-4 h-4" /> },
     { id: 'resources-locations', label: 'Employees & Locations', icon: <Users className="w-4 h-4" /> },
     { id: 'services', label: 'Services', icon: <Settings className="w-4 h-4" /> },
     { id: 'schedules', label: 'Schedules', icon: <Clock className="w-4 h-4" /> },
@@ -29,17 +31,11 @@ export default function HapioManagementClient() {
           <div className="bg-dark-sage text-charcoal px-6 py-4 border-b border-sage-light">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold">Hapio Management Portal</h1>
+                <h1 className="text-2xl font-bold">Aura Esthetics Dashboard</h1>
                 <p className="text-sm text-charcoal/70 mt-1">
-                  Manage availability, schedules, bookings, and employees
+                  Manage availability, schedules, bookings, employees, and clients
                 </p>
               </div>
-              <a
-                href="/admindash/amy"
-                className="px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-charcoal/80 transition-colors text-sm font-medium"
-              >
-                Main Dashboard
-              </a>
             </div>
           </div>
 
@@ -67,6 +63,7 @@ export default function HapioManagementClient() {
           <div className="p-6">
             {activeTab === 'overview' && <HapioOverview onNavigate={(tab) => setActiveTab(tab)} />}
             {activeTab === 'bookings' && <BookingsManager />}
+            {activeTab === 'clients' && <ClientsManager />}
             {activeTab === 'resources-locations' && <ResourcesAndLocationsManager />}
             {activeTab === 'services' && <ServicesManager />}
             {activeTab === 'schedules' && <SchedulesManager />}

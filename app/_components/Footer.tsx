@@ -92,9 +92,9 @@ export default function Footer() {
             <Link 
               href="/admindash/amy/hapio" 
               className="hover:text-charcoal transition-colors opacity-40 hover:opacity-100"
-              title="Hapio Management"
+              title="Internal Dashboard"
             >
-              Hapio
+              Internal
             </Link>
           </div>
 

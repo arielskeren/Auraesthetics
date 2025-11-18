@@ -88,6 +88,10 @@ export async function finalizeBookingTransactional(args: {
       throw new Error('Failed to ensure booking row');
     }
 
+    // Check if WELCOME15 discount code was used
+    const discountCode = pim.discountCode || pim.discount_code || null;
+    const usedWelcomeOffer = discountCode && typeof discountCode === 'string' && discountCode.toUpperCase() === 'WELCOME15';
+
     // Upsert customer if email
     let customerId: string | null = null;
     let stripeCustomerId: string | null = null;
@@ -98,14 +102,15 @@ export async function finalizeBookingTransactional(args: {
       stripeCustomerId = (pi as any).customer || null;
       
       const custRows = (await sql`
-        INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at)
-        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, ${stripeCustomerId}, NOW())
+        INSERT INTO customers (email, first_name, last_name, phone, marketing_opt_in, stripe_customer_id, last_seen_at, used_welcome_offer)
+        VALUES (${emailFromPi}, ${firstName || null}, ${lastName}, ${phoneFromPi || null}, true, ${stripeCustomerId}, NOW(), ${usedWelcomeOffer || false})
         ON CONFLICT (email) DO UPDATE SET
           first_name = COALESCE(EXCLUDED.first_name, customers.first_name),
           last_name = COALESCE(EXCLUDED.last_name, customers.last_name),
           phone = COALESCE(EXCLUDED.phone, customers.phone),
           stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id),
-          last_seen_at = NOW()
+          last_seen_at = NOW(),
+          used_welcome_offer = COALESCE(customers.used_welcome_offer, false) OR ${usedWelcomeOffer || false}
         RETURNING id
       `) as any[];
       customerId = custRows?.[0]?.id || null;
@@ -170,6 +175,7 @@ export async function finalizeBookingTransactional(args: {
     await sql`COMMIT`;
 
     // Sync customer to Brevo using database data (ensures we sync latest data, not just payment intent metadata)
+    // Also sync used_welcome_offer status to Brevo
     if (customerId) {
       try {
         await syncCustomerToBrevo({

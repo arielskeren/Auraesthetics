@@ -19,7 +19,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { code, amount } = body;
+    const { code, amount, customerEmail, customerName } = body;
 
     // Validate input
     if (!code || typeof code !== 'string') {
@@ -36,11 +36,121 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const codeUpper = code.toUpperCase();
+
+    // Special validation for WELCOME15 offer
+    if (codeUpper === 'WELCOME15') {
+      const sql = getSqlClient();
+      
+      // Check if customer email has already used the welcome offer
+      if (customerEmail && typeof customerEmail === 'string') {
+        const emailLower = customerEmail.toLowerCase().trim();
+        const customerCheck = await sql`
+          SELECT used_welcome_offer, email, first_name, last_name 
+          FROM customers 
+          WHERE LOWER(email) = ${emailLower}
+          LIMIT 1
+        `;
+        const customerRows = normalizeRows(customerCheck);
+        
+        if (customerRows.length > 0) {
+          const customer = customerRows[0];
+          
+          // Check if this customer has already used the welcome offer
+          if (customer.used_welcome_offer === true) {
+            return NextResponse.json(
+              { error: 'This welcome offer has already been used', valid: false },
+              { status: 400 }
+            );
+          }
+          
+          // Check for duplicate name if name is provided
+          if (customerName && typeof customerName === 'string') {
+            const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
+            if (nameParts.length >= 2) {
+              const firstName = nameParts[0];
+              const lastName = nameParts.slice(1).join(' ');
+              
+              // Check if another customer with same name has used the offer
+              const nameCheck = await sql`
+                SELECT used_welcome_offer 
+                FROM customers 
+                WHERE LOWER(first_name) = LOWER(${firstName})
+                  AND LOWER(last_name) = LOWER(${lastName})
+                  AND used_welcome_offer = true
+                  AND LOWER(email) != ${emailLower}
+                LIMIT 1
+              `;
+              const nameRows = normalizeRows(nameCheck);
+              
+              if (nameRows.length > 0) {
+                return NextResponse.json(
+                  { error: 'This welcome offer has already been used by someone with this name', valid: false },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        } else {
+          // New customer - check if someone with the same email/name combination has used it
+          if (customerName && typeof customerName === 'string') {
+            const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
+            if (nameParts.length >= 2) {
+              const firstName = nameParts[0];
+              const lastName = nameParts.slice(1).join(' ');
+              
+              const duplicateCheck = await sql`
+                SELECT used_welcome_offer 
+                FROM customers 
+                WHERE (LOWER(email) = LOWER(${customerEmail}) 
+                   OR (LOWER(first_name) = LOWER(${firstName}) AND LOWER(last_name) = LOWER(${lastName})))
+                  AND used_welcome_offer = true
+                LIMIT 1
+              `;
+              const duplicateRows = normalizeRows(duplicateCheck);
+              
+              if (duplicateRows.length > 0) {
+                return NextResponse.json(
+                  { error: 'This welcome offer has already been used', valid: false },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        }
+      } else if (customerName && typeof customerName === 'string') {
+        // Only name provided - check for duplicates
+        const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
+        if (nameParts.length >= 2) {
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ');
+          
+          const sql = getSqlClient();
+          const nameCheck = await sql`
+            SELECT used_welcome_offer 
+            FROM customers 
+            WHERE LOWER(first_name) = LOWER(${firstName})
+              AND LOWER(last_name) = LOWER(${lastName})
+              AND used_welcome_offer = true
+            LIMIT 1
+          `;
+          const nameRows = normalizeRows(nameCheck);
+          
+          if (nameRows.length > 0) {
+            return NextResponse.json(
+              { error: 'This welcome offer has already been used by someone with this name', valid: false },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    }
+
     // Check database for discount code
     const sql = getSqlClient();
     const dbResult = await sql`
       SELECT * FROM discount_codes 
-      WHERE code = ${code.toUpperCase()} 
+      WHERE code = ${codeUpper} 
       AND is_active = true
     `;
 

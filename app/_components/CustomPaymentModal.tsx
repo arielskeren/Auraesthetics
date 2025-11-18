@@ -191,6 +191,10 @@ function ModernPaymentSection({
         body: JSON.stringify({
           code: discountCode.trim().toUpperCase(),
           amount: baseAmount,
+          customerEmail: contactDetails.email?.trim() || null,
+          customerName: contactDetails.firstName && contactDetails.lastName 
+            ? `${contactDetails.firstName.trim()} ${contactDetails.lastName.trim()}`.trim()
+            : null,
         }),
       });
 

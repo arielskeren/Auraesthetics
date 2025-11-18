@@ -26,6 +26,11 @@ interface Booking {
   payment_type?: 'full' | 'deposit' | null;
   payment_status?: string;
   payment_intent_id?: string | null;
+  payment_amount_cents?: number | null;
+  refunded_cents?: number | null;
+  refund_id?: string | null;
+  refund_reason?: string | null;
+  refund_date?: string | null;
   created_at?: string;
   metadata?: any;
   // Hapio booking object fields (for compatibility)
@@ -59,6 +64,10 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [clientHistory, setClientHistory] = useState<ClientHistory[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundType, setRefundType] = useState<'dollar' | 'percent'>('dollar');
+  const [refundAmount, setRefundAmount] = useState<string>('');
+  const [refundReason, setRefundReason] = useState<string>('');
 
   // Extract booking ID helper - prioritize internal ID, then Hapio ID
   const getBookingId = useCallback((b: Booking | null) => {
@@ -166,38 +175,64 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     }
   };
 
-  const handleRefund = async () => {
+  const handleRefund = () => {
+    setShowRefundModal(true);
+  };
+
+  const handleRefundSubmit = async () => {
     if (!booking) return;
     const effective = bookingDetails || booking;
     const bookingId = getBookingId(effective);
     if (!bookingId) return;
-    
-    const choice = prompt(
-      'Refund amount:\n- Enter one of: 15,25,50,75,100 (percent)\n- Or enter a custom amount in dollars (e.g., 42.50)\n- Leave empty to refund full amount'
-    );
+
+    // Validate reason is required
+    if (!refundReason.trim()) {
+      setActionMessage({ type: 'error', text: 'Refund reason is required' });
+      return;
+    }
+
+    // Validate amount
+    const amountValue = parseFloat(refundAmount);
+    if (!refundAmount.trim() || isNaN(amountValue) || amountValue <= 0) {
+      setActionMessage({ type: 'error', text: 'Please enter a valid refund amount' });
+      return;
+    }
+
+    // Get payment amount to validate against
+    const paymentAmountCents = effective.payment_amount_cents || 0;
+    const paymentAmountDollars = paymentAmountCents / 100;
+
     let percentage: number | null = null;
     let amountCents: number | null = null;
-    if (choice && choice.trim().length > 0) {
-      const trimmed = choice.trim();
-      const pct = Number(trimmed);
-      if (!Number.isNaN(pct) && [15, 25, 50, 75, 100].includes(pct)) {
-        percentage = pct;
-      } else {
-        const amt = Number(trimmed);
-        if (!Number.isNaN(amt) && amt >= 0) {
-          amountCents = Math.round(amt * 100);
-        }
+
+    if (refundType === 'percent') {
+      if (amountValue < 1 || amountValue > 100) {
+        setActionMessage({ type: 'error', text: 'Percentage must be between 1 and 100' });
+        return;
       }
+      percentage = amountValue;
+    } else {
+      if (amountValue > paymentAmountDollars) {
+        setActionMessage({ type: 'error', text: `Refund amount cannot exceed payment amount of $${paymentAmountDollars.toFixed(2)}` });
+        return;
+      }
+      amountCents = Math.round(amountValue * 100);
     }
     
     try {
       setActionLoading('refund');
       setActionMessage(null);
+      setShowRefundModal(false);
       
-      const response = await fetch(`/api/admin/bookings/${bookingId}`, {
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refund', percentage, amountCents }),
+        body: JSON.stringify({ 
+          action: 'refund', 
+          percentage, 
+          amountCents,
+          reason: refundReason.trim()
+        }),
       });
       
       const data = await response.json();
@@ -207,9 +242,13 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           type: 'success', 
           text: `Refund processed successfully. Refund ID: ${data.refundId || 'N/A'}` 
         });
+        // Reset form
+        setRefundAmount('');
+        setRefundReason('');
+        setRefundType('dollar');
         setTimeout(() => {
           onRefresh();
-          onClose();
+          fetchBookingDetails();
         }, 2000);
       } else {
         setActionMessage({ type: 'error', text: data.error || 'Failed to process refund' });
@@ -486,6 +525,42 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       </p>
                     </div>
                   )}
+                  {/* Refund Information */}
+                  {(effective.refunded_cents && effective.refunded_cents > 0) && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
+                      <label className="text-xs font-semibold text-yellow-800 mb-1 block">Refund Information</label>
+                      <div className="space-y-1">
+                        <p className="text-xs text-yellow-800">
+                          <strong>Amount Refunded:</strong> ${((effective.refunded_cents || 0) / 100).toFixed(2)}
+                        </p>
+                        {effective.refund_date && (
+                          <p className="text-xs text-yellow-800">
+                            <strong>Date Refunded:</strong> {formatDate(effective.refund_date)}
+                          </p>
+                        )}
+                        {effective.refund_reason && (
+                          <p className="text-xs text-yellow-800">
+                            <strong>Reason:</strong> {effective.refund_reason}
+                          </p>
+                        )}
+                        {effective.refund_id && (
+                          <p className="text-xs text-yellow-800 font-mono break-all">
+                            <strong>Refund ID:</strong> {effective.refund_id}
+                          </p>
+                        )}
+                        {effective.payment_amount_cents && effective.refunded_cents < effective.payment_amount_cents && (
+                          <p className="text-xs text-yellow-700 italic">
+                            Partial refund (${((effective.payment_amount_cents - effective.refunded_cents) / 100).toFixed(2)} remaining)
+                          </p>
+                        )}
+                        {effective.payment_amount_cents && effective.refunded_cents >= effective.payment_amount_cents && (
+                          <p className="text-xs text-yellow-700 italic">
+                            Full refund
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="text-xs text-warm-gray mb-1">Hapio Booking ID</label>
                     <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">
@@ -557,6 +632,139 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           </div>
         )}
       </div>
+
+      {/* Refund Modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-charcoal">Process Refund</h3>
+                <button
+                  onClick={() => {
+                    setShowRefundModal(false);
+                    setRefundAmount('');
+                    setRefundReason('');
+                    setRefundType('dollar');
+                  }}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Refund Type Toggle */}
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">Refund Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRefundType('dollar')}
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        refundType === 'dollar'
+                          ? 'bg-dark-sage text-white'
+                          : 'bg-sand/30 text-charcoal hover:bg-sand/50'
+                      }`}
+                    >
+                      $
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRefundType('percent')}
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        refundType === 'percent'
+                          ? 'bg-dark-sage text-white'
+                          : 'bg-sand/30 text-charcoal hover:bg-sand/50'
+                      }`}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
+
+                {/* Refund Amount Input */}
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    Refund Amount {refundType === 'percent' ? '(%)' : '($)'}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {refundType === 'dollar' && (
+                      <span className="text-charcoal font-medium">$</span>
+                    )}
+                    <input
+                      type="number"
+                      step={refundType === 'percent' ? '1' : '0.01'}
+                      min="0"
+                      max={refundType === 'percent' ? '100' : undefined}
+                      value={refundAmount}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Only allow numbers and decimal point
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setRefundAmount(value);
+                        }
+                      }}
+                      placeholder={refundType === 'percent' ? 'Enter percentage (1-100)' : 'Enter amount'}
+                      className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage focus:border-transparent"
+                    />
+                    {refundType === 'percent' && (
+                      <span className="text-charcoal font-medium">%</span>
+                    )}
+                  </div>
+                  {effective.payment_amount_cents && (
+                    <p className="text-xs text-warm-gray mt-1">
+                      Payment amount: ${((effective.payment_amount_cents || 0) / 100).toFixed(2)}
+                      {refundType === 'percent' && refundAmount && !isNaN(parseFloat(refundAmount)) && (
+                        <span className="ml-2">
+                          ({parseFloat(refundAmount)}% = ${((parseFloat(refundAmount) / 100) * (effective.payment_amount_cents || 0) / 100).toFixed(2)})
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                {/* Refund Reason (Required) */}
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    Reason <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    placeholder="Enter reason for refund (required)"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage focus:border-transparent resize-none"
+                    required
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowRefundModal(false);
+                      setRefundAmount('');
+                      setRefundReason('');
+                      setRefundType('dollar');
+                    }}
+                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRefundSubmit}
+                    disabled={actionLoading === 'refund' || !refundAmount.trim() || !refundReason.trim()}
+                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    {actionLoading === 'refund' ? 'Processing...' : 'Process Refund'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
