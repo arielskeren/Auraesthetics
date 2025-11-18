@@ -82,6 +82,23 @@ export async function POST(
       );
     }
 
+    // Check if booking is within 72 hours (cannot reschedule within 72 hours)
+    if (bookingData.booking_date) {
+      const bookingDateTime = new Date(bookingData.booking_date);
+      const now = new Date();
+      const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursUntilBooking <= 72) {
+        return NextResponse.json(
+          { 
+            error: 'Rescheduling must be done at least 72 hours before the appointment. Please call or text +1 (440) 520-3337 to change your appointment.',
+            hoursUntilBooking: Math.round(hoursUntilBooking * 10) / 10,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Calculate end time (need service duration)
     let durationMinutes = 60; // Default
     if (bookingData.service_id) {

@@ -10,6 +10,7 @@ import { formatInEST } from '@/lib/timezone';
 interface Booking {
   id: string;
   hapio_booking_id?: string | null;
+  service_id?: string | null;
   service_name?: string;
   service_display_name?: string | null;
   service_image_url?: string | null;
@@ -24,12 +25,24 @@ interface Booking {
   created_at?: string;
 }
 
+type AvailabilitySlot = {
+  start: string;
+  end: string;
+  bufferStart?: string | null;
+  bufferEnd?: string | null;
+  resources?: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    metadata?: any;
+  }>;
+};
+
 export default function ManageBookingClient() {
   const [searchMode, setSearchMode] = useState<'id' | 'search'>('id');
   const [bookingId, setBookingId] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [searchBookingId, setSearchBookingId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
@@ -37,6 +50,11 @@ export default function ManageBookingClient() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
+  const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [serviceSlug, setServiceSlug] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -71,12 +89,12 @@ export default function ManageBookingClient() {
         }
         url += `id=${encodeURIComponent(bookingId.trim())}`;
       } else {
-        if (!lastName.trim() || !email.trim() || !searchBookingId.trim()) {
-          setError('Please fill in all search fields');
+        if (!lastName.trim() || !email.trim()) {
+          setError('Please enter both last name and email address');
           setLoading(false);
           return;
         }
-        url += `lastName=${encodeURIComponent(lastName.trim())}&email=${encodeURIComponent(email.trim())}&bookingId=${encodeURIComponent(searchBookingId.trim())}`;
+        url += `lastName=${encodeURIComponent(lastName.trim())}&email=${encodeURIComponent(email.trim())}`;
       }
 
       const response = await fetch(url);
@@ -89,6 +107,22 @@ export default function ManageBookingClient() {
 
       setBooking(data.booking);
       setError(null);
+      
+      // Fetch service slug if service_id is available
+      if (data.booking?.service_id) {
+        try {
+          const serviceResponse = await fetch(`/api/services`);
+          if (serviceResponse.ok) {
+            const services = await serviceResponse.json();
+            const service = services.find((s: any) => s.id === data.booking.service_id || s.slug === data.booking.service_id);
+            if (service?.slug) {
+              setServiceSlug(service.slug);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch service slug:', e);
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load booking');
     } finally {
@@ -101,18 +135,90 @@ export default function ManageBookingClient() {
     
     const date = new Date(booking.booking_date);
     setRescheduleDate(date.toISOString().split('T')[0]);
-    const timeStr = date.toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    setRescheduleTime(timeStr);
+    setRescheduleTime('');
+    setAvailabilityStatus('idle');
+    setAvailabilitySlots([]);
+    setSelectedSlot(null);
+    setAvailabilityError(null);
     setShowRescheduleModal(true);
   };
 
+  const handleCheckAvailability = async () => {
+    if (!rescheduleDate || !rescheduleTime || !serviceSlug) {
+      setAvailabilityError('Please select a date and time first');
+      return;
+    }
+
+    setAvailabilityStatus('loading');
+    setAvailabilityError(null);
+    setSelectedSlot(null);
+
+    try {
+      // Build a window covering the chosen day ± two working days
+      const [hour, minute] = rescheduleTime.split(':').map((v) => Number(v));
+      const chosen = new Date(`${rescheduleDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
+
+      const isWorkingDay = (d: Date) => {
+        const day = d.getDay();
+        return day !== 6; // Exclude Saturday
+      };
+
+      const prevWorkingDays: Date[] = [];
+      const nextWorkingDays: Date[] = [];
+
+      // Walk backwards
+      {
+        const cursor = new Date(chosen);
+        for (let i = 0; i < 10 && prevWorkingDays.length < 2; i++) {
+          cursor.setDate(cursor.getDate() - 1);
+          if (isWorkingDay(cursor)) {
+            prevWorkingDays.push(new Date(cursor));
+          }
+        }
+      }
+      // Walk forwards
+      {
+        const cursor = new Date(chosen);
+        for (let i = 0; i < 10 && nextWorkingDays.length < 2; i++) {
+          cursor.setDate(cursor.getDate() + 1);
+          if (isWorkingDay(cursor)) {
+            nextWorkingDays.push(new Date(cursor));
+          }
+        }
+      }
+
+      const allDays = [...prevWorkingDays.reverse(), new Date(chosen), ...nextWorkingDays];
+      const windowStart = new Date(allDays[0]);
+      windowStart.setHours(0, 0, 0, 0);
+      const windowEnd = new Date(allDays[allDays.length - 1]);
+      windowEnd.setHours(23, 59, 59, 0);
+
+      const params = new URLSearchParams({
+        slug: serviceSlug,
+        from: windowStart.toISOString(),
+        to: windowEnd.toISOString(),
+        timezone: 'America/New_York',
+      });
+
+      const response = await fetch(`/api/availability?${params.toString()}`);
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.error ?? 'Failed to load availability');
+      }
+
+      const json = await response.json();
+      setAvailabilitySlots(json?.availability ?? []);
+      setAvailabilityStatus('success');
+    } catch (error: any) {
+      console.error('Failed to fetch availability', error);
+      setAvailabilityError(error.message || 'Failed to load availability');
+      setAvailabilityStatus('error');
+    }
+  };
+
   const handleRescheduleSubmit = async () => {
-    if (!booking || !rescheduleDate || !rescheduleTime) {
-      setActionMessage({ type: 'error', text: 'Please select both date and time' });
+    if (!booking || !selectedSlot) {
+      setActionMessage({ type: 'error', text: 'Please select an available time slot' });
       return;
     }
 
@@ -120,12 +226,21 @@ export default function ManageBookingClient() {
     setActionMessage(null);
 
     try {
+      // Extract date and time from selected slot
+      const slotDate = new Date(selectedSlot.start);
+      const newDate = slotDate.toISOString().split('T')[0];
+      const newTime = slotDate.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
       const response = await fetch(`/api/bookings/customer/${booking.id}/reschedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          newDate: rescheduleDate,
-          newTime: rescheduleTime,
+          newDate,
+          newTime,
         }),
       });
 
@@ -145,6 +260,16 @@ export default function ManageBookingClient() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const formatSlotTime = (slot: AvailabilitySlot) => {
+    const date = new Date(slot.start);
+    return formatInEST(date, {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'America/New_York',
+    });
   };
 
   const handleCancelSubmit = async () => {
@@ -197,8 +322,19 @@ export default function ManageBookingClient() {
     });
   };
 
-  const canReschedule = booking && booking.payment_status !== 'cancelled' && booking.hapio_booking_id;
-  const canCancel = booking && booking.payment_status !== 'cancelled';
+  // Check if booking is within 72 hours (3 days)
+  const isWithin72Hours = (bookingDate: string | null | undefined): boolean => {
+    if (!bookingDate) return false;
+    const bookingDateTime = new Date(bookingDate);
+    const now = new Date();
+    const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return hoursUntilBooking <= 72;
+  };
+
+  const isCancelled = booking?.payment_status === 'cancelled';
+  const within72Hours = booking?.booking_date ? isWithin72Hours(booking.booking_date) : false;
+  const canReschedule = booking && !isCancelled && !within72Hours && booking.hapio_booking_id;
+  const canCancel = booking && !isCancelled && !within72Hours;
 
   return (
     <div className="min-h-screen bg-ivory">
@@ -303,19 +439,9 @@ export default function ManageBookingClient() {
                         required
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-charcoal mb-2">
-                        Booking ID <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={searchBookingId}
-                        onChange={(e) => setSearchBookingId(e.target.value)}
-                        placeholder="Enter your booking ID"
-                        className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage focus:border-transparent"
-                        required
-                      />
-                    </div>
+                    <p className="text-sm text-warm-gray">
+                      We&apos;ll find your most recent booking using your last name and email address.
+                    </p>
                   </div>
                 )}
 
@@ -393,13 +519,13 @@ export default function ManageBookingClient() {
                     <p className="text-warm-gray mb-4">{booking.service_duration}</p>
                   )}
                   <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                    booking.payment_status === 'cancelled'
+                    isCancelled
                       ? 'bg-red-100 text-red-800'
                       : booking.payment_status === 'succeeded' || booking.payment_status === 'paid'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {booking.payment_status === 'cancelled' ? 'Cancelled' : 'Confirmed'}
+                    {isCancelled ? 'Cancelled' : 'Confirmed'}
                   </div>
                 </div>
               </div>
@@ -468,28 +594,57 @@ export default function ManageBookingClient() {
               )}
 
               {/* Action Buttons */}
-              {booking.payment_status !== 'cancelled' && (
-                <div className="flex flex-col sm:flex-row gap-4">
-                  {canReschedule && (
-                    <Button
-                      variant="primary"
-                      onClick={handleReschedule}
-                      className="flex-1"
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Reschedule
-                    </Button>
+              {!isCancelled && (
+                <>
+                  {within72Hours ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-sm text-yellow-800 mb-2">
+                        This appointment is within 72 hours. To reschedule or cancel, please contact us directly.
+                      </p>
+                      <p className="text-sm text-yellow-800">
+                        Call or text:{' '}
+                        <a 
+                          href="tel:+14405203337" 
+                          className="text-dark-sage font-semibold hover:underline"
+                        >
+                          +1 (440) 520-3337
+                        </a>
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      {canReschedule && (
+                        <Button
+                          variant="primary"
+                          onClick={handleReschedule}
+                          className="flex-1"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Reschedule
+                        </Button>
+                      )}
+                      {canCancel && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => setShowCancelModal(true)}
+                          className="flex-1"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel Booking
+                        </Button>
+                      )}
+                    </div>
                   )}
-                  {canCancel && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowCancelModal(true)}
-                      className="flex-1"
-                    >
-                      <X className="w-4 h-4 mr-2" />
-                      Cancel Booking
-                    </Button>
-                  )}
+                </>
+              )}
+
+              {/* Cancelled Booking Message */}
+              {isCancelled && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800 font-medium mb-1">This booking has been cancelled.</p>
+                  <p className="text-xs text-red-700">
+                    If you need to book a new appointment, please visit our booking page.
+                  </p>
                 </div>
               )}
 
@@ -521,7 +676,13 @@ export default function ManageBookingClient() {
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-xl font-serif text-charcoal">Reschedule Booking</h3>
                       <button
-                        onClick={() => setShowRescheduleModal(false)}
+                        onClick={() => {
+                          setShowRescheduleModal(false);
+                          setAvailabilityStatus('idle');
+                          setAvailabilitySlots([]);
+                          setSelectedSlot(null);
+                          setAvailabilityError(null);
+                        }}
                         className="p-1 hover:bg-sand/30 rounded-full transition-colors"
                       >
                         <X className="w-5 h-5 text-charcoal" />
@@ -529,50 +690,182 @@ export default function ManageBookingClient() {
                     </div>
 
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-charcoal mb-2">
-                          New Date <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="date"
-                          value={rescheduleDate}
-                          onChange={(e) => setRescheduleDate(e.target.value)}
-                          min={new Date().toISOString().split('T')[0]}
-                          className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                          required
-                        />
-                      </div>
+                      {availabilityStatus === 'idle' && (
+                        <>
+                          <p className="text-sm text-warm-gray mb-4">
+                            Select a date and time to check available slots for rescheduling.
+                          </p>
+                          <div>
+                            <label className="block text-sm font-medium text-charcoal mb-2">
+                              Preferred Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={rescheduleDate}
+                              onChange={(e) => {
+                                setRescheduleDate(e.target.value);
+                                setAvailabilityStatus('idle');
+                                setAvailabilitySlots([]);
+                                setSelectedSlot(null);
+                              }}
+                              min={new Date().toISOString().split('T')[0]}
+                              className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                              required
+                            />
+                          </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-charcoal mb-2">
-                          New Time <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="time"
-                          value={rescheduleTime}
-                          onChange={(e) => setRescheduleTime(e.target.value)}
-                          className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                          required
-                        />
-                        <p className="mt-2 text-xs text-warm-gray">Time is in EST/EDT</p>
-                      </div>
+                          <div>
+                            <label className="block text-sm font-medium text-charcoal mb-2">
+                              Preferred Time <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="time"
+                              value={rescheduleTime}
+                              onChange={(e) => {
+                                setRescheduleTime(e.target.value);
+                                setAvailabilityStatus('idle');
+                                setAvailabilitySlots([]);
+                                setSelectedSlot(null);
+                              }}
+                              className="w-full px-4 py-3 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                              required
+                            />
+                            <p className="mt-2 text-xs text-warm-gray">Time is in EST/EDT</p>
+                          </div>
 
-                      <div className="flex gap-3 pt-2">
+                          <Button
+                            variant={!rescheduleDate || !rescheduleTime || !serviceSlug ? 'disabled' : 'primary'}
+                            onClick={handleCheckAvailability}
+                            className="w-full"
+                          >
+                            Check Availability
+                          </Button>
+                        </>
+                      )}
+
+                      {availabilityStatus === 'loading' && (
+                        <div className="text-center py-8">
+                          <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-dark-sage" />
+                          <p className="text-sm text-warm-gray">Checking available time slots...</p>
+                        </div>
+                      )}
+
+                      {availabilityStatus === 'error' && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <p className="text-sm text-red-800 mb-3">{availabilityError || 'Failed to load availability'}</p>
+                          <Button
+                            variant="secondary"
+                            onClick={handleCheckAvailability}
+                            className="w-full"
+                          >
+                            Try Again
+                          </Button>
+                        </div>
+                      )}
+
+                      {availabilityStatus === 'success' && (
+                        <>
+                          {availabilitySlots.length === 0 ? (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                              <p className="text-sm text-yellow-800">
+                                No available slots found for the selected date. Please try a different date or time.
+                              </p>
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  setAvailabilityStatus('idle');
+                                  setAvailabilitySlots([]);
+                                  setSelectedSlot(null);
+                                }}
+                                className="w-full mt-3"
+                              >
+                                Choose Different Date/Time
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-charcoal mb-2">
+                                  Select Available Time Slot <span className="text-red-500">*</span>
+                                </label>
+                                <div className="max-h-60 overflow-y-auto border border-sage-dark/20 rounded-lg">
+                                  {availabilitySlots.map((slot, index) => {
+                                    const slotDate = new Date(slot.start);
+                                    const isSelected = selectedSlot?.start === slot.start;
+                                    const isToday = slotDate.toDateString() === new Date().toDateString();
+                                    const slotDateStr = formatInEST(slotDate, {
+                                      weekday: 'short',
+                                      month: 'short',
+                                      day: 'numeric',
+                                    });
+                                    
+                                    return (
+                                      <button
+                                        key={index}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`w-full text-left px-4 py-3 border-b border-sage-dark/10 last:border-b-0 transition-colors ${
+                                          isSelected
+                                            ? 'bg-dark-sage text-white'
+                                            : 'hover:bg-sage-light/30 text-charcoal'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div>
+                                            <p className="font-medium">{formatSlotTime(slot)} EST</p>
+                                            <p className={`text-xs ${isSelected ? 'text-white/80' : 'text-warm-gray'}`}>
+                                              {slotDateStr} {isToday && '(Today)'}
+                                            </p>
+                                          </div>
+                                          {isSelected && (
+                                            <CheckCircle className="w-5 h-5" />
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="flex gap-3 pt-2">
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setAvailabilityStatus('idle');
+                                    setAvailabilitySlots([]);
+                                    setSelectedSlot(null);
+                                  }}
+                                  className="flex-1"
+                                >
+                                  Back
+                                </Button>
+                                <Button
+                                  variant={actionLoading || !selectedSlot ? 'disabled' : 'primary'}
+                                  onClick={handleRescheduleSubmit}
+                                  className="flex-1"
+                                >
+                                  {actionLoading ? 'Rescheduling...' : 'Reschedule'}
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {availabilityStatus === 'idle' && (
                         <Button
                           variant="secondary"
-                          onClick={() => setShowRescheduleModal(false)}
-                          className="flex-1"
+                          onClick={() => {
+                            setShowRescheduleModal(false);
+                            setAvailabilityStatus('idle');
+                            setAvailabilitySlots([]);
+                            setSelectedSlot(null);
+                            setAvailabilityError(null);
+                          }}
+                          className="w-full"
                         >
                           Cancel
                         </Button>
-                        <Button
-                          variant={actionLoading || !rescheduleDate || !rescheduleTime ? 'disabled' : 'primary'}
-                          onClick={handleRescheduleSubmit}
-                          className="flex-1"
-                        >
-                          {actionLoading ? 'Rescheduling...' : 'Reschedule'}
-                        </Button>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </motion.div>

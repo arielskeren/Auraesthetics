@@ -20,7 +20,6 @@ export async function GET(request: NextRequest) {
     const id = searchParams.get('id');
     const lastName = searchParams.get('lastName');
     const email = searchParams.get('email');
-    const bookingId = searchParams.get('bookingId'); // For search mode
 
     const sql = getSqlClient();
 
@@ -63,8 +62,8 @@ export async function GET(request: NextRequest) {
         booking = rows[0];
       }
     }
-    // Mode 2: Search by lastName + email + bookingId
-    else if (lastName && email && bookingId) {
+    // Mode 2: Search by lastName + email (returns most recent booking)
+    else if (lastName && email) {
       const lastNameLower = lastName.toLowerCase().trim();
       const emailLower = email.toLowerCase().trim();
       
@@ -95,12 +94,12 @@ export async function GET(request: NextRequest) {
           ) AS refunded_cents
         FROM bookings b
         LEFT JOIN services s ON (b.service_id = s.id::text OR b.service_id = s.slug)
-        WHERE (b.id = ${bookingId} OR b.hapio_booking_id = ${bookingId})
-          AND LOWER(b.client_email) = ${emailLower}
+        WHERE LOWER(b.client_email) = ${emailLower}
           AND (
             LOWER(SPLIT_PART(b.client_name, ' ', -1)) = ${lastNameLower}
             OR LOWER(b.client_name) LIKE ${`%${lastNameLower}%`}
           )
+        ORDER BY b.booking_date DESC, b.created_at DESC
         LIMIT 1
       `;
       const rows = normalizeRows(result);
@@ -109,7 +108,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       return NextResponse.json(
-        { error: 'Missing required parameters. Provide either "id" or "lastName", "email", and "bookingId"' },
+        { error: 'Missing required parameters. Provide either "id" or both "lastName" and "email"' },
         { status: 400 }
       );
     }
@@ -126,6 +125,7 @@ export async function GET(request: NextRequest) {
       booking: {
         id: booking.id,
         hapio_booking_id: booking.hapio_booking_id,
+        service_id: booking.service_id,
         service_name: booking.service_name,
         service_display_name: booking.service_display_name,
         service_image_url: booking.service_image_url,
