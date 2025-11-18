@@ -297,16 +297,19 @@ export async function POST(
             const remainingRefundable = totalPaymentAmount - totalAlreadyRefunded;
             
             // Use remaining refundable amount (full refund on cancellation)
-            const paymentAmount = remainingRefundable > 0 ? remainingRefundable : totalPaymentAmount;
+            const requestedRefundAmount = remainingRefundable > 0 ? remainingRefundable : totalPaymentAmount;
             
             const refund = await stripe.refunds.create({
               payment_intent: bookingData.payment_intent_id,
-              amount: paymentAmount,
+              amount: requestedRefundAmount,
               reason: 'requested_by_customer',
             });
             
             refundProcessed = true;
             refundId = refund.id;
+            
+            // CRITICAL: Use Stripe's actual refund amount (may differ from requested)
+            const actualRefundAmount = refund.amount || requestedRefundAmount;
             
             // Update payments.refunded_cents using actual refund amount from Stripe
             // Check existing refunded amount to prevent over-refunding
@@ -320,13 +323,12 @@ export async function POST(
             if (existingPaymentCheckRows.length > 0) {
               const existing = existingPaymentCheckRows[0];
               const alreadyRefundedOnThisPayment = existing.refunded_cents || 0;
-              const refundAmount = refund.amount || paymentAmount;
-              const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + refundAmount;
+              const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + actualRefundAmount;
               
               // Safety check: ensure we don't exceed this payment record's amount
               if (newTotalRefundedOnThisPayment <= existing.amount_cents) {
                 // Also check total across all payments
-                const totalRefundedAfter = totalAlreadyRefunded + refundAmount;
+                const totalRefundedAfter = totalAlreadyRefunded + actualRefundAmount;
                 if (totalRefundedAfter <= totalPaymentAmount) {
                   await sql`
                     UPDATE payments 
@@ -336,14 +338,14 @@ export async function POST(
                 } else {
                   console.error('[Cancel Booking] Refund amount would exceed total payment amount', {
                     totalAlreadyRefunded,
-                    refundAmount,
+                    actualRefundAmount,
                     totalPayment: totalPaymentAmount,
                   });
                 }
               } else {
                 console.error('[Cancel Booking] Refund amount would exceed payment record amount', {
                   alreadyRefundedOnThisPayment,
-                  refundAmount,
+                  actualRefundAmount,
                   paymentRecordAmount: existing.amount_cents,
                 });
               }
@@ -593,6 +595,8 @@ export async function POST(
         );
       }
 
+      // CRITICAL: Wrap refund logic in transaction to prevent race conditions
+      await sql`BEGIN`;
       try {
         const requestedPercent = typeof body?.percentage === 'number' ? body.percentage : null;
         const requestedAmountCents = typeof body?.amountCents === 'number' ? body.amountCents : null;
@@ -600,6 +604,7 @@ export async function POST(
         
         // Reason is required for refunds
         if (!refundReason) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
             { error: 'Refund reason is required' },
             { status: 400 }
@@ -610,21 +615,24 @@ export async function POST(
         const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
         
         if (paymentIntent.status !== 'succeeded') {
+          await sql`ROLLBACK`;
           return NextResponse.json(
             { error: 'Payment not succeeded, cannot refund' },
             { status: 400 }
           );
         }
 
-        // Get payment amount from payments table
-        // Handle multiple payments by summing them (though typically there's only one)
+        // CRITICAL: Use SELECT FOR UPDATE to lock payment rows and prevent race conditions
+        // Get payment amount from payments table with row-level locking
         const paymentRows = await sql`
           SELECT SUM(amount_cents) as total_amount_cents, SUM(refunded_cents) as total_refunded_cents
           FROM payments 
           WHERE booking_id = ${bookingInternalId}
+          FOR UPDATE
         `;
         const paymentRow = normalizeRows(paymentRows)[0];
         if (!paymentRow || !paymentRow.total_amount_cents) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
             { error: 'Payment record not found for this booking' },
             { status: 400 }
@@ -635,16 +643,17 @@ export async function POST(
         const remainingRefundable = totalCents - alreadyRefundedTotal;
         
         // Calculate refund amount based on request
-        let refundCents = remainingRefundable; // Default to remaining refundable amount
+        let requestedRefundCents = remainingRefundable; // Default to remaining refundable amount
         if (requestedAmountCents && requestedAmountCents > 0 && requestedAmountCents <= remainingRefundable) {
-          refundCents = requestedAmountCents;
+          requestedRefundCents = requestedAmountCents;
         } else if (requestedPercent && requestedPercent > 0 && requestedPercent <= 100) {
           // Calculate percentage of remaining (not yet refunded) amount
-          refundCents = Math.round((requestedPercent / 100) * remainingRefundable);
+          requestedRefundCents = Math.round((requestedPercent / 100) * remainingRefundable);
         }
         
         // Validate refund amount is positive
-        if (refundCents <= 0) {
+        if (requestedRefundCents <= 0) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
             { error: 'Refund amount must be greater than 0' },
             { status: 400 }
@@ -652,9 +661,10 @@ export async function POST(
         }
         
         // Check if refund would exceed remaining refundable amount
-        if (refundCents > remainingRefundable) {
+        if (requestedRefundCents > remainingRefundable) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
-            { error: `Refund amount ($${(refundCents / 100).toFixed(2)}) cannot exceed remaining refundable amount ($${(remainingRefundable / 100).toFixed(2)}). Already refunded: $${(alreadyRefundedTotal / 100).toFixed(2)}` },
+            { error: `Refund amount ($${(requestedRefundCents / 100).toFixed(2)}) cannot exceed remaining refundable amount ($${(remainingRefundable / 100).toFixed(2)}). Already refunded: $${(alreadyRefundedTotal / 100).toFixed(2)}` },
             { status: 400 }
           );
         }
@@ -662,28 +672,50 @@ export async function POST(
         // Create refund with metadata for tracking
         const refund = await stripe.refunds.create({
           payment_intent: bookingData.payment_intent_id,
-          amount: refundCents,
+          amount: requestedRefundCents,
           reason: 'requested_by_customer',
           metadata: {
             booking_id: bookingInternalId,
             refund_reason: refundReason,
             refund_type: requestedPercent ? 'percentage' : 'amount',
             refund_percentage: requestedPercent ? String(requestedPercent) : '',
-            refund_amount_cents: String(refundCents),
+            refund_amount_cents: String(requestedRefundCents),
           },
         });
+
+        // CRITICAL: Use Stripe's actual refund amount (may differ from requested due to fees/rounding)
+        const actualRefundCents = refund.amount || requestedRefundCents;
+
+        // CRITICAL: Re-validate with actual refund amount from Stripe
+        if (actualRefundCents > remainingRefundable) {
+          // This should never happen, but if it does, we need to handle it
+          console.error('[Refund] Stripe refund amount exceeds remaining refundable:', {
+            actualRefundCents,
+            remainingRefundable,
+            requestedRefundCents,
+          });
+          await sql`ROLLBACK`;
+          return NextResponse.json(
+            { error: `Stripe refund amount ($${(actualRefundCents / 100).toFixed(2)}) exceeds remaining refundable amount. Please contact support.` },
+            { status: 500 }
+          );
+        }
 
         // Update payments.refunded_cents across all payment records for this booking
         // Distribute refund proportionally or to the most recent payment
         // For simplicity, we'll add to the most recent payment record
+        // CRITICAL: Use SELECT FOR UPDATE to lock the row
         const existingRefundCheck = await sql`
           SELECT id, refunded_cents, amount_cents 
           FROM payments 
           WHERE booking_id = ${bookingInternalId} 
-          ORDER BY created_at DESC LIMIT 1
+          ORDER BY created_at DESC 
+          LIMIT 1
+          FOR UPDATE
         `;
         const existingRefundCheckRows = normalizeRows(existingRefundCheck);
         if (existingRefundCheckRows.length === 0) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
             { error: 'Payment record not found for this booking' },
             { status: 400 }
@@ -691,21 +723,23 @@ export async function POST(
         }
         const existingRefund = existingRefundCheckRows[0];
         const alreadyRefundedOnThisPayment = existingRefund.refunded_cents || 0;
-        const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + refundCents;
+        const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + actualRefundCents;
         
         // Safety check: ensure we don't refund more than this payment record's amount
         if (newTotalRefundedOnThisPayment > existingRefund.amount_cents) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
-            { error: `Cannot refund $${(refundCents / 100).toFixed(2)}. Would exceed this payment record's amount. Payment: $${(existingRefund.amount_cents / 100).toFixed(2)}, Already refunded on this payment: $${(alreadyRefundedOnThisPayment / 100).toFixed(2)}` },
+            { error: `Cannot refund $${(actualRefundCents / 100).toFixed(2)}. Would exceed this payment record's amount. Payment: $${(existingRefund.amount_cents / 100).toFixed(2)}, Already refunded on this payment: $${(alreadyRefundedOnThisPayment / 100).toFixed(2)}` },
             { status: 400 }
           );
         }
         
         // Final safety check: ensure total refunded across all payments doesn't exceed total paid
-        const newTotalRefundedAcrossAll = alreadyRefundedTotal + refundCents;
+        const newTotalRefundedAcrossAll = alreadyRefundedTotal + actualRefundCents;
         if (newTotalRefundedAcrossAll > totalCents) {
+          await sql`ROLLBACK`;
           return NextResponse.json(
-            { error: `Cannot refund $${(refundCents / 100).toFixed(2)}. Total refunded across all payments would exceed total paid. Total paid: $${(totalCents / 100).toFixed(2)}, Already refunded: $${(alreadyRefundedTotal / 100).toFixed(2)}` },
+            { error: `Cannot refund $${(actualRefundCents / 100).toFixed(2)}. Total refunded across all payments would exceed total paid. Total paid: $${(totalCents / 100).toFixed(2)}, Already refunded: $${(alreadyRefundedTotal / 100).toFixed(2)}` },
             { status: 400 }
           );
         }
@@ -733,7 +767,7 @@ export async function POST(
                   ${JSON.stringify(new Date().toISOString())}::jsonb
                 ),
                 '{refundAmountCents}',
-                ${JSON.stringify(refundCents)}::jsonb
+                ${JSON.stringify(actualRefundCents)}::jsonb
               ),
               '{refundReason}',
               ${JSON.stringify(refundReason)}::jsonb
@@ -742,12 +776,13 @@ export async function POST(
           WHERE id = ${bookingInternalId}
         `;
 
-        // Record event with reason and full refund details
+        // Record event with reason and full refund details (use actual refund amount from Stripe)
         await sql`
           INSERT INTO booking_events (booking_id, type, data)
           VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ 
             refundId: refund.id, 
-            amount_cents: refundCents, 
+            amount_cents: actualRefundCents, 
+            requested_amount_cents: requestedRefundCents,
             reason: refundReason,
             refund_type: requestedPercent ? 'percentage' : 'amount',
             refund_percentage: requestedPercent || null,
@@ -758,6 +793,9 @@ export async function POST(
             payment_record_id: existingRefund.id,
           })}::jsonb)
         `;
+
+        // Commit transaction before external API calls (best-effort operations)
+        await sql`COMMIT`;
 
         // Update Outlook event if it exists (best-effort)
         if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.outlook_event_id) {
@@ -775,12 +813,21 @@ export async function POST(
             await ensureOutlookEventForBooking(bookingForOutlook);
             await sql`
               UPDATE bookings 
-              SET outlook_sync_status = 'updated'
+              SET outlook_sync_status = 'updated', updated_at = NOW()
               WHERE id = ${bookingInternalId}
             `;
           } catch (outlookError) {
             console.error('[Refund Booking] Outlook update failed:', outlookError);
-            // Non-critical - continue
+            // Update sync status to reflect failure
+            try {
+              await sql`
+                UPDATE bookings 
+                SET outlook_sync_status = 'error', updated_at = NOW()
+                WHERE id = ${bookingInternalId}
+              `;
+            } catch (updateError) {
+              console.error('[Refund Booking] Failed to update Outlook sync status:', updateError);
+            }
           }
         }
 
@@ -836,7 +883,7 @@ export async function POST(
               bookingDate,
               bookingTime,
               refundProcessed: true,
-              refundAmount: refundCents / 100,
+              refundAmount: actualRefundCents / 100,
               refundId: refund.id,
               receiptUrl: `https://dashboard.stripe.com/refunds/${refund.id}`,
               refundReason: refundReason,
@@ -863,8 +910,15 @@ export async function POST(
           success: true,
           message: 'Refund processed successfully. Booking remains active (not cancelled).',
           refundId: refund.id,
+          refundAmount: actualRefundCents / 100,
         });
       } catch (error: any) {
+        // Rollback transaction on error
+        try {
+          await sql`ROLLBACK`;
+        } catch (rollbackError) {
+          console.error('[Refund] Failed to rollback transaction:', rollbackError);
+        }
         return NextResponse.json(
           { error: 'Failed to process refund', details: error.message },
           { status: 500 }

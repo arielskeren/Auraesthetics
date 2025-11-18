@@ -95,17 +95,20 @@ export async function finalizeBookingTransactional(args: {
     
     // Mark one-time discount code as used if payment succeeds
     // CRITICAL: Must validate customer match to prevent code theft
+    // CRITICAL: Use SELECT FOR UPDATE to prevent race conditions
     let oneTimeCodeId: string | null = null;
     if (discountCode && typeof discountCode === 'string') {
       try {
         const codeUpper = discountCode.toUpperCase();
-        // First check if code exists and is valid
+        // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
+        // First check if code exists and is valid (with row lock)
         const oneTimeCodeResult = await sql`
           SELECT id, customer_id FROM one_time_discount_codes 
           WHERE code = ${codeUpper} 
             AND used = false
             AND (expires_at IS NULL OR expires_at > NOW())
           LIMIT 1
+          FOR UPDATE
         `;
         const oneTimeRows = Array.isArray(oneTimeCodeResult) 
           ? oneTimeCodeResult 
@@ -225,13 +228,24 @@ export async function finalizeBookingTransactional(args: {
     `;
 
     // Mark one-time discount code as used (inside transaction to ensure atomicity)
+    // CRITICAL: The row is already locked by SELECT FOR UPDATE, so this update is safe
     if (oneTimeCodeId) {
       try {
-        await sql`
+        const updateResult = await sql`
           UPDATE one_time_discount_codes 
           SET used = true, used_at = NOW()
           WHERE id = ${oneTimeCodeId} AND used = false
         `;
+        // Verify the update succeeded (row might have been updated by another transaction)
+        const verifyResult = await sql`
+          SELECT used FROM one_time_discount_codes WHERE id = ${oneTimeCodeId} LIMIT 1
+        `;
+        const verifyRows = Array.isArray(verifyResult) 
+          ? verifyResult 
+          : (verifyResult as any)?.rows || [];
+        if (verifyRows.length > 0 && !verifyRows[0].used) {
+          console.warn('[finalizeCore] One-time code was not marked as used - possible race condition');
+        }
       } catch (e) {
         // Non-critical - log but continue
         console.error('[finalizeCore] Failed to mark one-time code as used:', e);
