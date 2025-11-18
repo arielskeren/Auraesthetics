@@ -109,8 +109,25 @@ export async function PATCH(
               brevoId: syncResult.brevoId 
             }, { status: 500 });
           }
+          
+          // Check the actual customer data to provide a better error message
+          const customerCheck = await sql`
+            SELECT marketing_opt_in, email FROM customers WHERE id = ${customerId} LIMIT 1
+          `;
+          const customerData = Array.isArray(customerCheck) ? customerCheck[0] : (customerCheck as any)?.rows?.[0];
+          
+          if (customerData && customerData.marketing_opt_in !== true) {
+            return NextResponse.json(
+              { 
+                error: `Failed to sync to Brevo. Customer marketing opt-in is ${customerData.marketing_opt_in || 'not set'} (must be true). Please enable marketing opt-in first.`,
+                marketingOptIn: customerData.marketing_opt_in
+              },
+              { status: 400 }
+            );
+          }
+          
           return NextResponse.json(
-            { error: 'Failed to sync to Brevo. Customer may not have marketing opt-in enabled.' },
+            { error: 'Failed to sync to Brevo. Please check server logs for details.' },
             { status: 500 }
           );
         }
@@ -145,9 +162,12 @@ export async function PATCH(
 
     // CRITICAL: Always sync to Brevo after Neon update (if marketing opt-in is true)
     // This ensures Brevo stays in sync with Neon (source of truth)
+    // syncCustomerToBrevo will fetch the LATEST data from Neon, so it will use the updated values
     const shouldSync = marketing_opt_in !== false && (marketing_opt_in || existing.marketing_opt_in);
     if (shouldSync) {
       try {
+        // CRITICAL: syncCustomerToBrevo fetches customer data from Neon AFTER the update above
+        // This ensures it uses the latest name, email, phone, etc. when updating Brevo
         const syncResult = await syncCustomerToBrevo({
           customerId,
           sql,
@@ -155,24 +175,30 @@ export async function PATCH(
           tags: ['customer', 'admin_updated'],
         });
         
-        // Verify brevo_contact_id was updated in database
+        // Verify brevo_contact_id was updated in database (syncCustomerToBrevo should handle this, but double-check)
         if (syncResult.brevoId) {
           const verifyResult = await sql`
             SELECT brevo_contact_id FROM customers WHERE id = ${customerId} LIMIT 1
           `;
           const verify = Array.isArray(verifyResult) ? verifyResult[0] : (verifyResult as any)?.rows?.[0];
-          if (verify && String(verify.brevo_contact_id) !== String(syncResult.brevoId)) {
-            // Update if not already set correctly
+          if (!verify || String(verify.brevo_contact_id) !== String(syncResult.brevoId)) {
+            // Update if not already set correctly (backup - syncCustomerToBrevo should have done this)
             await sql`
               UPDATE customers 
               SET brevo_contact_id = ${String(syncResult.brevoId)}, updated_at = NOW()
               WHERE id = ${customerId}
             `;
-            console.log(`[Admin Customers API] Updated brevo_contact_id to ${syncResult.brevoId}`);
+            console.log(`[Admin Customers API] Updated brevo_contact_id to ${syncResult.brevoId} (backup update)`);
           }
         }
+        
+        if (syncResult.success) {
+          console.log(`[Admin Customers API] Successfully synced customer ${customerId} to Brevo with updated data`);
+        } else if (syncResult.brevoId) {
+          console.warn(`[Admin Customers API] Customer ${customerId} synced to Brevo (ID: ${syncResult.brevoId}) but update may have partially failed`);
+        }
       } catch (e) {
-        // Brevo sync failure is non-critical - customer is already updated
+        // Brevo sync failure is non-critical - customer is already updated in Neon
         console.error('[Admin Customers API] Brevo sync failed:', e);
       }
     } else if (marketing_opt_in === false && existing.marketing_opt_in) {

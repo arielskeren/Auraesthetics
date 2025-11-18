@@ -184,13 +184,22 @@ export async function syncCustomerToBrevo(params: {
       : (customerResult as any)?.rows || [];
     
     if (customers.length === 0 || !customers[0]?.email) {
+      console.error(`[syncCustomerToBrevo] Customer ${customerId} not found or missing email`);
       return { success: false };
     }
     
     const customer = customers[0];
     
+    // Normalize marketing_opt_in (handle boolean, string, null, undefined)
+    // PostgreSQL may return boolean as true/false or as string 't'/'f'
+    const marketingOptIn = customer.marketing_opt_in === true 
+      || customer.marketing_opt_in === 't' 
+      || customer.marketing_opt_in === 'true'
+      || customer.marketing_opt_in === 1;
+    
     // Only sync if marketing opt-in is true
-    if (!customer.marketing_opt_in) {
+    if (!marketingOptIn) {
+      console.warn(`[syncCustomerToBrevo] Skipping sync for customer ${customerId} (${customer.email}): marketing_opt_in is ${JSON.stringify(customer.marketing_opt_in)} (expected true). Raw value type: ${typeof customer.marketing_opt_in}`);
       return { success: false };
     }
     
@@ -205,10 +214,50 @@ export async function syncCustomerToBrevo(params: {
       USED_WELCOME_OFFER: customer.used_welcome_offer === true ? 'true' : 'false',
     };
     
+    // Format phone number for Brevo (E.164 format required)
+    // Brevo requires phone numbers in international format: +[country code][number]
     if (customer.phone) {
-      attributes.PHONE = customer.phone;
-      attributes.LANDLINE_NUMBER = customer.phone;
-      attributes.SMS = customer.phone;
+      try {
+        // Remove all non-digit characters
+        const digitsOnly = customer.phone.trim().replace(/\D/g, '');
+        
+        // Only add phone if it has at least 10 digits (valid US number minimum)
+        if (digitsOnly.length >= 10) {
+          let formattedPhone: string;
+          
+          // If it's exactly 10 digits, assume US number and add +1
+          if (digitsOnly.length === 10) {
+            formattedPhone = `+1${digitsOnly}`;
+          } 
+          // If it's 11 digits and starts with 1, it's already a US number with country code
+          else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+            formattedPhone = `+${digitsOnly}`;
+          }
+          // If it already starts with +, use it as-is (but clean it)
+          else if (customer.phone.trim().startsWith('+')) {
+            // Remove all non-digit and non-plus characters, then ensure it starts with +
+            const cleaned = customer.phone.trim().replace(/[^\d+]/g, '');
+            formattedPhone = cleaned.startsWith('+') ? cleaned : `+${cleaned.replace(/\+/g, '')}`;
+          }
+          // Otherwise, add + prefix
+          else {
+            formattedPhone = `+${digitsOnly}`;
+          }
+          
+          // Validate the formatted phone (should start with + and have at least 11 characters including +)
+          if (formattedPhone.startsWith('+') && formattedPhone.length >= 11) {
+            attributes.PHONE = formattedPhone;
+            attributes.LANDLINE_NUMBER = formattedPhone;
+            attributes.SMS = formattedPhone;
+          } else {
+            console.warn(`[syncCustomerToBrevo] Invalid phone format for customer ${customerId} (${customer.email}): ${customer.phone} -> ${formattedPhone}. Skipping phone in sync.`);
+          }
+        } else {
+          console.warn(`[syncCustomerToBrevo] Phone number too short for customer ${customerId} (${customer.email}): ${customer.phone} (${digitsOnly.length} digits). Skipping phone in sync.`);
+        }
+      } catch (e) {
+        console.warn(`[syncCustomerToBrevo] Error formatting phone for customer ${customerId} (${customer.email}): ${customer.phone}. Error: ${e}. Skipping phone in sync.`);
+      }
     }
     
     const body: any = {
@@ -235,11 +284,32 @@ export async function syncCustomerToBrevo(params: {
           brevoContactId = existing.id;
           
           // Merge attributes - prioritize Neon data (source of truth)
-          const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
+          // BUT: If phone is invalid, don't overwrite existing phone in Brevo
+          const mergedAttributes = { ...(existing.attributes || {}) };
+          
+          // Only update attributes that we have valid data for
+          if (attributes.FIRSTNAME) mergedAttributes.FIRSTNAME = attributes.FIRSTNAME;
+          if (attributes.LASTNAME) mergedAttributes.LASTNAME = attributes.LASTNAME;
+          if (attributes.USED_WELCOME_OFFER) mergedAttributes.USED_WELCOME_OFFER = attributes.USED_WELCOME_OFFER;
+          
+          // Only update phone if we successfully formatted it (attributes.PHONE exists)
+          if (attributes.PHONE) {
+            mergedAttributes.PHONE = attributes.PHONE;
+            mergedAttributes.LANDLINE_NUMBER = attributes.LANDLINE_NUMBER;
+            mergedAttributes.SMS = attributes.SMS;
+          }
+          // If phone is invalid, keep existing phone in Brevo (don't clear it)
+          
           const updateBody: any = { 
             attributes: mergedAttributes,
             updateEnabled: true,
           };
+          
+          // CRITICAL: If email changed in Neon, update it in Brevo (Brevo uses email as identifier)
+          // But we're updating by ID, so we need to include the new email
+          if (customer.email && customer.email !== existing.email) {
+            updateBody.email = customer.email;
+          }
           
           // Always use the listId from params/env if provided, otherwise preserve existing
           if (finalListId && Number.isFinite(finalListId)) {
@@ -248,8 +318,8 @@ export async function syncCustomerToBrevo(params: {
             updateBody.listIds = existing.listIds;
           }
           
-          // Ensure emailBlacklisted matches marketing_opt_in
-          updateBody.emailBlacklisted = !customer.marketing_opt_in;
+          // Ensure emailBlacklisted matches marketing_opt_in (use normalized value)
+          updateBody.emailBlacklisted = !marketingOptIn;
           
           const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(brevoContactId))}`, {
             method: 'PUT',
@@ -262,9 +332,41 @@ export async function syncCustomerToBrevo(params: {
             console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId} (by ID)`);
           } else {
             const updateErrorText = await update.text().catch(() => '');
-            console.warn(`[syncCustomerToBrevo] Update failed for contact ID ${brevoContactId} (${customer.email}). Error: ${updateErrorText}`);
-            // Still have the ID, so we can save it even if update failed
-            brevoResult = { id: brevoContactId, success: false };
+            let errorData: any;
+            try {
+              errorData = typeof updateErrorText === 'string' ? JSON.parse(updateErrorText) : updateErrorText;
+            } catch {
+              errorData = { message: updateErrorText };
+            }
+            
+            // If error is about invalid phone, try again without phone
+            if (errorData?.message?.toLowerCase().includes('invalid phone')) {
+              console.warn(`[syncCustomerToBrevo] Phone validation error for contact ID ${brevoContactId} (${customer.email}). Retrying without phone update.`);
+              
+              // Remove phone from attributes and try again
+              delete mergedAttributes.PHONE;
+              delete mergedAttributes.LANDLINE_NUMBER;
+              delete mergedAttributes.SMS;
+              
+              const retryBody = { ...updateBody, attributes: mergedAttributes };
+              const retry = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(brevoContactId))}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+                body: JSON.stringify(retryBody),
+              });
+              
+              if (retry.ok) {
+                brevoResult = { id: brevoContactId, success: true };
+                console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId} (by ID, without phone)`);
+              } else {
+                const retryErrorText = await retry.text().catch(() => '');
+                console.warn(`[syncCustomerToBrevo] Update failed for contact ID ${brevoContactId} (${customer.email}) even without phone. Error: ${retryErrorText}`);
+                brevoResult = { id: brevoContactId, success: false };
+              }
+            } else {
+              console.warn(`[syncCustomerToBrevo] Update failed for contact ID ${brevoContactId} (${customer.email}). Error: ${updateErrorText}`);
+              brevoResult = { id: brevoContactId, success: false };
+            }
           }
         } else {
           // ID doesn't exist in Brevo, clear it and try creating/updating by email
@@ -303,11 +405,34 @@ export async function syncCustomerToBrevo(params: {
             brevoContactId = existing.id;
             
             // Merge attributes - prioritize Neon data (source of truth)
-            const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
+            // BUT: If phone is invalid, don't overwrite existing phone in Brevo
+            const mergedAttributes = { ...(existing.attributes || {}) };
+            
+            // Only update attributes that we have valid data for
+            if (attributes.FIRSTNAME) mergedAttributes.FIRSTNAME = attributes.FIRSTNAME;
+            if (attributes.LASTNAME) mergedAttributes.LASTNAME = attributes.LASTNAME;
+            if (attributes.USED_WELCOME_OFFER) mergedAttributes.USED_WELCOME_OFFER = attributes.USED_WELCOME_OFFER;
+            
+            // Only update phone if we successfully formatted it (attributes.PHONE exists)
+            if (attributes.PHONE) {
+              mergedAttributes.PHONE = attributes.PHONE;
+              mergedAttributes.LANDLINE_NUMBER = attributes.LANDLINE_NUMBER;
+              mergedAttributes.SMS = attributes.SMS;
+            }
+            // If phone is invalid, keep existing phone in Brevo (don't clear it)
+            
             const updateBody: any = { 
               attributes: mergedAttributes,
               updateEnabled: true,
             };
+            
+            // CRITICAL: If email changed in Neon, update it in Brevo
+            // We're updating by email, so if email changed, we need to handle it carefully
+            // Note: Brevo uses email as the primary identifier, so changing email requires special handling
+            // For now, we update the contact at the current email, and if email changed, it will be updated
+            if (customer.email && customer.email !== existing.email) {
+              updateBody.email = customer.email;
+            }
             
             // Always use the listId from params/env if provided, otherwise preserve existing
             if (finalListId && Number.isFinite(finalListId)) {
@@ -316,8 +441,8 @@ export async function syncCustomerToBrevo(params: {
               updateBody.listIds = existing.listIds;
             }
             
-            // Ensure emailBlacklisted matches marketing_opt_in
-            updateBody.emailBlacklisted = !customer.marketing_opt_in;
+            // Ensure emailBlacklisted matches marketing_opt_in (use normalized value)
+            updateBody.emailBlacklisted = !marketingOptIn;
             
             const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
               method: 'PUT',
@@ -330,9 +455,42 @@ export async function syncCustomerToBrevo(params: {
               console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId} (by email)`);
             } else {
               const updateErrorText = await update.text().catch(() => '');
-              console.warn(`[syncCustomerToBrevo] Contact exists but update failed for ${customer.email}. Contact ID: ${brevoContactId}. Error: ${updateErrorText}`);
-              // Still have the ID, so we can save it even if update failed
-              brevoResult = { id: brevoContactId, success: false };
+              let errorData: any;
+              try {
+                errorData = typeof updateErrorText === 'string' ? JSON.parse(updateErrorText) : updateErrorText;
+              } catch {
+                errorData = { message: updateErrorText };
+              }
+              
+              // If error is about invalid phone, try again without phone
+              if (errorData?.message?.toLowerCase().includes('invalid phone')) {
+                console.warn(`[syncCustomerToBrevo] Phone validation error for contact ${customer.email} (ID: ${brevoContactId}). Retrying without phone update.`);
+                
+                // Remove phone from attributes and try again
+                delete mergedAttributes.PHONE;
+                delete mergedAttributes.LANDLINE_NUMBER;
+                delete mergedAttributes.SMS;
+                
+                const retryBody = { ...updateBody, attributes: mergedAttributes };
+                const retry = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+                  body: JSON.stringify(retryBody),
+                });
+                
+                if (retry.ok) {
+                  brevoResult = { id: brevoContactId, success: true };
+                  console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId} (by email, without phone)`);
+                } else {
+                  const retryErrorText = await retry.text().catch(() => '');
+                  console.warn(`[syncCustomerToBrevo] Update failed for contact ${customer.email} (ID: ${brevoContactId}) even without phone. Error: ${retryErrorText}`);
+                  brevoResult = { id: brevoContactId, success: false };
+                }
+              } else {
+                console.warn(`[syncCustomerToBrevo] Contact exists but update failed for ${customer.email}. Contact ID: ${brevoContactId}. Error: ${updateErrorText}`);
+                // Still have the ID, so we can save it even if update failed
+                brevoResult = { id: brevoContactId, success: false };
+              }
             }
           } else {
             const errorText = await existingResp.text().catch(() => '');
@@ -349,24 +507,31 @@ export async function syncCustomerToBrevo(params: {
     
     // CRITICAL: Always update brevo_contact_id in database if we have a contact ID (even if update partially failed)
     // This ensures we maintain the link between Neon and Brevo
+    // We ALWAYS save it, even if it's the same, to ensure database consistency
     if (brevoContactId) {
       const currentBrevoId = customer.brevo_contact_id ? String(customer.brevo_contact_id) : null;
       const newBrevoId = String(brevoContactId);
       
-      // Update if different or if currently null
-      if (currentBrevoId !== newBrevoId) {
+      // ALWAYS update if different OR if currently null (ensures we never lose the link)
+      if (currentBrevoId !== newBrevoId || currentBrevoId === null) {
         try {
           await sql`
             UPDATE customers 
             SET brevo_contact_id = ${newBrevoId}, updated_at = NOW()
             WHERE id = ${customerId}
           `;
-          console.log(`[syncCustomerToBrevo] Updated brevo_contact_id for customer ${customerId} from ${currentBrevoId || 'null'} to ${newBrevoId}`);
+          console.log(`[syncCustomerToBrevo] Updated brevo_contact_id for customer ${customerId} (${customer.email}) from ${currentBrevoId || 'null'} to ${newBrevoId}`);
         } catch (dbError) {
           console.error(`[syncCustomerToBrevo] Failed to update brevo_contact_id in database:`, dbError);
           // Don't fail the whole operation, but log the error
         }
+      } else {
+        // Even if it's the same, log that we verified it
+        console.log(`[syncCustomerToBrevo] Verified brevo_contact_id for customer ${customerId} (${customer.email}): ${newBrevoId}`);
       }
+    } else {
+      // Log warning if we couldn't get a contact ID
+      console.warn(`[syncCustomerToBrevo] No brevo_contact_id obtained for customer ${customerId} (${customer.email}) - sync may have failed`);
     }
     
     return { success: brevoResult.success, brevoId: brevoContactId };
