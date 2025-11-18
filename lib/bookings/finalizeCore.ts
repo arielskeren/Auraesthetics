@@ -405,12 +405,21 @@ export async function finalizeBookingTransactional(args: {
     // Also sync used_welcome_offer status to Brevo
     if (customerId) {
       try {
-        await syncCustomerToBrevo({
+        const syncResult = await syncCustomerToBrevo({
           customerId,
           sql,
           listId: process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined,
           tags: ['booked', svcId || 'service'],
         });
+        
+        if (syncResult.success) {
+          console.log(`[finalizeCore] Successfully synced customer ${customerId} to Brevo with ID ${syncResult.brevoId}`);
+        } else if (syncResult.brevoId) {
+          // Partial success - got contact ID but update may have failed
+          console.warn(`[finalizeCore] Customer ${customerId} exists in Brevo (ID: ${syncResult.brevoId}) but update may have failed`);
+        } else {
+          console.warn(`[finalizeCore] Failed to sync customer ${customerId} to Brevo - may not have marketing opt-in enabled`);
+        }
       } catch (e) {
         // Brevo sync failure is non-critical - booking is already finalized
         console.error('[finalizeCore] Brevo sync failed:', e);

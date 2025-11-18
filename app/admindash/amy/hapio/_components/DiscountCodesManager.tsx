@@ -62,10 +62,20 @@ export default function DiscountCodesManager() {
 
       const response = await fetch('/api/admin/discount-codes');
       if (!response.ok) {
-        throw new Error('Failed to load discount codes');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.details || 'Failed to load discount codes');
       }
 
       const data = await response.json();
+      
+      // Check for warning about missing table
+      if (data.warning) {
+        console.warn('[DiscountCodesManager]', data.warning);
+        setError({ message: data.warning });
+        setCodes([]);
+        return;
+      }
+      
       setCodes(data.codes || []);
       
       // Load usage details for used codes
@@ -74,7 +84,10 @@ export default function DiscountCodesManager() {
         await loadUsageDetails(code.id);
       }
     } catch (err: any) {
+      console.error('[DiscountCodesManager] Error loading codes:', err);
       setError(err);
+      // Still set codes to empty array so UI doesn't break
+      setCodes([]);
     } finally {
       setLoading(false);
     }

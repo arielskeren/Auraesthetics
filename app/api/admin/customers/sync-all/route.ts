@@ -92,13 +92,39 @@ export async function POST(request: NextRequest) {
             }
           }
         } else {
-          failedCount++;
-          results.push({
-            customerId: customer.id,
-            email: customer.email,
-            success: false,
-            error: 'Sync failed (no error details)',
-          });
+          // Check if we got a partial success (contact ID but update failed)
+          if (result.brevoId) {
+            // Still update the database with the contact ID we got
+            const currentBrevoId = customer.brevo_contact_id ? String(customer.brevo_contact_id) : null;
+            const newBrevoId = String(result.brevoId);
+            
+            if (currentBrevoId !== newBrevoId) {
+              await sql`
+                UPDATE customers
+                SET brevo_contact_id = ${newBrevoId}, updated_at = NOW()
+                WHERE id = ${customer.id}
+              `;
+              console.log(`[Sync All] Updated brevo_contact_id for ${customer.email} from ${currentBrevoId || 'null'} to ${newBrevoId} (partial success)`);
+            }
+            
+            // Count as partial success (contact exists but update may have failed)
+            syncedCount++;
+            results.push({
+              customerId: customer.id,
+              email: customer.email,
+              success: false,
+              error: 'Contact exists in Brevo but update may have failed',
+              brevoId: result.brevoId,
+            });
+          } else {
+            failedCount++;
+            results.push({
+              customerId: customer.id,
+              email: customer.email,
+              success: false,
+              error: 'Sync failed - customer may not have marketing opt-in enabled or Brevo API error',
+            });
+          }
         }
       } catch (error: any) {
         failedCount++;

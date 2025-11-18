@@ -65,13 +65,55 @@ export async function PATCH(
     // Handle syncToBrevo request (no field updates needed)
     if (syncToBrevo === true) {
       try {
-        await syncCustomerToBrevo({
+        const syncResult = await syncCustomerToBrevo({
           customerId,
           sql,
           listId: process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined,
           tags: ['customer', 'admin_synced'],
         });
-        return NextResponse.json({ success: true, message: 'Customer synced to Brevo successfully' });
+        
+        if (syncResult.success) {
+          // Verify brevo_contact_id was updated in database
+          if (syncResult.brevoId) {
+            const verifyResult = await sql`
+              SELECT brevo_contact_id FROM customers WHERE id = ${customerId} LIMIT 1
+            `;
+            const verify = Array.isArray(verifyResult) ? verifyResult[0] : (verifyResult as any)?.rows?.[0];
+            if (verify && String(verify.brevo_contact_id) !== String(syncResult.brevoId)) {
+              // Update if not already set correctly
+              await sql`
+                UPDATE customers 
+                SET brevo_contact_id = ${String(syncResult.brevoId)}, updated_at = NOW()
+                WHERE id = ${customerId}
+              `;
+              console.log(`[Admin Customers API] Updated brevo_contact_id to ${syncResult.brevoId}`);
+            }
+          }
+          return NextResponse.json({ 
+            success: true, 
+            message: 'Customer synced to Brevo successfully',
+            brevoId: syncResult.brevoId 
+          });
+        } else {
+          // Sync failed but might have partial success (e.g., got contact ID but update failed)
+          if (syncResult.brevoId) {
+            // Still update the database with the contact ID we got
+            await sql`
+              UPDATE customers 
+              SET brevo_contact_id = ${String(syncResult.brevoId)}, updated_at = NOW()
+              WHERE id = ${customerId}
+            `;
+            return NextResponse.json({ 
+              success: false, 
+              message: 'Contact exists in Brevo but update may have failed. Contact ID saved.',
+              brevoId: syncResult.brevoId 
+            }, { status: 500 });
+          }
+          return NextResponse.json(
+            { error: 'Failed to sync to Brevo. Customer may not have marketing opt-in enabled.' },
+            { status: 500 }
+          );
+        }
       } catch (e) {
         console.error('[Admin Customers API] Brevo sync failed:', e);
         return NextResponse.json(

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import BookingsCalendar from './BookingsCalendar';
 import CancelledRefundedBookings from './CancelledRefundedBookings';
 
@@ -8,9 +9,29 @@ type ViewMode = 'calendar' | 'cancelled-refunded';
 
 export default function BookingsManager() {
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   return (
     <div className="space-y-4">
+      {/* Header with Refresh Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-charcoal">Bookings</h2>
+        </div>
+        <button
+          onClick={handleRefresh}
+          className="px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2"
+          title="Refresh bookings"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
+      </div>
+
       {/* View Mode Tabs */}
       <div className="flex items-center gap-2 border-b border-sand">
         <button
@@ -36,8 +57,8 @@ export default function BookingsManager() {
       </div>
 
       {/* Content */}
-      {viewMode === 'calendar' && <BookingsCalendar />}
-      {viewMode === 'cancelled-refunded' && <CancelledRefundedBookings />}
+      {viewMode === 'calendar' && <BookingsCalendar key={refreshKey} />}
+      {viewMode === 'cancelled-refunded' && <CancelledRefundedBookings key={refreshKey} />}
     </div>
   );
 }

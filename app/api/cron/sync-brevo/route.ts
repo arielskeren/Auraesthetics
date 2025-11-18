@@ -90,16 +90,42 @@ export async function GET(request: NextRequest) {
           syncedCount++;
           
           // Update brevo_contact_id if we got a new ID
-          if (result.brevoId && result.brevoId !== customer.brevo_contact_id) {
-            await sql`
-              UPDATE customers
-              SET brevo_contact_id = ${result.brevoId}, updated_at = NOW()
-              WHERE id = ${customer.id}
-            `;
+          if (result.brevoId) {
+            const currentBrevoId = customer.brevo_contact_id ? String(customer.brevo_contact_id) : null;
+            const newBrevoId = String(result.brevoId);
+            
+            if (currentBrevoId !== newBrevoId) {
+              await sql`
+                UPDATE customers
+                SET brevo_contact_id = ${newBrevoId}, updated_at = NOW()
+                WHERE id = ${customer.id}
+              `;
+              console.log(`[Cron Sync] Updated brevo_contact_id for ${customer.email} from ${currentBrevoId || 'null'} to ${newBrevoId}`);
+            }
           }
         } else {
-          failedCount++;
-          errors.push(`${customer.email}: Sync failed`);
+          // Check if we got a partial success (contact ID but update failed)
+          if (result.brevoId) {
+            // Still update the database with the contact ID we got
+            const currentBrevoId = customer.brevo_contact_id ? String(customer.brevo_contact_id) : null;
+            const newBrevoId = String(result.brevoId);
+            
+            if (currentBrevoId !== newBrevoId) {
+              await sql`
+                UPDATE customers
+                SET brevo_contact_id = ${newBrevoId}, updated_at = NOW()
+                WHERE id = ${customer.id}
+              `;
+              console.log(`[Cron Sync] Updated brevo_contact_id for ${customer.email} from ${currentBrevoId || 'null'} to ${newBrevoId} (partial success)`);
+            }
+            
+            // Count as partial success
+            syncedCount++;
+            errors.push(`${customer.email}: Contact exists in Brevo (ID: ${result.brevoId}) but update may have failed`);
+          } else {
+            failedCount++;
+            errors.push(`${customer.email}: Sync failed - may not have marketing opt-in enabled or Brevo API error`);
+          }
         }
       } catch (error: any) {
         failedCount++;

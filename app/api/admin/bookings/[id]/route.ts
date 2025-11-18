@@ -1207,8 +1207,31 @@ export async function POST(
         } catch (rollbackError) {
           console.error('[Refund] Failed to rollback transaction:', rollbackError);
         }
+        
+        // Enhanced error logging with full context
+        const errorDetails = {
+          message: error?.message || 'Unknown error',
+          stack: error?.stack,
+          name: error?.name,
+          bookingId: bookingInternalId,
+          paymentIntentId: bookingData.payment_intent_id,
+          requestedPercent: body?.percentage,
+          requestedAmountCents: body?.amountCents,
+          refundReason: body?.reason ? 'provided' : 'missing',
+        };
+        console.error('[Refund] Detailed error:', JSON.stringify(errorDetails, null, 2));
+        console.error('[Refund] Full error object:', error);
+        
+        // Return detailed error message for debugging
+        const errorMessage = error?.message || 'Unknown error occurred';
         return NextResponse.json(
-          { error: 'Failed to process refund', details: error.message },
+          { 
+            error: 'Failed to process refund', 
+            details: errorMessage,
+            errorType: error?.name || 'UnknownError',
+            // Include helpful context in development
+            ...(process.env.NODE_ENV === 'development' ? { errorDetails } : {}),
+          },
           { status: 500 }
         );
       }

@@ -29,7 +29,11 @@ export async function GET(request: NextRequest) {
     const hasTable = normalizeRows(tableCheck).length > 0;
 
     if (!hasTable) {
-      return NextResponse.json({ codes: [] });
+      console.warn('[Discount Codes API] Table one_time_discount_codes does not exist');
+      return NextResponse.json({ 
+        codes: [],
+        warning: 'Discount codes table does not exist. Please run migration 006_create_one_time_discount_codes.sql',
+      });
     }
 
     // Auto-lock expired codes (set expiry to past if not already expired and not used)
@@ -133,8 +137,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ codes: codesWithUsage });
   } catch (error: any) {
     console.error('[Discount Codes API] Error:', error);
+    console.error('[Discount Codes API] Error stack:', error?.stack);
+    console.error('[Discount Codes API] Error details:', {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code,
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch discount codes', details: error.message },
+      { 
+        error: 'Failed to fetch discount codes', 
+        details: error.message,
+        errorType: error?.name || 'UnknownError',
+      },
       { status: 500 }
     );
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone, Clock as ClockIcon, RefreshCw, Loader2, CheckCircle } from 'lucide-react';
+import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone, Clock as ClockIcon, RefreshCw, Loader2, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatInEST } from '@/lib/timezone';
 
@@ -76,6 +76,8 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [serviceSlug, setServiceSlug] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
 
   // Extract booking ID helper - prioritize internal ID, then Hapio ID
   const getBookingId = useCallback((b: Booking | null) => {
@@ -284,23 +286,152 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const handleReschedule = () => {
     const effective = bookingDetails || booking;
     if (!effective) return;
+    // Set calendar month to current booking date or today
     if (effective.booking_date) {
       const date = new Date(effective.booking_date);
+      setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
       const yyyy = String(date.getFullYear());
       const mm = String(date.getMonth() + 1).padStart(2, '0');
       const dd = String(date.getDate()).padStart(2, '0');
       setRescheduleDate(`${yyyy}-${mm}-${dd}`);
-      setRescheduleTime('');
     } else {
+      const today = new Date();
+      setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
       setRescheduleDate('');
-      setRescheduleTime('');
     }
+    setRescheduleTime('');
     setAvailabilityStatus('idle');
     setAvailabilitySlots([]);
     setSelectedSlot(null);
+    setSelectedCalendarDate(null);
     setAvailabilityError(null);
     setShowRescheduleModal(true);
   };
+
+  // Calendar helper functions
+  const getDaysInMonth = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days: (Date | null)[] = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    
+    return days;
+  }, [calendarMonth]);
+
+  const isPastDate = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+
+  const isSaturday = (date: Date): boolean => {
+    return date.getDay() === 6;
+  };
+
+  const handleCalendarDayClick = async (date: Date) => {
+    if (isPastDate(date) || isSaturday(date) || !serviceSlug) return;
+    
+    setSelectedCalendarDate(date);
+    const yyyy = String(date.getFullYear());
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    setRescheduleDate(dateStr);
+    
+    // Fetch availability for the selected day
+    setAvailabilityStatus('loading');
+    setAvailabilityError(null);
+    setSelectedSlot(null);
+    
+    try {
+      // Build a window covering the selected day ± two working days
+      const chosen = new Date(date);
+      chosen.setHours(12, 0, 0, 0); // Set to noon for consistency
+      
+      const isWorkingDay = (d: Date) => {
+        const day = d.getDay();
+        return day !== 6; // Exclude Saturday
+      };
+      
+      const prevWorkingDays: Date[] = [];
+      const nextWorkingDays: Date[] = [];
+      
+      // Walk backwards
+      {
+        const cursor = new Date(chosen);
+        for (let i = 0; i < 10 && prevWorkingDays.length < 2; i++) {
+          cursor.setDate(cursor.getDate() - 1);
+          if (isWorkingDay(cursor)) {
+            prevWorkingDays.push(new Date(cursor));
+          }
+        }
+      }
+      // Walk forwards
+      {
+        const cursor = new Date(chosen);
+        for (let i = 0; i < 10 && nextWorkingDays.length < 2; i++) {
+          cursor.setDate(cursor.getDate() + 1);
+          if (isWorkingDay(cursor)) {
+            nextWorkingDays.push(new Date(cursor));
+          }
+        }
+      }
+      
+      const allDays = [...prevWorkingDays.reverse(), new Date(chosen), ...nextWorkingDays];
+      const windowStart = new Date(allDays[0]);
+      windowStart.setHours(0, 0, 0, 0);
+      const windowEnd = new Date(allDays[allDays.length - 1]);
+      windowEnd.setHours(23, 59, 59, 0);
+      
+      const params = new URLSearchParams({
+        slug: serviceSlug,
+        from: windowStart.toISOString(),
+        to: windowEnd.toISOString(),
+        timezone: 'America/New_York',
+      });
+      
+      const response = await fetch(`/api/availability?${params.toString()}`);
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.error ?? 'Failed to load availability');
+      }
+      
+      const json = await response.json();
+      setAvailabilitySlots(json?.availability ?? []);
+      setAvailabilityStatus('success');
+    } catch (error: any) {
+      console.error('Failed to fetch availability', error);
+      setAvailabilityError(error.message || 'Failed to load availability');
+      setAvailabilityStatus('error');
+    }
+  };
+
+  const handlePreviousMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
+  };
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const handleCheckAvailability = async () => {
     if (!rescheduleDate || !rescheduleTime || !serviceSlug) {
@@ -539,13 +670,24 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           reason: refundReason.trim()
         }),
       });
+
+      const responseData = await response.json();
       
-      const data = await response.json();
+      if (!response.ok) {
+        // Show detailed error message from API
+        const errorMessage = responseData.details || responseData.error || 'Failed to process refund';
+        setActionMessage({ 
+          type: 'error', 
+          text: `Refund failed: ${errorMessage}${responseData.errorType ? ` (${responseData.errorType})` : ''}` 
+        });
+        setActionLoading(null);
+        return;
+      }
       
-      if (data.success) {
+      if (responseData.success) {
         setActionMessage({ 
           type: 'success', 
-          text: `Refund processed successfully. Refund ID: ${data.refundId || 'N/A'}` 
+          text: `Refund processed successfully. Refund ID: ${responseData.refundId || 'N/A'}` 
         });
         // Reset form
         setRefundAmount('');
@@ -556,7 +698,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
           fetchBookingDetails();
         }, 2000);
       } else {
-        setActionMessage({ type: 'error', text: data.error || 'Failed to process refund' });
+        setActionMessage({ type: 'error', text: responseData.error || 'Failed to process refund' });
       }
     } catch (error: any) {
       setActionMessage({ type: 'error', text: error.message || 'Failed to process refund' });
@@ -1096,7 +1238,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       {/* Reschedule Modal */}
       {showRescheduleModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-charcoal">Reschedule Booking</h3>
@@ -1108,6 +1250,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     setAvailabilityStatus('idle');
                     setAvailabilitySlots([]);
                     setSelectedSlot(null);
+                    setSelectedCalendarDate(null);
                     setAvailabilityError(null);
                   }}
                   className="p-1 hover:bg-sand/30 rounded-full transition-colors"
@@ -1120,75 +1263,70 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                 {availabilityStatus === 'idle' && (
                   <>
                     <p className="text-sm text-warm-gray mb-4">
-                      Select a date and time to check available slots for rescheduling.
+                      Click on a date in the calendar to view available time slots for rescheduling.
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="flex flex-col">
-                        <label className="text-xs text-warm-gray mb-1">Date</label>
-                        <select
-                          className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-                          value={rescheduleDate}
-                          onChange={(e) => {
-                            setRescheduleDate(e.target.value);
-                            setRescheduleTime('');
-                            setAvailabilityStatus('idle');
-                            setAvailabilitySlots([]);
-                            setSelectedSlot(null);
-                          }}
-                        >
-                          <option value="" disabled>Select date</option>
-                          {dateOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="text-xs text-warm-gray mb-1">Preferred time</label>
-                        <select
-                          className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-                          value={rescheduleTime}
-                          onChange={(e) => {
-                            setRescheduleTime(e.target.value);
-                            setAvailabilityStatus('idle');
-                            setAvailabilitySlots([]);
-                            setSelectedSlot(null);
-                          }}
-                          disabled={!rescheduleDate}
-                        >
-                          <option value="" disabled>Select time</option>
-                          {timeOptions.map((d) => {
-                            const now = new Date();
-                            const isPast =
-                              d.getFullYear() === now.getFullYear() &&
-                              d.getMonth() === now.getMonth() &&
-                              d.getDate() === now.getDate() &&
-                              d.getTime() < now.getTime();
-                            const hh = String(d.getHours()).padStart(2, '0');
-                            const mi = String(d.getMinutes()).padStart(2, '0');
-                            const value = `${hh}:${mi}`;
-                            const label = new Intl.DateTimeFormat(undefined, {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            }).format(d);
-                            return (
-                              <option key={value + d.toISOString()} value={value} disabled={isPast}>
-                                {label}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="text-xs text-warm-gray mb-1 opacity-0">Find times</label>
+                    
+                    {/* Calendar Grid */}
+                    <div className="bg-white border border-sand rounded-lg p-4">
+                      {/* Calendar Header */}
+                      <div className="flex items-center justify-between mb-3">
                         <button
-                          onClick={handleCheckAvailability}
-                          disabled={!rescheduleDate || !rescheduleTime || !serviceSlug}
-                          className="h-11 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+                          onClick={handlePreviousMonth}
+                          className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
                         >
-                          Find times
+                          <ChevronLeft className="w-4 h-4" />
                         </button>
+                        <h3 className="text-base font-semibold text-charcoal">
+                          {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                        </h3>
+                        <button
+                          onClick={handleNextMonth}
+                          className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Calendar Grid */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {/* Day Headers */}
+                        {dayNames.map((day) => (
+                          <div
+                            key={day}
+                            className="text-center text-xs font-semibold text-charcoal py-1"
+                          >
+                            {day}
+                          </div>
+                        ))}
+
+                        {/* Calendar Days */}
+                        {getDaysInMonth.map((date, index) => {
+                          if (!date) {
+                            return <div key={`empty-${index}`} className="aspect-square" />;
+                          }
+
+                          const isPast = isPastDate(date);
+                          const isSat = isSaturday(date);
+                          const isSelected = selectedCalendarDate && date.toDateString() === selectedCalendarDate.toDateString();
+                          const isDisabled = isPast || isSat;
+
+                          return (
+                            <button
+                              key={date.toISOString()}
+                              onClick={() => handleCalendarDayClick(date)}
+                              disabled={isDisabled}
+                              className={`aspect-square border rounded-lg text-xs transition-colors w-full ${
+                                isDisabled
+                                  ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                  : isSelected
+                                  ? 'ring-2 ring-dark-sage ring-offset-1 bg-dark-sage/10 border-dark-sage'
+                                  : 'hover:bg-sand/20 cursor-pointer bg-white border-sand'
+                              }`}
+                            >
+                              <div className="text-center font-medium">{date.getDate()}</div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </>
@@ -1291,10 +1429,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                               setAvailabilityStatus('idle');
                               setAvailabilitySlots([]);
                               setSelectedSlot(null);
+                              setSelectedCalendarDate(null);
                             }}
                             className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
                           >
-                            Back
+                            Back to Calendar
                           </button>
                           <button
                             onClick={handleRescheduleSubmit}

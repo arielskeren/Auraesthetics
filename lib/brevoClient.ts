@@ -223,65 +223,128 @@ export async function syncCustomerToBrevo(params: {
     let brevoResult: { id?: number; success: boolean } = { success: false };
     let brevoContactId: number | undefined = undefined;
     
-    const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-      body: JSON.stringify(body),
-    });
-    
-    if (resp.status === 200 || resp.status === 201) {
-      const data = await resp.json().catch(() => ({}));
-      brevoContactId = data?.id;
-      brevoResult = { id: brevoContactId, success: true };
-      console.log(`[syncCustomerToBrevo] Created new Brevo contact for ${customer.email} with ID ${brevoContactId}`);
-    } else if (resp.status === 400) {
-      // Contact exists - fetch it first to get the ID, then update
-      const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
-        headers: { 'api-key': apiKey, 'Accept': 'application/json' },
-      });
-      
-      if (existingResp.ok) {
-        const existing = await existingResp.json();
-        brevoContactId = existing.id;
-        
-        // Merge attributes - prioritize Neon data (source of truth)
-        const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
-        const updateBody: any = { 
-          attributes: mergedAttributes,
-          updateEnabled: true,
-        };
-        
-        // Always use the listId from params/env if provided, otherwise preserve existing
-        if (finalListId && Number.isFinite(finalListId)) {
-          updateBody.listIds = [finalListId];
-        } else if (existing.listIds?.length) {
-          updateBody.listIds = existing.listIds;
-        }
-        
-        // Ensure emailBlacklisted matches marketing_opt_in
-        updateBody.emailBlacklisted = !customer.marketing_opt_in;
-        
-        const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-          body: JSON.stringify(updateBody),
+    // If we already have a brevo_contact_id, try to use it first (more efficient)
+    if (customer.brevo_contact_id) {
+      try {
+        const existingByIdResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(customer.brevo_contact_id))}`, {
+          headers: { 'api-key': apiKey, 'Accept': 'application/json' },
         });
         
-        if (update.ok) {
-          brevoResult = { id: brevoContactId, success: true };
-          console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId}`);
+        if (existingByIdResp.ok) {
+          const existing = await existingByIdResp.json();
+          brevoContactId = existing.id;
+          
+          // Merge attributes - prioritize Neon data (source of truth)
+          const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
+          const updateBody: any = { 
+            attributes: mergedAttributes,
+            updateEnabled: true,
+          };
+          
+          // Always use the listId from params/env if provided, otherwise preserve existing
+          if (finalListId && Number.isFinite(finalListId)) {
+            updateBody.listIds = [finalListId];
+          } else if (existing.listIds?.length) {
+            updateBody.listIds = existing.listIds;
+          }
+          
+          // Ensure emailBlacklisted matches marketing_opt_in
+          updateBody.emailBlacklisted = !customer.marketing_opt_in;
+          
+          const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(brevoContactId))}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+            body: JSON.stringify(updateBody),
+          });
+          
+          if (update.ok) {
+            brevoResult = { id: brevoContactId, success: true };
+            console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId} (by ID)`);
+          } else {
+            const updateErrorText = await update.text().catch(() => '');
+            console.warn(`[syncCustomerToBrevo] Update failed for contact ID ${brevoContactId} (${customer.email}). Error: ${updateErrorText}`);
+            // Still have the ID, so we can save it even if update failed
+            brevoResult = { id: brevoContactId, success: false };
+          }
         } else {
-          // Update failed, but we still have the contact ID - mark as partial success
-          const updateErrorText = await update.text().catch(() => '');
-          console.warn(`[syncCustomerToBrevo] Contact exists but update failed for ${customer.email}. Contact ID: ${brevoContactId}. Error: ${updateErrorText}`);
-          brevoResult = { id: brevoContactId, success: false };
+          // ID doesn't exist in Brevo, clear it and try creating/updating by email
+          console.warn(`[syncCustomerToBrevo] Contact ID ${customer.brevo_contact_id} not found in Brevo, will try by email`);
+          brevoContactId = undefined;
+        }
+      } catch (e) {
+        console.warn(`[syncCustomerToBrevo] Error checking contact by ID ${customer.brevo_contact_id}:`, e);
+        // Continue to try by email
+        brevoContactId = undefined;
+      }
+    }
+    
+    // If we don't have a contact ID yet, try POST (create) or fetch by email (update)
+    if (!brevoContactId) {
+      const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+        body: JSON.stringify(body),
+      });
+      
+      if (resp.status === 200 || resp.status === 201) {
+        const data = await resp.json().catch(() => ({}));
+        brevoContactId = data?.id;
+        brevoResult = { id: brevoContactId, success: true };
+        console.log(`[syncCustomerToBrevo] Created new Brevo contact for ${customer.email} with ID ${brevoContactId}`);
+      } else if (resp.status === 400) {
+        // Contact exists - fetch it by email to get the ID, then update
+        try {
+          const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+            headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+          });
+          
+          if (existingResp.ok) {
+            const existing = await existingResp.json();
+            brevoContactId = existing.id;
+            
+            // Merge attributes - prioritize Neon data (source of truth)
+            const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
+            const updateBody: any = { 
+              attributes: mergedAttributes,
+              updateEnabled: true,
+            };
+            
+            // Always use the listId from params/env if provided, otherwise preserve existing
+            if (finalListId && Number.isFinite(finalListId)) {
+              updateBody.listIds = [finalListId];
+            } else if (existing.listIds?.length) {
+              updateBody.listIds = existing.listIds;
+            }
+            
+            // Ensure emailBlacklisted matches marketing_opt_in
+            updateBody.emailBlacklisted = !customer.marketing_opt_in;
+            
+            const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+              body: JSON.stringify(updateBody),
+            });
+            
+            if (update.ok) {
+              brevoResult = { id: brevoContactId, success: true };
+              console.log(`[syncCustomerToBrevo] Updated existing Brevo contact for ${customer.email} with ID ${brevoContactId} (by email)`);
+            } else {
+              const updateErrorText = await update.text().catch(() => '');
+              console.warn(`[syncCustomerToBrevo] Contact exists but update failed for ${customer.email}. Contact ID: ${brevoContactId}. Error: ${updateErrorText}`);
+              // Still have the ID, so we can save it even if update failed
+              brevoResult = { id: brevoContactId, success: false };
+            }
+          } else {
+            const errorText = await existingResp.text().catch(() => '');
+            console.error(`[syncCustomerToBrevo] Failed to fetch existing contact for ${customer.email}:`, existingResp.status, errorText);
+          }
+        } catch (e) {
+          console.error(`[syncCustomerToBrevo] Error fetching/updating contact by email ${customer.email}:`, e);
         }
       } else {
-        console.error(`[syncCustomerToBrevo] Failed to fetch existing contact for ${customer.email}:`, existingResp.status);
+        const errorText = await resp.text().catch(() => '');
+        console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email}:`, resp.status, errorText);
       }
-    } else {
-      const errorText = await resp.text().catch(() => '');
-      console.error(`[syncCustomerToBrevo] Failed to create/update contact for ${customer.email}:`, resp.status, errorText);
     }
     
     // CRITICAL: Always update brevo_contact_id in database if we have a contact ID (even if update partially failed)
