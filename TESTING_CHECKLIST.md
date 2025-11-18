@@ -82,7 +82,8 @@ This checklist tracks all implemented features to ensure they work correctly. Ch
 
 - [ ] **Individual Sync**: Click "Push to Brevo" on a Neon customer - should sync successfully
 - [ ] **Sync All Button**: In "Unmatched" view, click "Sync All to Brevo" - should sync all pending customers
-- [ ] **Hourly Cron Job**: Verify `/api/cron/sync-brevo` runs hourly (check Vercel cron logs)
+- [ ] **Daily Cron Job**: Verify `/api/cron/sync-brevo` runs once per day at 2:00 AM UTC (check Vercel cron logs)
+  - **Note**: On Hobby plan, cron jobs can only run once per day. For hourly syncs, upgrade to Pro plan.
 
 ### Phase 3: One-Time Discount Code Generation
 

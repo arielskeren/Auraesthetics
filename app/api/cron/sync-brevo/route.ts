@@ -30,8 +30,9 @@ function normalizeRows(result: any): any[] {
   return [];
 }
 
-// This endpoint is called by Vercel Cron every hour
+// This endpoint is called by Vercel Cron once per day (2:00 AM UTC)
 // It syncs all Neon customers with marketing_opt_in=true to Brevo
+// Note: On Hobby plan, cron jobs can only run once per day
 export async function GET(request: NextRequest) {
   try {
     // Verify this is a legitimate cron request
