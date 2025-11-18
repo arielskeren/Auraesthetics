@@ -76,7 +76,11 @@ export async function GET(request: NextRequest) {
         try {
           // Check if we can find the booking via payment metadata
           // This is a simplified approach - in production you might want to store booking_id in one_time_discount_codes
-          const usageResult = await sql`
+          // Try multiple ways to find the booking that used this code
+          // 1. Check booking_events data
+          // 2. Check bookings metadata
+          // 3. Check payments via payment intent metadata
+          let usageResult = await sql`
             SELECT 
               b.id AS booking_id,
               b.service_name AS booking_service,
@@ -87,10 +91,28 @@ export async function GET(request: NextRequest) {
             FROM booking_events be
             JOIN bookings b ON be.booking_id = b.id
             WHERE be.type = 'finalized'
-              AND be.data->>'discountCode' = ${code.code.toUpperCase()}
+              AND (be.data->>'discountCode' = ${code.code.toUpperCase()}
+                OR b.metadata->>'discountCode' = ${code.code.toUpperCase()})
             ORDER BY be.created_at DESC
             LIMIT 1
           `;
+          
+          // If not found, try checking bookings metadata directly
+          if (normalizeRows(usageResult).length === 0) {
+            usageResult = await sql`
+              SELECT 
+                b.id AS booking_id,
+                b.service_name AS booking_service,
+                b.booking_date,
+                b.client_email,
+                b.client_name,
+                b.created_at AS used_at
+              FROM bookings b
+              WHERE b.metadata->>'discountCode' = ${code.code.toUpperCase()}
+              ORDER BY b.created_at DESC
+              LIMIT 1
+            `;
+          }
           const usage = normalizeRows(usageResult)[0];
           if (usage) {
             return {

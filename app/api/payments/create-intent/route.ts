@@ -5,7 +5,7 @@ import { getHapioServiceConfig } from '@/lib/hapioServiceCatalog';
 
 export async function POST(request: NextRequest) {
   try {
-    const { serviceId, serviceSlug, slotStart, slotEnd, timezone, email, bookingId, amountCents } =
+    const { serviceId, serviceSlug, slotStart, slotEnd, timezone, email, bookingId, amountCents, discountCode } =
       (await request.json()) as {
         serviceId?: string;
         serviceSlug?: string;
@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
         email?: string | null;
         bookingId?: string | null;
         amountCents?: number | null;
+        discountCode?: string | null;
       };
 
     if ((!serviceId && !serviceSlug) || !slotStart || !slotEnd) {
@@ -143,6 +144,7 @@ export async function POST(request: NextRequest) {
         slot_end: slotEnd,
         timezone: timezone ?? '',
         hapio_booking_id: bookingId ?? '',
+        discountCode: discountCode ? discountCode.toUpperCase() : '',
       },
     });
 

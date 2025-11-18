@@ -209,12 +209,24 @@ export async function POST(request: NextRequest) {
           stripeCouponId = discountCode.stripe_coupon_id;
           isOneTime = true;
           
-          // Check if customer matches (if customerId or email provided)
-          if (customerEmail && discountCode.customer_id) {
+          // CRITICAL: If code is customer-specific, require email for validation
+          if (discountCode.customer_id) {
+            if (!customerEmail || typeof customerEmail !== 'string' || !customerEmail.trim()) {
+              return NextResponse.json(
+                { 
+                  error: 'Please enter your email address to verify your eligibility for this discount code', 
+                  valid: false,
+                  requiresEmail: true 
+                },
+                { status: 400 }
+              );
+            }
+            
+            // Verify customer matches
             const customerCheck = await sql`
               SELECT id FROM customers 
               WHERE id = ${discountCode.customer_id} 
-                AND LOWER(email) = LOWER(${customerEmail})
+                AND LOWER(email) = LOWER(${customerEmail.trim()})
               LIMIT 1
             `;
             if (normalizeRows(customerCheck).length === 0) {

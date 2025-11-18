@@ -117,6 +117,8 @@ function ModernPaymentSection({
     discountAmount: number;
     finalAmount: number;
     originalAmount: number;
+    isOneTime?: boolean;
+    requiresEmail?: boolean;
   } | null>(null);
   const [validatingDiscount, setValidatingDiscount] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -181,6 +183,21 @@ function ModernPaymentSection({
       return;
     }
 
+    // For customer-specific codes, require email before validation
+    // We'll check this on the server, but also validate here for better UX
+    if (!contactDetails.email?.trim() || !isValidEmail(contactDetails.email)) {
+        setDiscountValidation({
+          valid: false,
+          discountAmount: 0,
+          finalAmount: baseAmount,
+          originalAmount: baseAmount,
+          isOneTime: false,
+          requiresEmail: true,
+        });
+        setError('Please enter your email address to verify your eligibility for discount codes');
+        return;
+    }
+
     setValidatingDiscount(true);
     setError(null);
 
@@ -201,12 +218,18 @@ function ModernPaymentSection({
       const data = await response.json();
       if (data.valid) {
         setDiscountValidation(data);
+        // If it's a one-time code, show message about email verification
+        if (data.isOneTime && data.requiresEmail === false) {
+          // Email was verified - no additional message needed
+        }
       } else {
         setDiscountValidation({
           valid: false,
           discountAmount: 0,
           finalAmount: baseAmount,
           originalAmount: baseAmount,
+          isOneTime: false,
+          requiresEmail: data.requiresEmail || false,
         });
         setError(data.error || 'Invalid discount code');
       }
@@ -216,7 +239,7 @@ function ModernPaymentSection({
     } finally {
       setValidatingDiscount(false);
     }
-  }, [discountCode, baseAmount]);
+  }, [discountCode, baseAmount, contactDetails.email, contactDetails.firstName, contactDetails.lastName]);
 
   const handlePayment = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -264,6 +287,7 @@ function ModernPaymentSection({
             email: trimmedContact.email,
             amountCents: Math.max(1, Math.round(amountDueToday * 100)),
             bookingId: pendingBooking.hapioBookingId,
+            discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
           }),
         });
 
@@ -492,10 +516,17 @@ function ModernPaymentSection({
             </button>
           </div>
           {discountValidation?.valid && (
-            <p className="mt-2 text-sm text-green-600 flex items-center gap-1">
-              <CheckCircle2 size={16} />
-              Discount applied! ${discountValidation.discountAmount.toFixed(2)} off
-            </p>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm text-green-600 flex items-center gap-1">
+                <CheckCircle2 size={16} />
+                Discount applied! ${discountValidation.discountAmount.toFixed(2)} off
+              </p>
+              {discountValidation.isOneTime && !contactDetails.email?.trim() && (
+                <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
+                  Please enter your email address to verify your eligibility for this discount code.
+                </p>
+              )}
+            </div>
           )}
           {discountValidation && !discountValidation.valid && discountCode && (
             <p className="mt-2 text-sm text-red-600 flex items-center gap-1">

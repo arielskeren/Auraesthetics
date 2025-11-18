@@ -52,12 +52,16 @@ export async function finalizeBookingTransactional(args: {
 
   await sql`BEGIN`;
   try {
+    // Extract discount code from payment intent metadata
+    const discountCodeFromMetadata = pim.discountCode || pim.discount_code || null;
+    
     // Upsert booking by hapio id
     const minimalMeta = {
       ...pim,
       stripePaymentIntentId: (pi as any).id,
       ensuredBy: 'finalize_txn',
       traceId,
+      discountCode: discountCodeFromMetadata ? (typeof discountCodeFromMetadata === 'string' ? discountCodeFromMetadata.toUpperCase() : discountCodeFromMetadata) : null,
     };
     const upsertRows = (await sql`
       INSERT INTO bookings (
@@ -90,14 +94,13 @@ export async function finalizeBookingTransactional(args: {
     }
 
     // Check if WELCOME15 discount code was used
-    const discountCode = pim.discountCode || pim.discount_code || null;
-    const usedWelcomeOffer = discountCode && typeof discountCode === 'string' && discountCode.toUpperCase() === 'WELCOME15';
+    const usedWelcomeOffer = discountCodeFromMetadata && typeof discountCodeFromMetadata === 'string' && discountCodeFromMetadata.toUpperCase() === 'WELCOME15';
     
     // Mark one-time discount code as used if payment succeeds
     // CRITICAL: Must validate customer match to prevent code theft
     // CRITICAL: Use SELECT FOR UPDATE to prevent race conditions
     let oneTimeCodeId: string | null = null;
-    if (discountCode && typeof discountCode === 'string') {
+    if (discountCodeFromMetadata && typeof discountCodeFromMetadata === 'string') {
       try {
         // Check if one_time_discount_codes table exists
         const tableCheck = await sql`
@@ -115,7 +118,7 @@ export async function finalizeBookingTransactional(args: {
           // Table doesn't exist - skip one-time code checking
           console.warn('[finalizeCore] one_time_discount_codes table does not exist, skipping one-time code validation');
         } else {
-          const codeUpper = discountCode.toUpperCase();
+          const codeUpper = discountCodeFromMetadata.toUpperCase();
           // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
           // First check if code exists and is valid (with row lock)
           const oneTimeCodeResult = await sql`
@@ -132,29 +135,40 @@ export async function finalizeBookingTransactional(args: {
           if (oneTimeRows.length > 0) {
             const codeRecord = oneTimeRows[0];
             // If code is customer-specific, verify customer matches
-            if (codeRecord.customer_id && emailFromPi) {
-              const customerMatch = await sql`
-                SELECT id FROM customers 
-                WHERE id = ${codeRecord.customer_id} 
-                  AND LOWER(email) = LOWER(${emailFromPi})
-                LIMIT 1
-              `;
-              const customerRows = Array.isArray(customerMatch) 
-                ? customerMatch 
-                : (customerMatch as any)?.rows || [];
-              if (customerRows.length === 0) {
-                // Customer doesn't match - log but don't mark as used
-                console.error('[finalizeCore] One-time code customer mismatch:', {
+            if (codeRecord.customer_id) {
+              if (!emailFromPi) {
+                // No email in payment - log security issue but still mark as used to prevent reuse
+                console.error('[finalizeCore] One-time code used without email (customer-specific code):', {
                   code: codeUpper,
                   codeCustomerId: codeRecord.customer_id,
-                  paymentEmail: emailFromPi,
                 });
-                // Don't set oneTimeCodeId - code won't be marked as used
-              } else {
-                // Customer matches - safe to mark as used
+                // Still mark as used to prevent code reuse, but log security issue
                 oneTimeCodeId = codeRecord.id;
+              } else {
+                const customerMatch = await sql`
+                  SELECT id FROM customers 
+                  WHERE id = ${codeRecord.customer_id} 
+                    AND LOWER(email) = LOWER(${emailFromPi})
+                  LIMIT 1
+                `;
+                const customerRows = Array.isArray(customerMatch) 
+                  ? customerMatch 
+                  : (customerMatch as any)?.rows || [];
+                if (customerRows.length === 0) {
+                  // Customer doesn't match - log security issue but still mark as used to prevent reuse
+                  console.error('[finalizeCore] One-time code customer mismatch (security issue):', {
+                    code: codeUpper,
+                    codeCustomerId: codeRecord.customer_id,
+                    paymentEmail: emailFromPi,
+                  });
+                  // Still mark as used to prevent code reuse, but log security issue
+                  oneTimeCodeId = codeRecord.id;
+                } else {
+                  // Customer matches - safe to mark as used
+                  oneTimeCodeId = codeRecord.id;
+                }
               }
-            } else if (!codeRecord.customer_id) {
+            } else {
               // Code is not customer-specific - safe to use
               oneTimeCodeId = codeRecord.id;
             }
@@ -272,7 +286,13 @@ export async function finalizeBookingTransactional(args: {
 
     await sql`
       INSERT INTO booking_events (booking_id, type, data)
-      VALUES (${ensuredBookingRowId}, ${'finalized'}, ${JSON.stringify({ stripe_pi_id: (pi as any).id, amount_cents, currency, traceId })}::jsonb)
+      VALUES (${ensuredBookingRowId}, ${'finalized'}, ${JSON.stringify({ 
+        stripe_pi_id: (pi as any).id, 
+        amount_cents, 
+        currency, 
+        traceId,
+        discountCode: discountCodeFromMetadata ? (typeof discountCodeFromMetadata === 'string' ? discountCodeFromMetadata.toUpperCase() : discountCodeFromMetadata) : null
+      })}::jsonb)
     `;
 
     // Mark one-time discount code as used (inside transaction to ensure atomicity)
@@ -294,9 +314,22 @@ export async function finalizeBookingTransactional(args: {
         if (hasOneTimeTable) {
           const updateResult = await sql`
             UPDATE one_time_discount_codes 
-            SET used = true, used_at = NOW()
+            SET used = true, used_at = NOW(), updated_at = NOW()
             WHERE id = ${oneTimeCodeId} AND used = false
+            RETURNING id, code, used, used_at
           `;
+          const updatedRows = Array.isArray(updateResult) 
+            ? updateResult 
+            : (updateResult as any)?.rows || [];
+          if (updatedRows.length === 0) {
+            console.warn('[finalizeCore] Failed to mark one-time code as used - code may have already been used:', oneTimeCodeId);
+          } else {
+            console.log('[finalizeCore] Successfully marked one-time code as used:', {
+              code: updatedRows[0].code,
+              used: updatedRows[0].used,
+              used_at: updatedRows[0].used_at,
+            });
+          }
           // Verify the update succeeded (row might have been updated by another transaction)
           const verifyResult = await sql`
             SELECT used FROM one_time_discount_codes WHERE id = ${oneTimeCodeId} LIMIT 1
