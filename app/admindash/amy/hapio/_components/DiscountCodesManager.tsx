@@ -104,13 +104,22 @@ export default function DiscountCodesManager() {
         console.warn('[DiscountCodesManager]', data.warning);
         setError({ message: data.warning });
         setCodes([]);
+        setUsageDetails({});
         return;
       }
       
-      setCodes(data.codes || []);
+      // Log what we received for debugging
+      console.log('[DiscountCodesManager] Loaded codes:', data.codes?.length || 0, 'codes');
+      if (data.codes && data.codes.length > 0) {
+        console.log('[DiscountCodesManager] Code IDs:', data.codes.map((c: DiscountCode) => c.id));
+      }
+      
+      // Ensure we're setting a fresh array (not appending)
+      const freshCodes = Array.isArray(data.codes) ? data.codes : [];
+      setCodes(freshCodes);
       
       // Load usage details for used codes
-      const usedCodes = (data.codes || []).filter((c: DiscountCode) => c.used);
+      const usedCodes = freshCodes.filter((c: DiscountCode) => c.used);
       for (const code of usedCodes) {
         await loadUsageDetails(code.id);
       }
@@ -298,6 +307,22 @@ export default function DiscountCodesManager() {
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         console.error('[Delete Discount Code] Failed:', data);
+        
+        // If code not found (404), it's already deleted - remove from UI
+        if (response.status === 404 || data.error?.includes('not found')) {
+          console.log('[Delete Discount Code] Code not found, removing from UI state');
+          setCodes(prevCodes => prevCodes.filter(c => c.id !== selectedCode.id));
+          setUsageDetails(prev => {
+            const updated = { ...prev };
+            delete updated[selectedCode.id];
+            return updated;
+          });
+          setShowDeleteModal(false);
+          setSelectedCode(null);
+          alert('This code no longer exists and has been removed from the list.');
+          return;
+        }
+        
         alert(data.error || 'Failed to delete discount code');
         return;
       }
@@ -311,14 +336,27 @@ export default function DiscountCodesManager() {
       console.log('[Delete Discount Code] Success, refreshing list...');
       alert('Discount code deleted successfully!');
       setShowDeleteModal(false);
+      const deletedCodeId = selectedCode.id;
       setSelectedCode(null);
-      // Force refresh by clearing usage details and reloading
+      
+      // Aggressively clear all state
       setUsageDetails({});
-      // Clear codes array first to ensure UI updates immediately
       setCodes([]);
+      
       // Small delay to ensure database transaction is committed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Reload and verify the deleted code is gone
       await loadCodes();
+      
+      // Double-check: if the code still appears, filter it out
+      setCodes(prevCodes => {
+        const filtered = prevCodes.filter(c => c.id !== deletedCodeId);
+        if (filtered.length !== prevCodes.length) {
+          console.warn('[Delete Discount Code] Filtered out deleted code from state:', deletedCodeId);
+        }
+        return filtered;
+      });
     } catch (err: any) {
       console.error('[Delete Discount Code] Error:', err);
       alert(err.message || 'Failed to delete discount code');
@@ -466,8 +504,15 @@ export default function DiscountCodesManager() {
             </div>
         <div className="flex gap-2">
           <button
-            onClick={loadCodes}
+            onClick={async () => {
+              // Hard refresh: clear everything first
+              setCodes([]);
+              setUsageDetails({});
+              setError(null);
+              await loadCodes();
+            }}
             className="px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2"
+            title="Hard refresh - clears cache and reloads"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
