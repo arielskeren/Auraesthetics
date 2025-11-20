@@ -523,6 +523,26 @@ export default function ClientsManager() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={handleComprehensiveSync}
+            disabled={syncingAll}
+            className="px-3 md:px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-warm-gray disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs md:text-sm min-h-[44px] font-semibold"
+            title="Comprehensive sync: Pulls from both systems, creates missing records in Neon first, then syncs all to Brevo"
+          >
+            {syncingAll ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span className="hidden sm:inline">Syncing...</span>
+                <span className="sm:hidden">Sync...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                <span className="hidden sm:inline">Comprehensive Sync</span>
+                <span className="sm:hidden">Full Sync</span>
+              </>
+            )}
+          </button>
+          <button
             onClick={loadData}
             className="px-3 md:px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
           >
@@ -580,7 +600,7 @@ export default function ClientsManager() {
       )}
 
       {/* Sync Status and Actions */}
-      {viewMode === 'unmatched' && syncStatus && (
+      {syncStatus && (
         <div className="bg-sage-light/30 border border-sage-dark/20 rounded-lg p-3 md:p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
             <div>
@@ -612,7 +632,7 @@ export default function ClientsManager() {
               <button
                 onClick={handleComprehensiveSync}
                 disabled={syncingAll}
-                className="px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-warm-gray disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs md:text-sm min-h-[44px] justify-center md:justify-start"
+                className="px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-warm-gray disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs md:text-sm min-h-[44px] justify-center md:justify-start font-semibold"
                 title="Comprehensive sync: Pulls from both systems, creates missing records in Neon first, then syncs all to Brevo"
               >
                 {syncingAll ? (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Filter, ChevronDown, ChevronRight, Star, ListOrdered } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, RefreshCw, ExternalLink, Link as LinkIcon, CheckSquare, Square, Filter, ChevronDown, ChevronRight, Star, ListOrdered, X } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -30,6 +30,7 @@ export default function ServicesManager() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
+  const [viewingService, setViewingService] = useState<any>(null);
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [showUnstarModal, setShowUnstarModal] = useState(false);
   const [pendingStarServiceId, setPendingStarServiceId] = useState<string | null>(null);
@@ -814,7 +815,8 @@ export default function ServicesManager() {
                         </button>
                         {!isCollapsed && (
                           <div className="px-3 py-3">
-                            <table className="w-full">
+                            {/* Desktop Table */}
+                            <table className="hidden md:table w-full">
                               <thead className="bg-sage-light/30 border-b border-sand">
                                 <tr>
                                   <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal w-10">#</th>
@@ -923,6 +925,49 @@ export default function ServicesManager() {
                               ))}
                             </tbody>
                           </table>
+                            {/* Mobile Cards */}
+                            <div className="md:hidden space-y-2">
+                              {categoryServices.map((service) => (
+                                <div
+                                  key={service.id}
+                                  onClick={() => setViewingService(service)}
+                                  className="bg-white border border-sand rounded-lg p-3 cursor-pointer transition-colors active:bg-sand/10"
+                                >
+                                  <div className="flex gap-3">
+                                    {/* Photo */}
+                                    <div className="flex-shrink-0">
+                                      {service.image_url ? (
+                                        <img
+                                          src={service.image_url}
+                                          alt={service.name || 'Service image'}
+                                          className="w-16 h-16 object-cover rounded-lg border border-sand"
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                                          No image
+                                        </div>
+                                      )}
+                                    </div>
+                                    {/* Name, Duration, Price */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-semibold text-sm text-charcoal mb-1 line-clamp-2">{service.name || '—'}</div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="text-xs text-warm-gray">
+                                          {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
+                                        </div>
+                                        <div className="text-sm font-semibold text-charcoal">
+                                          {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                         </div>
                       )}
                     </div>
@@ -930,8 +975,9 @@ export default function ServicesManager() {
                   })}
               </div>
             ) : (
-              // Sorted View (All Services)
-              <table className="w-full">
+              <>
+                {/* Desktop Table - Sorted View */}
+                <table className="hidden md:table w-full">
                 <thead className="bg-sage-light/30 border-b border-sand">
                   <tr>
                     <th className="px-3 py-2 text-center text-sm font-semibold text-charcoal w-10">#</th>
@@ -1034,7 +1080,214 @@ export default function ServicesManager() {
                   ))}
                 </tbody>
               </table>
+                {/* Mobile Cards - Sorted View */}
+                <div className="md:hidden space-y-2">
+                  {filteredAndSortedServices.map((service) => (
+                    <div
+                      key={service.id}
+                      onClick={() => setViewingService(service)}
+                      className="bg-white border border-sand rounded-lg p-3 cursor-pointer transition-colors active:bg-sand/10"
+                    >
+                      <div className="flex gap-3">
+                        {/* Photo */}
+                        <div className="flex-shrink-0">
+                          {service.image_url ? (
+                            <img
+                              src={service.image_url}
+                              alt={service.name || 'Service image'}
+                              className="w-16 h-16 object-cover rounded-lg border border-sand"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                        {/* Name, Duration, Price */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm text-charcoal mb-1 line-clamp-2">{service.name || '—'}</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs text-warm-gray">
+                              {service.duration_display || (service.duration_minutes != null ? `${service.duration_minutes} min` : '—')}
+                            </div>
+                            <div className="text-sm font-semibold text-charcoal">
+                              {service.price != null ? `$${Number(service.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Service Detail Modal */}
+      {viewingService && (
+        <div className="fixed inset-0 z-50 bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-2xl md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Service Details</h3>
+                <button
+                  onClick={() => setViewingService(null)}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Photo and Name */}
+                <div className="flex gap-4 items-start">
+                  {viewingService.image_url ? (
+                    <img
+                      src={viewingService.image_url}
+                      alt={viewingService.name || 'Service image'}
+                      className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-lg border border-sand flex-shrink-0"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-24 h-24 md:w-32 md:h-32 bg-sand/20 rounded-lg border border-sand flex items-center justify-center text-xs text-warm-gray flex-shrink-0">
+                      No image
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <h4 className="text-xl md:text-2xl font-bold text-charcoal mb-2">{viewingService.name || '—'}</h4>
+                    <div className="flex items-center gap-2 mb-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleStar(viewingService.id, viewingService.starred || false);
+                        }}
+                        disabled={starringService === viewingService.id}
+                        className={`p-1 rounded transition-colors ${
+                          viewingService.starred
+                            ? 'text-yellow-500 hover:text-yellow-600'
+                            : 'text-warm-gray hover:text-charcoal'
+                        } disabled:opacity-50`}
+                        title={viewingService.starred ? 'Unstar service' : 'Star service (shows on home page)'}
+                      >
+                        <Star className={`w-5 h-5 ${viewingService.starred ? 'fill-current' : ''}`} />
+                      </button>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          viewingService.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {viewingService.enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="bg-sage-light/20 rounded-lg p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-warm-gray uppercase tracking-wide">Duration</label>
+                      <div className="text-sm font-medium text-charcoal mt-1">
+                        {viewingService.duration_display || (viewingService.duration_minutes != null ? `${viewingService.duration_minutes} min` : '—')}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-warm-gray uppercase tracking-wide">Price</label>
+                      <div className="text-sm font-medium text-charcoal mt-1">
+                        {viewingService.price != null ? `$${Number(viewingService.price).toFixed(2).replace(/\.00$/, '')}` : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  {viewingService.category && (
+                    <div>
+                      <label className="text-xs text-warm-gray uppercase tracking-wide">Category</label>
+                      <div className="text-sm font-medium text-charcoal mt-1">{viewingService.category}</div>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Service ID</label>
+                    <div className="text-sm font-medium text-charcoal mt-1 font-mono break-all">{viewingService.id}</div>
+                  </div>
+                  {viewingService.hapio_service_id && (
+                    <div>
+                      <label className="text-xs text-warm-gray uppercase tracking-wide">Hapio Service ID</label>
+                      <div className="text-sm font-medium text-charcoal mt-1 font-mono break-all">{viewingService.hapio_service_id}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="bg-white border border-sand rounded-lg p-4">
+                  <h5 className="font-semibold text-charcoal mb-3">Actions</h5>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setViewingService(null);
+                        handleEdit(viewingService);
+                      }}
+                      className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit Service
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSync(viewingService.id);
+                        }}
+                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Sync Hapio
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStripeSyncOne(viewingService.id);
+                        }}
+                        disabled={syncingStripeId === viewingService.id}
+                        className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2 text-sm min-h-[44px] disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${syncingStripeId === viewingService.id ? 'animate-spin' : ''}`} />
+                        Sync Stripe
+                      </button>
+                    </div>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to delete ${viewingService.name}? This action cannot be undone.`)) {
+                          await handleDelete(viewingService.id);
+                          setViewingService(null);
+                          await loadServices();
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Service
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <button
+                onClick={() => setViewingService(null)}
+                className="w-full px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
