@@ -196,7 +196,8 @@ export async function POST(request: NextRequest) {
     if (hasOneTimeTable) {
       try {
         const oneTimeResult = await sql`
-          SELECT * FROM one_time_discount_codes 
+          SELECT id, code, customer_id, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at
+          FROM one_time_discount_codes 
           WHERE code = ${codeUpper}
             AND used = false
             AND (expires_at IS NULL OR expires_at > NOW())
@@ -290,13 +291,20 @@ export async function POST(request: NextRequest) {
         const discount = (amount * coupon.percent_off) / 100;
         discountAmount = discount;
         
-        // Apply max discount if specified (for WELCOME15, max $30)
-        // Check coupon metadata or hardcode for known coupons
+        // Apply max discount if specified
+        // Check discount_cap from database (for one-time codes) or coupon metadata
         let maxDiscount = 0;
-        if (coupon.metadata?.max_discount) {
+        if (isOneTime && discountCode?.discount_cap) {
+          // Use discount_cap from database for one-time codes
+          maxDiscount = Number(discountCode.discount_cap);
+        } else if (coupon.metadata?.discount_cap) {
+          // Check coupon metadata for discount_cap
+          maxDiscount = parseFloat(coupon.metadata.discount_cap);
+        } else if (coupon.metadata?.max_discount) {
+          // Fallback to max_discount in metadata
           maxDiscount = parseFloat(coupon.metadata.max_discount);
         } else if (coupon.id === 'L0DshEg5' || code.toUpperCase() === 'WELCOME15') {
-          // WELCOME15 has a $30 cap
+          // WELCOME15 has a $30 cap (hardcoded for legacy support)
           maxDiscount = 30;
         }
         

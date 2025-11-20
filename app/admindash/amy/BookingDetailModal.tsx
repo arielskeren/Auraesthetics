@@ -1415,18 +1415,18 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                                       const startDate = new Date(slot.start);
                                       const endDate = new Date(slot.end);
                                       // Format time as "10:00 AM to 11:00 AM" (no date, just time with AM/PM)
-                                      const startLabel = formatInEST(startDate, {
+                                      const startLabel = new Intl.DateTimeFormat('en-US', {
                                         hour: 'numeric',
                                         minute: '2-digit',
                                         hour12: true,
                                         timeZone: 'America/New_York',
-                                      });
-                                      const endLabel = formatInEST(endDate, {
+                                      }).format(startDate);
+                                      const endLabel = new Intl.DateTimeFormat('en-US', {
                                         hour: 'numeric',
                                         minute: '2-digit',
                                         hour12: true,
                                         timeZone: 'America/New_York',
-                                      });
+                                      }).format(endDate);
                                       
                                       return (
                                         <button

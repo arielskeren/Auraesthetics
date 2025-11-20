@@ -26,7 +26,7 @@ function generateUniqueCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerId, customerEmail, customerName, discountType, discountValue, expiresInDays } = body;
+    const { customerId, customerEmail, customerName, discountType, discountValue, discountCap, expiresInDays } = body;
 
     // Validate inputs
     if (!customerId && !customerEmail) {
@@ -55,6 +55,22 @@ export async function POST(request: NextRequest) {
         { error: 'Percentage discount cannot exceed 100%' },
         { status: 400 }
       );
+    }
+
+    // Validate discount cap (only for percentage discounts)
+    if (discountCap !== undefined && discountCap !== null) {
+      if (discountType !== 'percent') {
+        return NextResponse.json(
+          { error: 'Discount cap can only be set for percentage discounts' },
+          { status: 400 }
+        );
+      }
+      if (discountCap <= 0) {
+        return NextResponse.json(
+          { error: 'Discount cap must be greater than 0' },
+          { status: 400 }
+        );
+      }
     }
 
     const sql = getSqlClient();
@@ -157,7 +173,10 @@ export async function POST(request: NextRequest) {
       
       let coupon: Stripe.Coupon;
       if (discountType === 'percent') {
-        coupon = await stripe.coupons.create({
+        // For percentage discounts with a cap, we need to use max_redemptions or handle it differently
+        // Stripe doesn't natively support percentage caps, so we'll store it in metadata
+        // The cap will be enforced in the validation logic
+        const couponParams: Stripe.CouponCreateParams = {
           name: couponName,
           duration: 'once',
           percent_off: Math.round(discountValue),
@@ -166,7 +185,17 @@ export async function POST(request: NextRequest) {
             customer_id: finalCustomerId || '',
             discount_type: discountType,
           },
-        });
+        };
+        
+        // Add discount cap to metadata if provided
+        if (discountCap !== undefined && discountCap !== null) {
+          couponParams.metadata = {
+            ...couponParams.metadata,
+            discount_cap: String(discountCap),
+          };
+        }
+        
+        coupon = await stripe.coupons.create(couponParams);
       } else {
         coupon = await stripe.coupons.create({
           name: couponName,
@@ -193,22 +222,29 @@ export async function POST(request: NextRequest) {
     // Insert into database (only after Stripe succeeds to avoid orphaned records)
     const insertResult = await sql`
       INSERT INTO one_time_discount_codes (
-        customer_id, code, discount_type, discount_value, 
+        customer_id, code, discount_type, discount_value, discount_cap,
         expires_at, stripe_coupon_id, created_by
       )
       VALUES (
-        ${finalCustomerId}, ${code}, ${discountType}, ${discountValue},
-        ${expiresAt}, ${stripeCouponId}, 'admin'
+        ${finalCustomerId}, ${code}, ${discountType}, ${discountValue}, 
+        ${discountCap || null}, ${expiresAt}, ${stripeCouponId}, 'admin'
       )
-      RETURNING id, code, discount_type, discount_value, expires_at, created_at
+      RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
     `;
     const inserted = normalizeRows(insertResult)[0];
 
     // Send email to customer
     try {
-      const discountDisplay = discountType === 'percent' 
-        ? `${discountValue}% off`
-        : `$${discountValue} off`;
+      let discountDisplay: string;
+      if (discountType === 'percent') {
+        if (discountCap !== undefined && discountCap !== null) {
+          discountDisplay = `${discountValue}% off (up to $${discountCap})`;
+        } else {
+          discountDisplay = `${discountValue}% off`;
+        }
+      } else {
+        discountDisplay = `$${discountValue} off`;
+      }
 
       // Escape HTML to prevent XSS
       const escapeHtml = (text: string | null): string => {
@@ -272,6 +308,13 @@ export async function POST(request: NextRequest) {
               <p style="margin: 25px 0; color: #333333; font-size: 16px; line-height: 1.6; text-align: center;">
                 Use this code at checkout to redeem your <strong style="color: #2d5016;">${safeDiscountDisplay}</strong> discount.
               </p>
+              ${discountType === 'percent' && discountCap ? `
+                <div style="background-color: #e8f5e9; border-left: 4px solid #4a7c2a; padding: 12px; margin: 20px 0; border-radius: 4px;">
+                  <p style="margin: 0; color: #2d5016; font-size: 14px; line-height: 1.6;">
+                    <strong>💡 Note:</strong> This ${discountValue}% discount is capped at a maximum savings of $${discountCap}.
+                  </p>
+                </div>
+              ` : ''}
               
               ${safeExpiresAt ? `
                 <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 25px 0; border-radius: 4px;">
@@ -342,6 +385,7 @@ export async function POST(request: NextRequest) {
         code: inserted.code,
         discountType: inserted.discount_type,
         discountValue: Number(inserted.discount_value),
+        discountCap: inserted.discount_cap ? Number(inserted.discount_cap) : null,
         expiresAt: inserted.expires_at,
         createdAt: inserted.created_at,
       },

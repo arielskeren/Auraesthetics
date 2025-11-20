@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X } from 'lucide-react';
+import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2 } from 'lucide-react';
 
 interface DiscountCode {
   id: string;
@@ -11,6 +11,7 @@ interface DiscountCode {
   customer_name?: string | null;
   discount_type: 'percent' | 'dollar';
   discount_value: number;
+  discount_cap?: number | null;
   stripe_coupon_id: string | null;
   used: boolean;
   used_at: string | null;
@@ -37,6 +38,8 @@ export default function DiscountCodesManager() {
   const [error, setError] = useState<any>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedCode, setSelectedCode] = useState<DiscountCode | null>(null);
   const [usageDetails, setUsageDetails] = useState<Record<string, UsageDetails>>({});
   
@@ -45,6 +48,15 @@ export default function DiscountCodesManager() {
     customerEmail: '',
     discountType: 'percent' as 'percent' | 'dollar',
     discountValue: '',
+    discountCap: '',
+    expiresInDays: '',
+  });
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    discountType: 'percent' as 'percent' | 'dollar',
+    discountValue: '',
+    discountCap: '',
     expiresInDays: '',
   });
 
@@ -121,6 +133,7 @@ export default function DiscountCodesManager() {
           customerEmail: createForm.customerEmail,
           discountType: createForm.discountType,
           discountValue: parseFloat(createForm.discountValue),
+          discountCap: createForm.discountType === 'percent' && createForm.discountCap ? parseFloat(createForm.discountCap) : null,
           expiresInDays: createForm.expiresInDays ? parseInt(createForm.expiresInDays) : null,
         }),
       });
@@ -134,7 +147,7 @@ export default function DiscountCodesManager() {
 
       alert('Discount code created and emailed to customer!');
       setShowCreateModal(false);
-      setCreateForm({ customerEmail: '', discountType: 'percent', discountValue: '', expiresInDays: '' });
+      setCreateForm({ customerEmail: '', discountType: 'percent', discountValue: '', discountCap: '', expiresInDays: '' });
       loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to create discount code');
@@ -188,6 +201,74 @@ export default function DiscountCodesManager() {
       loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to update code status');
+    }
+  };
+
+  const handleEdit = (code: DiscountCode) => {
+    setSelectedCode(code);
+    setEditForm({
+      discountType: code.discount_type,
+      discountValue: String(code.discount_value),
+      discountCap: code.discount_cap ? String(code.discount_cap) : '',
+      expiresInDays: code.expires_at ? String(Math.ceil((new Date(code.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedCode || !editForm.discountValue) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/discount-codes/${selectedCode.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          discountType: editForm.discountType,
+          discountValue: parseFloat(editForm.discountValue),
+          discountCap: editForm.discountType === 'percent' && editForm.discountCap ? parseFloat(editForm.discountCap) : null,
+          expiresInDays: editForm.expiresInDays ? parseInt(editForm.expiresInDays) : null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || 'Failed to update discount code');
+        return;
+      }
+
+      alert('Discount code updated successfully!');
+      setShowEditModal(false);
+      setSelectedCode(null);
+      loadCodes();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update discount code');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedCode) return;
+
+    try {
+      const response = await fetch(`/api/admin/discount-codes/${selectedCode.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || 'Failed to delete discount code');
+        return;
+      }
+
+      alert('Discount code deleted successfully!');
+      setShowDeleteModal(false);
+      setSelectedCode(null);
+      loadCodes();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete discount code');
     }
   };
 
@@ -303,7 +384,7 @@ export default function DiscountCodesManager() {
                       </td>
                       <td className="px-4 py-3 text-sm text-charcoal">
                         {code.discount_type === 'percent' 
-                          ? `${code.discount_value}%` 
+                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
                           : `$${code.discount_value}`}
                       </td>
                       <td className="px-4 py-3">
@@ -331,6 +412,16 @@ export default function DiscountCodesManager() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          {!code.used && (
+                            <button
+                              onClick={() => handleEdit(code)}
+                              className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
+                              title="Edit code"
+                            >
+                              <Edit className="w-3 h-3" />
+                              Edit
+                            </button>
+                          )}
                           {!code.used && code.expires_at && (
                             <button
                               onClick={() => {
@@ -367,6 +458,17 @@ export default function DiscountCodesManager() {
                               )}
                             </button>
                           )}
+                          <button
+                            onClick={() => {
+                              setSelectedCode(code);
+                              setShowDeleteModal(true);
+                            }}
+                            className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
+                            title="Delete code"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -457,6 +559,29 @@ export default function DiscountCodesManager() {
                     )}
                   </div>
                 </div>
+
+                {createForm.discountType === 'percent' && (
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-2">
+                      Maximum Discount Amount (Cap) <span className="text-warm-gray text-xs">(optional)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-charcoal">$</span>
+                      <input
+                        type="number"
+                        value={createForm.discountCap}
+                        onChange={(e) => setCreateForm({ ...createForm, discountCap: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                        placeholder="40 (e.g., 15% off up to $40)"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    <p className="text-xs text-warm-gray mt-1">
+                      Optional: Cap the discount at a maximum dollar amount. Example: 15% off up to $40.
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal mb-2">
@@ -553,6 +678,192 @@ export default function DiscountCodesManager() {
                     className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                   >
                     Extend
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedCode && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-charcoal">Edit Discount Code</h3>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedCode(null);
+                  }}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-warm-gray mb-2">
+                    Code: <span className="font-mono font-semibold text-charcoal">{selectedCode.code}</span>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    Discount Type <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditForm({ ...editForm, discountType: 'percent' })}
+                      className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                        editForm.discountType === 'percent'
+                          ? 'bg-dark-sage text-white'
+                          : 'bg-sand/30 text-charcoal hover:bg-sand/50'
+                      }`}
+                    >
+                      Percentage
+                    </button>
+                    <button
+                      onClick={() => setEditForm({ ...editForm, discountType: 'dollar' })}
+                      className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                        editForm.discountType === 'dollar'
+                          ? 'bg-dark-sage text-white'
+                          : 'bg-sand/30 text-charcoal hover:bg-sand/50'
+                      }`}
+                    >
+                      Dollar Amount
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    Discount Value <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {editForm.discountType === 'dollar' && (
+                      <span className="text-charcoal">$</span>
+                    )}
+                    <input
+                      type="number"
+                      value={editForm.discountValue}
+                      onChange={(e) => setEditForm({ ...editForm, discountValue: e.target.value })}
+                      className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                      placeholder={editForm.discountType === 'percent' ? '15' : '30'}
+                      min="0"
+                      max={editForm.discountType === 'percent' ? '100' : undefined}
+                    />
+                    {editForm.discountType === 'percent' && (
+                      <span className="text-charcoal">%</span>
+                    )}
+                  </div>
+                </div>
+
+                {editForm.discountType === 'percent' && (
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal mb-2">
+                      Maximum Discount Amount (Cap) <span className="text-warm-gray text-xs">(optional)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-charcoal">$</span>
+                      <input
+                        type="number"
+                        value={editForm.discountCap}
+                        onChange={(e) => setEditForm({ ...editForm, discountCap: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                        placeholder="40 (e.g., 15% off up to $40)"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    Expires In (Days) <span className="text-warm-gray text-xs">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.expiresInDays}
+                    onChange={(e) => setEditForm({ ...editForm, expiresInDays: e.target.value })}
+                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    placeholder="30 (leave empty for no expiry)"
+                    min="1"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedCode(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdate}
+                    disabled={!editForm.discountValue}
+                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedCode && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-charcoal">Delete Discount Code</h3>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedCode(null);
+                  }}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-warm-gray">
+                  Are you sure you want to delete discount code <span className="font-mono font-semibold text-charcoal">{selectedCode.code}</span>?
+                </p>
+                {selectedCode.used && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      ⚠️ This code has already been used. Deleting it will remove the record but won't affect the booking that used it.
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setSelectedCode(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  >
+                    Delete
                   </button>
                 </div>
               </div>

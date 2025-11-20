@@ -47,26 +47,72 @@ export async function GET(request: NextRequest) {
     `;
 
     // Fetch all discount codes with customer info
-    const codesResult = await sql`
-      SELECT 
-        otc.id,
-        otc.code,
-        otc.customer_id,
-        otc.discount_type,
-        otc.discount_value,
-        otc.stripe_coupon_id,
-        otc.used,
-        otc.used_at,
-        otc.expires_at,
-        otc.created_at,
-        otc.created_by,
-        c.email AS customer_email,
-        TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
-      FROM one_time_discount_codes otc
-      LEFT JOIN customers c ON otc.customer_id = c.id
-      ORDER BY otc.created_at DESC
-    `;
+    // Check if discount_cap column exists (for backward compatibility)
+    let hasDiscountCapColumn = false;
+    try {
+      const columnCheck = await sql`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+          AND table_name = 'one_time_discount_codes'
+          AND column_name = 'discount_cap'
+        LIMIT 1
+      `;
+      hasDiscountCapColumn = normalizeRows(columnCheck).length > 0;
+    } catch (e) {
+      // Column check failed, assume it doesn't exist
+      console.warn('[Discount Codes API] Could not check for discount_cap column:', e);
+    }
+
+    // Build query based on whether discount_cap column exists
+    let codesResult;
+    if (hasDiscountCapColumn) {
+      codesResult = await sql`
+        SELECT 
+          otc.id,
+          otc.code,
+          otc.customer_id,
+          otc.discount_type,
+          otc.discount_value,
+          otc.discount_cap,
+          otc.stripe_coupon_id,
+          otc.used,
+          otc.used_at,
+          otc.expires_at,
+          otc.created_at,
+          otc.created_by,
+          c.email AS customer_email,
+          TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
+        FROM one_time_discount_codes otc
+        LEFT JOIN customers c ON otc.customer_id = c.id
+        ORDER BY otc.created_at DESC
+      `;
+    } else {
+      codesResult = await sql`
+        SELECT 
+          otc.id,
+          otc.code,
+          otc.customer_id,
+          otc.discount_type,
+          otc.discount_value,
+          NULL AS discount_cap,
+          otc.stripe_coupon_id,
+          otc.used,
+          otc.used_at,
+          otc.expires_at,
+          otc.created_at,
+          otc.created_by,
+          c.email AS customer_email,
+          TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
+        FROM one_time_discount_codes otc
+        LEFT JOIN customers c ON otc.customer_id = c.id
+        ORDER BY otc.created_at DESC
+      `;
+    }
     const codes = normalizeRows(codesResult);
+    
+    // Log for debugging
+    console.log(`[Discount Codes API] Found ${codes.length} discount codes`);
 
     // For used codes, fetch booking usage details
     const codesWithUsage = await Promise.all(
