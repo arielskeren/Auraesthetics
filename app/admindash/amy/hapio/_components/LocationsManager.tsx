@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, X } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -18,6 +18,7 @@ export default function LocationsManager() {
   const [perPage] = useState(20);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
+  const [viewingLocation, setViewingLocation] = useState<any>(null);
 
   useEffect(() => {
     loadLocations();
@@ -135,12 +136,12 @@ export default function LocationsManager() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-charcoal">Locations</h2>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+        <h2 className="text-lg md:text-xl font-semibold text-charcoal">Locations</h2>
         <button
           onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-xs md:text-sm font-medium min-h-[44px]"
         >
           <Plus className="w-4 h-4" />
           Add Location
@@ -149,58 +150,33 @@ export default function LocationsManager() {
 
       {error && <ErrorDisplay error={error} />}
 
-      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white border border-sand rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Timezone</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand">
-              {locations.map((location) => {
-                // Handle both timezone (camelCase) and time_zone (snake_case) from API
-                const timezone = location.timezone || location.time_zone || null;
-                // Ensure enabled is a boolean
-                const isEnabled = location.enabled !== false && location.enabled !== undefined;
-                
-                return (
-                  <tr key={location.id} className="hover:bg-sand/20">
-                    <td className="px-4 py-3 text-sm font-medium text-charcoal">{location.name}</td>
-                    <td className="px-4 py-3 text-sm text-warm-gray">{timezone || '—'}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        isEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {isEnabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEdit(location)}
-                        className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(location.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+              {locations.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-8 text-center text-warm-gray">No locations found</td>
                 </tr>
-                );
-              })}
+              ) : (
+                locations.map((location) => (
+                  <tr 
+                    key={location.id} 
+                    onClick={() => setViewingLocation(location)}
+                    className="hover:bg-sand/10 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-sm text-charcoal">{location.name}</div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -211,6 +187,122 @@ export default function LocationsManager() {
           </div>
         )}
       </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-2">
+        {locations.length === 0 ? (
+          <div className="bg-white border border-sand rounded-lg p-8 text-center text-warm-gray text-sm">
+            No locations found
+          </div>
+        ) : (
+          locations.map((location) => (
+            <div
+              key={location.id}
+              onClick={() => setViewingLocation(location)}
+              className="bg-white border border-sand rounded-lg p-3 cursor-pointer transition-colors active:bg-sand/10"
+            >
+              <div className="font-semibold text-base text-charcoal">{location.name}</div>
+            </div>
+          ))
+        )}
+        {pagination && (
+          <div className="pt-2">
+            <PaginationControls meta={pagination} onPageChange={handlePageChange} />
+          </div>
+        )}
+      </div>
+
+      {/* Location Detail Modal */}
+      {viewingLocation && (() => {
+        const timezone = viewingLocation.timezone || viewingLocation.time_zone || null;
+        const isEnabled = viewingLocation.enabled !== false && viewingLocation.enabled !== undefined;
+        return (
+        <div className="fixed inset-0 z-50 bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-2xl md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Location Details</h3>
+                <button
+                  onClick={() => setViewingLocation(null)}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Name - Emphasized */}
+                <div>
+                  <h4 className="text-2xl md:text-3xl font-bold text-charcoal mb-2">{viewingLocation.name}</h4>
+                </div>
+
+                {/* Details */}
+                <div className="bg-sage-light/20 rounded-lg p-4 space-y-3">
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Location ID</label>
+                    <div className="text-sm font-medium text-charcoal mt-1 font-mono">{viewingLocation.id}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Timezone</label>
+                    <div className="text-sm font-medium text-charcoal mt-1">{timezone || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Status</label>
+                    <div className="mt-1">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          isEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {isEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="bg-white border border-sand rounded-lg p-4">
+                  <h5 className="font-semibold text-charcoal mb-3">Actions</h5>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setViewingLocation(null);
+                        handleEdit(viewingLocation);
+                      }}
+                      className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit Location
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Are you sure you want to delete ${viewingLocation.name}? This action cannot be undone.`)) {
+                          await handleDelete(viewingLocation.id);
+                          setViewingLocation(null);
+                          await loadLocations();
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Location
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <button
+                onClick={() => setViewingLocation(null)}
+                className="w-full px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {showEditModal && (
         <LocationEditModal

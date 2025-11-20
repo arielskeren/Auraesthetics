@@ -35,6 +35,7 @@ export default function ClientsManager() {
   const [syncingAll, setSyncingAll] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [editing, setEditing] = useState<UnifiedClient | null>(null);
+  const [viewingClient, setViewingClient] = useState<UnifiedClient | null>(null);
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
@@ -233,6 +234,7 @@ export default function ClientsManager() {
   };
 
   const handleEdit = (client: UnifiedClient) => {
+    setViewingClient(null);
     setEditing(client);
     setEditForm({
       firstName: client.firstName || '',
@@ -304,6 +306,10 @@ export default function ClientsManager() {
       await Promise.all([loadData(), loadSyncStatus()]);
       setEditing(null);
       alert('Client updated successfully');
+      // Refresh viewing client if it was open
+      if (viewingClient && viewingClient.email === editForm.email) {
+        await loadData();
+      }
     } catch (err: any) {
       setError(err);
       alert(`Update failed: ${err.message}`);
@@ -646,20 +652,15 @@ export default function ClientsManager() {
           <table className="w-full">
             <thead className="bg-sage-light/30">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Email</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Phone</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Neon ID</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Brevo ID</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Marketing Opt-In</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Used Welcome Offer</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-warm-gray">
+                  <td colSpan={3} className="px-4 py-8 text-center text-warm-gray">
                     No clients found
                   </td>
                 </tr>
@@ -667,97 +668,18 @@ export default function ClientsManager() {
                 filteredData.map((client) => (
                   <tr 
                     key={client.email} 
-                    className={`hover:bg-sand/10 ${
+                    onClick={() => setViewingClient(client)}
+                    className={`hover:bg-sand/10 cursor-pointer transition-colors ${
                       client.hasMismatch ? 'bg-yellow-50/50' : ''
                     }`}
                   >
-                    <td className="px-4 py-3 text-sm text-charcoal">{client.email}</td>
-                    <td className="px-4 py-3 text-sm text-charcoal">
-                      {`${client.firstName} ${client.lastName}`.trim() || 'N/A'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-charcoal">{client.phone || 'N/A'}</td>
-                    <td className="px-4 py-3 text-sm text-warm-gray font-mono text-xs">
-                      {client.neonId ? (
-                        <span className="text-charcoal">{client.neonId}</span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-warm-gray font-mono text-xs">
-                      {client.brevoId ? (
-                        <span className="text-charcoal">{client.brevoId}</span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {client.marketingOptIn ? (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-gray-400" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {client.usedWelcomeOffer ? (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-gray-400" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {client.inNeon && !client.inBrevo && client.marketingOptIn && (
-                          <button
-                            onClick={() => handleSyncToBrevo(client.neonId!)}
-                            disabled={syncingToBrevo === client.neonId}
-                            className="px-2 py-1 bg-dark-sage text-white rounded hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
-                            title="Sync to Brevo"
-                          >
-                            <Upload className="w-3 h-3" />
-                            To Brevo
-                          </button>
-                        )}
-                        {!client.inNeon && client.inBrevo && (
-                          <button
-                            onClick={() => handleSyncToNeon(client.brevoId!)}
-                            disabled={syncingToNeon === client.brevoId}
-                            className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
-                            title="Create in Neon from Brevo"
-                          >
-                            <Download className="w-3 h-3" />
-                            To Neon
-                          </button>
-                        )}
-                        {client.inNeon && client.inBrevo && client.hasMismatch && (
-                          <button
-                            onClick={() => handleSyncToBrevo(client.neonId!)}
-                            disabled={syncingToBrevo === client.neonId}
-                            className="px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
-                            title="Sync Neon data to Brevo (fix mismatch)"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            Fix Sync
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleEdit(client)}
-                          className="px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
-                          title="Edit client"
-                        >
-                          <Edit className="w-3 h-3" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(client)}
-                          disabled={deleting === (client.neonId || client.brevoId)}
-                          className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1"
-                          title="Delete client"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-sm text-charcoal">
+                        {`${client.firstName} ${client.lastName}`.trim() || 'N/A'}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-sm text-charcoal">{client.email}</td>
+                    <td className="px-4 py-3 text-sm text-charcoal">{client.phone || 'N/A'}</td>
                   </tr>
                 ))
               )}
@@ -776,121 +698,18 @@ export default function ClientsManager() {
           filteredData.map((client) => (
             <div
               key={client.email}
-              className={`bg-white border rounded-lg p-3 ${
+              onClick={() => setViewingClient(client)}
+              className={`bg-white border rounded-lg p-3 cursor-pointer transition-colors active:bg-sand/10 ${
                 client.hasMismatch ? 'border-yellow-300 bg-yellow-50/30' : 'border-sand'
               }`}
             >
-              {/* Primary Info */}
-              <div className="space-y-2">
-                <div>
-                  <div className="font-semibold text-sm text-charcoal">{client.email}</div>
-                  <div className="text-xs text-warm-gray mt-0.5">
-                    {`${client.firstName} ${client.lastName}`.trim() || 'N/A'}
-                  </div>
-                  {client.phone && (
-                    <div className="text-xs text-warm-gray mt-0.5">{client.phone}</div>
-                  )}
-                </div>
-
-                {/* Status Indicators */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-1">
-                    {client.marketingOptIn ? (
-                      <CheckCircle className="w-3 h-3 text-green-600" />
-                    ) : (
-                      <XCircle className="w-3 h-3 text-gray-400" />
-                    )}
-                    <span className="text-xs text-warm-gray">Marketing</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {client.usedWelcomeOffer ? (
-                      <CheckCircle className="w-3 h-3 text-green-600" />
-                    ) : (
-                      <XCircle className="w-3 h-3 text-gray-400" />
-                    )}
-                    <span className="text-xs text-warm-gray">Welcome Offer</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className={`px-1.5 py-0.5 rounded ${
-                      client.inNeon && client.inBrevo ? 'bg-green-100 text-green-700' :
-                      client.inNeon ? 'bg-blue-100 text-blue-700' :
-                      'bg-orange-100 text-orange-700'
-                    }`}>
-                      {client.inNeon && client.inBrevo ? 'Both' : client.inNeon ? 'Neon' : 'Brevo'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Secondary Info (IDs) */}
-                <div className="pt-2 border-t border-sand/50 space-y-1">
-                  {client.neonId && (
-                    <div className="text-xs">
-                      <span className="text-warm-gray">Neon:</span>
-                      <span className="ml-1 font-mono text-charcoal">{client.neonId}</span>
-                    </div>
-                  )}
-                  {client.brevoId && (
-                    <div className="text-xs">
-                      <span className="text-warm-gray">Brevo:</span>
-                      <span className="ml-1 font-mono text-charcoal">{client.brevoId}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="pt-2 border-t border-sand/50 flex flex-wrap gap-2">
-                  {client.inNeon && !client.inBrevo && client.marketingOptIn && (
-                    <button
-                      onClick={() => handleSyncToBrevo(client.neonId!)}
-                      disabled={syncingToBrevo === client.neonId}
-                      className="px-2 py-1.5 bg-dark-sage text-white rounded hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
-                      title="Sync to Brevo"
-                    >
-                      <Upload className="w-3 h-3" />
-                      To Brevo
-                    </button>
-                  )}
-                  {!client.inNeon && client.inBrevo && (
-                    <button
-                      onClick={() => handleSyncToNeon(client.brevoId!)}
-                      disabled={syncingToNeon === client.brevoId}
-                      className="px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
-                      title="Create in Neon from Brevo"
-                    >
-                      <Download className="w-3 h-3" />
-                      To Neon
-                    </button>
-                  )}
-                  {client.inNeon && client.inBrevo && client.hasMismatch && (
-                    <button
-                      onClick={() => handleSyncToBrevo(client.neonId!)}
-                      disabled={syncingToBrevo === client.neonId}
-                      className="px-2 py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
-                      title="Sync Neon data to Brevo (fix mismatch)"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Fix Sync
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleEdit(client)}
-                    className="px-2 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
-                    title="Edit client"
-                  >
-                    <Edit className="w-3 h-3" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(client)}
-                    disabled={deleting === (client.neonId || client.brevoId)}
-                    className="px-2 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
-                    title="Delete client"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Delete
-                  </button>
-                </div>
+              <div className="font-semibold text-base text-charcoal mb-1">
+                {`${client.firstName} ${client.lastName}`.trim() || 'N/A'}
               </div>
+              <div className="text-sm text-warm-gray">{client.email}</div>
+              {client.phone && (
+                <div className="text-sm text-warm-gray mt-0.5">{client.phone}</div>
+              )}
             </div>
           ))
         )}
@@ -905,6 +724,188 @@ export default function ClientsManager() {
           </span>
         )}
       </div>
+
+      {/* Client Detail Modal */}
+      {viewingClient && (() => {
+        // Find the current client data from unifiedClients to get fresh data
+        const currentClient = unifiedClients.find(c => c.email.toLowerCase() === viewingClient.email.toLowerCase()) || viewingClient;
+        return (
+          <div className="fixed inset-0 z-50 bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-2xl md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Client Details</h3>
+                <button
+                  onClick={() => setViewingClient(null)}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Client Name - Emphasized */}
+                <div>
+                  <h4 className="text-2xl md:text-3xl font-bold text-charcoal mb-2">
+                    {`${currentClient.firstName} ${currentClient.lastName}`.trim() || 'N/A'}
+                  </h4>
+                </div>
+
+                {/* Basic Information */}
+                <div className="bg-sage-light/20 rounded-lg p-4 space-y-3">
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Email</label>
+                    <div className="text-sm font-medium text-charcoal mt-1">{currentClient.email}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Phone</label>
+                    <div className="text-sm font-medium text-charcoal mt-1">{currentClient.phone || 'N/A'}</div>
+                  </div>
+                </div>
+
+                {/* System Status */}
+                <div className="bg-white border border-sand rounded-lg p-4 space-y-3">
+                  <h5 className="font-semibold text-charcoal mb-2">System Status</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-warm-gray">In Neon:</span>
+                      {currentClient.inNeon ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      {currentClient.neonId && (
+                        <span className="text-xs font-mono text-warm-gray ml-1">{currentClient.neonId}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-warm-gray">In Brevo:</span>
+                      {currentClient.inBrevo ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      {currentClient.brevoId && (
+                        <span className="text-xs font-mono text-warm-gray ml-1">{currentClient.brevoId}</span>
+                      )}
+                    </div>
+                  </div>
+                  {currentClient.hasMismatch && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mt-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                        <span className="text-xs text-yellow-800">Data mismatch detected between Neon and Brevo</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Preferences */}
+                <div className="bg-white border border-sand rounded-lg p-4 space-y-3">
+                  <h5 className="font-semibold text-charcoal mb-2">Preferences</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-warm-gray">Marketing Opt-In:</span>
+                      {currentClient.marketingOptIn ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-warm-gray">Used Welcome Offer:</span>
+                      {currentClient.usedWelcomeOffer ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="bg-white border border-sand rounded-lg p-4">
+                  <h5 className="font-semibold text-charcoal mb-3">Actions</h5>
+                  <div className="flex flex-col gap-2">
+                    {currentClient.inNeon && !currentClient.inBrevo && currentClient.marketingOptIn && (
+                    <button
+                      onClick={async () => {
+                        await handleSyncToBrevo(currentClient.neonId!);
+                        await Promise.all([loadData(), loadSyncStatus()]);
+                      }}
+                      disabled={syncingToBrevo === currentClient.neonId}
+                      className="w-full px-4 py-3 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {syncingToBrevo === currentClient.neonId ? 'Syncing...' : 'Sync to Brevo'}
+                    </button>
+                    )}
+                    {!currentClient.inNeon && currentClient.inBrevo && (
+                    <button
+                      onClick={async () => {
+                        await handleSyncToNeon(currentClient.brevoId!);
+                        await Promise.all([loadData(), loadSyncStatus()]);
+                      }}
+                      disabled={syncingToNeon === currentClient.brevoId}
+                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Download className="w-4 h-4" />
+                      {syncingToNeon === currentClient.brevoId ? 'Syncing...' : 'Create in Neon from Brevo'}
+                    </button>
+                    )}
+                    {currentClient.inNeon && currentClient.inBrevo && currentClient.hasMismatch && (
+                    <button
+                      onClick={async () => {
+                        await handleSyncToBrevo(currentClient.neonId!);
+                        await Promise.all([loadData(), loadSyncStatus()]);
+                      }}
+                      disabled={syncingToBrevo === currentClient.neonId}
+                      className="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      {syncingToBrevo === currentClient.neonId ? 'Syncing...' : 'Fix Sync (Sync Neon to Brevo)'}
+                    </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setViewingClient(null);
+                        handleEdit(currentClient);
+                      }}
+                      className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit Client
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Are you sure you want to delete ${currentClient.email}? This action cannot be undone.`)) {
+                          await handleDelete(currentClient);
+                          setViewingClient(null);
+                          await loadData();
+                        }
+                      }}
+                      disabled={deleting === (currentClient.neonId || currentClient.brevoId)}
+                      className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {deleting === (currentClient.neonId || currentClient.brevoId) ? 'Deleting...' : 'Delete Client'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <button
+                onClick={() => setViewingClient(null)}
+                className="w-full px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {/* Edit Modal */}
       {editing && (

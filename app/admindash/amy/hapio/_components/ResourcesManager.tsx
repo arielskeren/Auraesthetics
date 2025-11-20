@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Calendar, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, Eye, X } from 'lucide-react';
 import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
@@ -22,6 +22,7 @@ export default function ResourcesManager() {
   const [selectedResource, setSelectedResource] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedResourceForSchedule, setSelectedResourceForSchedule] = useState<any>(null);
+  const [viewingResource, setViewingResource] = useState<any>(null);
 
   useEffect(() => {
     // Don't call loadLocations - it's auto-loaded by context
@@ -129,12 +130,12 @@ export default function ResourcesManager() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-charcoal">Employees</h2>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+        <h2 className="text-lg md:text-xl font-semibold text-charcoal">Employees</h2>
         <button
           onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-xs md:text-sm font-medium min-h-[44px]"
         >
           <Plus className="w-4 h-4" />
           Add Employee
@@ -143,66 +144,33 @@ export default function ResourcesManager() {
 
       {error && <ErrorDisplay error={error} />}
 
-      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white border border-sand rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-sage-light/30 border-b border-sand">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Resource ID</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Location ID</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Max Simultaneous</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand">
-              {resources.map((resource) => (
-                <tr key={resource.id} className="hover:bg-sand/20">
-                  <td className="px-4 py-3">
-                    <IdDisplay id={resource.id} label="Resource ID" />
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-charcoal">{resource.name}</td>
-                  <td className="px-4 py-3">
-                    <IdDisplay id={resource.location_id} label="Location ID" />
-                  </td>
-                  <td className="px-4 py-3 text-sm text-warm-gray">{resource.max_simultaneous_bookings}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        resource.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {resource.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleViewSchedule(resource)}
-                        className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
-                        title="View schedule"
-                      >
-                        <Calendar className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(resource)}
-                        className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(resource.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+              {resources.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-8 text-center text-warm-gray">No employees found</td>
                 </tr>
-              ))}
+              ) : (
+                resources.map((resource) => (
+                  <tr 
+                    key={resource.id} 
+                    onClick={() => setViewingResource(resource)}
+                    className="hover:bg-sand/10 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-sm text-charcoal">{resource.name}</div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -213,6 +181,132 @@ export default function ResourcesManager() {
           </div>
         )}
       </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-2">
+        {resources.length === 0 ? (
+          <div className="bg-white border border-sand rounded-lg p-8 text-center text-warm-gray text-sm">
+            No employees found
+          </div>
+        ) : (
+          resources.map((resource) => (
+            <div
+              key={resource.id}
+              onClick={() => setViewingResource(resource)}
+              className="bg-white border border-sand rounded-lg p-3 cursor-pointer transition-colors active:bg-sand/10"
+            >
+              <div className="font-semibold text-base text-charcoal">{resource.name}</div>
+            </div>
+          ))
+        )}
+        {pagination && (
+          <div className="pt-2">
+            <PaginationControls meta={pagination} onPageChange={handlePageChange} />
+          </div>
+        )}
+      </div>
+
+      {/* Resource Detail Modal */}
+      {viewingResource && (
+        <div className="fixed inset-0 z-50 bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-2xl md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Employee Details</h3>
+                <button
+                  onClick={() => setViewingResource(null)}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Name - Emphasized */}
+                <div>
+                  <h4 className="text-2xl md:text-3xl font-bold text-charcoal mb-2">{viewingResource.name}</h4>
+                </div>
+
+                {/* Details */}
+                <div className="bg-sage-light/20 rounded-lg p-4 space-y-3">
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Resource ID</label>
+                    <div className="text-sm font-medium text-charcoal mt-1 font-mono">{viewingResource.id}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Location ID</label>
+                    <div className="text-sm font-medium text-charcoal mt-1 font-mono">{viewingResource.location_id || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Max Simultaneous Bookings</label>
+                    <div className="text-sm font-medium text-charcoal mt-1">{viewingResource.max_simultaneous_bookings || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray uppercase tracking-wide">Status</label>
+                    <div className="mt-1">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          viewingResource.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {viewingResource.enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="bg-white border border-sand rounded-lg p-4">
+                  <h5 className="font-semibold text-charcoal mb-3">Actions</h5>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setViewingResource(null);
+                        handleViewSchedule(viewingResource);
+                      }}
+                      className="w-full px-4 py-3 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      View Schedule
+                    </button>
+                    <button
+                      onClick={() => {
+                        setViewingResource(null);
+                        handleEdit(viewingResource);
+                      }}
+                      className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit Employee
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Are you sure you want to delete ${viewingResource.name}? This action cannot be undone.`)) {
+                          await handleDelete(viewingResource.id);
+                          setViewingResource(null);
+                          await loadResources();
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 text-sm min-h-[44px]"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Employee
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <button
+                onClick={() => setViewingResource(null)}
+                className="w-full px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEditModal && (
         <ResourceEditModal
