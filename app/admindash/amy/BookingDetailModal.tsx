@@ -888,43 +888,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
         {/* Content */}
         {!loading && (
-          <div className="p-4 space-y-3">
-            {/* Top Section: Client Info + Quick Actions (left) + Service Details (right) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Left Column: Client Info + Quick Actions */}
-              <div className="space-y-3">
-                {/* Client Information - Shortened */}
-                <div className="bg-sand/20 rounded-lg p-2.5">
-                  <h3 className="text-sm font-semibold text-charcoal mb-1.5 flex items-center gap-2">
-                    <User className="w-3.5 h-3.5" />
-                    Client Information
-                  </h3>
-                  <div className="space-y-1.5">
-                    <div>
-                      <label className="text-xs text-warm-gray mb-0.5">Name</label>
-                      <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{effective.client_name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="text-xs text-warm-gray mb-0.5 flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        Email
-                      </label>
-                      <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white break-all">{effective.client_email || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="text-xs text-warm-gray mb-0.5 flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        Phone
-                      </label>
-                      <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{effective.client_phone || 'N/A'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Actions - Below Client Info, Same Width */}
-                <div className="bg-sand/20 rounded-lg p-2.5">
-                  <h3 className="text-sm font-semibold text-charcoal mb-1.5">Quick Actions</h3>
-                  <div className="flex flex-wrap gap-2">
+          <div className="p-3 space-y-2">
+            {/* Quick Actions - Full Width at Top */}
+            <div className="bg-sand/20 rounded-lg p-2">
+              <h3 className="text-sm font-semibold text-charcoal mb-1.5">Quick Actions</h3>
+              <div className="flex flex-wrap gap-2">
                     {effective.payment_status !== 'cancelled' && (
                       <>
                         <button
@@ -997,32 +965,61 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                         {actionLoading === 'outlook-sync' ? 'Syncing...' : 'Sync Outlook'}
                       </button>
                     )}
+              </div>
+            </div>
+
+            {/* Client Info and Service Details - Side by Side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {/* Left Column: Client Information */}
+              <div className="bg-sand/20 rounded-lg p-2">
+                <h3 className="text-sm font-semibold text-charcoal mb-1.5 flex items-center gap-2">
+                  <User className="w-3.5 h-3.5" />
+                  Client Information
+                </h3>
+                <div className="space-y-1.5">
+                  <div>
+                    <label className="text-xs text-warm-gray mb-0.5">Name</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{effective.client_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-0.5 flex items-center gap-1">
+                      <Mail className="w-3 h-3" />
+                      Email
+                    </label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white break-all">{effective.client_email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-warm-gray mb-0.5 flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      Phone
+                    </label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{effective.client_phone || 'N/A'}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Service Details - Right Side, Half Width */}
-              <div className="bg-sand/20 rounded-lg p-3">
-                <h3 className="text-base font-semibold text-charcoal mb-3 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
+              {/* Right Column: Service Details */}
+              <div className="bg-sand/20 rounded-lg p-2">
+                <h3 className="text-sm font-semibold text-charcoal mb-1.5 flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5" />
                   Service Details
                 </h3>
                 
                 {/* Service Photo and Name */}
-                <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-start gap-2 mb-2">
                   {effective.service_image_url ? (
                     <img 
                       src={effective.service_image_url} 
                       alt={effective.service_display_name || effective.service_name || 'Service'}
-                      className="w-16 h-16 object-cover rounded-lg border border-sage-dark/20 flex-shrink-0"
+                      className="w-14 h-14 object-cover rounded-lg border border-sage-dark/20 flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-16 h-16 bg-gradient-to-br from-dark-sage/20 to-sand/40 rounded-lg border border-sage-dark/20 flex-shrink-0 flex items-center justify-center">
-                      <Calendar className="w-6 h-6 text-dark-sage/50" />
+                    <div className="w-14 h-14 bg-gradient-to-br from-dark-sage/20 to-sand/40 rounded-lg border border-sage-dark/20 flex-shrink-0 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-dark-sage/50" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-charcoal text-sm leading-tight mb-1">
+                    <p className="font-semibold text-charcoal text-sm leading-tight mb-0.5">
                       {effective.service_display_name || effective.service_name || 'N/A'}
                     </p>
                     {effective.service_duration && (
@@ -1032,44 +1029,52 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                 </div>
 
                 {/* Date and Time (side by side) */}
-                <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                   <div>
-                    <label className="text-xs text-warm-gray mb-1">Date</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDateShort(effective.booking_date)}</p>
+                    <label className="text-xs text-warm-gray mb-0.5">Date</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{formatDateShort(effective.booking_date)}</p>
                   </div>
                   <div>
-                    <label className="text-xs text-warm-gray mb-1">Time (EST)</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatTimeEST(effective.booking_date)}</p>
+                    <label className="text-xs text-warm-gray mb-0.5">Time (EST)</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{formatTimeEST(effective.booking_date)}</p>
                   </div>
                 </div>
 
                 {/* Amount Paid */}
-                <div>
-                  <label className="text-xs text-warm-gray mb-1">Amount Paid</label>
-                  <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">${finalAmount.toFixed(2)}</p>
+                <div className="mb-1.5">
+                  <label className="text-xs text-warm-gray mb-0.5">Amount Paid</label>
+                  <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">${finalAmount.toFixed(2)}</p>
                 </div>
 
                 {/* Payment Type - only show if it's a deposit (partial payment) */}
                 {effective.payment_type === 'deposit' && (
-                  <div className="mt-2">
-                    <label className="text-xs text-warm-gray mb-1">
+                  <div className="mb-1.5">
+                    <label className="text-xs text-warm-gray mb-0.5">
                       Payment Type
                       <span className="ml-1 text-xs text-warm-gray/70" title="This booking was paid as a partial deposit (typically 50%). The remaining balance may be due at the appointment.">
                         (?)
                       </span>
                     </label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{getPaymentTypeLabel(effective.payment_type)}</p>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{getPaymentTypeLabel(effective.payment_type)}</p>
                   </div>
                 )}
+
+                {/* Client Notes - Moved here from Other Information */}
+                <div>
+                  <label className="text-xs text-warm-gray mb-0.5">Notes</label>
+                  <p className="font-medium text-charcoal text-xs px-2 py-1 border border-sage-dark/20 rounded bg-white whitespace-pre-wrap min-h-[2rem]">
+                    {effective.metadata?.notes || effective.metadata?.customer_notes || 'None'}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Bottom Section: Other Info (left) + Client History (right) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {/* Other Information - Left Side */}
-              <div className="bg-sand/20 rounded-lg p-3">
-                <h3 className="text-base font-semibold text-charcoal mb-2">Other Information</h3>
-                <div className="space-y-2">
+              <div className="bg-sand/20 rounded-lg p-2">
+                <h3 className="text-sm font-semibold text-charcoal mb-1.5">Other Information</h3>
+                <div className="space-y-1.5">
                   <div>
                     <label className="text-xs text-warm-gray mb-1">Status</label>
                     <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{effective.payment_status || 'N/A'}</p>
@@ -1165,23 +1170,17 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     )}
                   </div>
                   <div>
-                    <label className="text-xs text-warm-gray mb-1">Created At</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white">{formatDate(effective.created_at)}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-warm-gray mb-1">Notes</label>
-                    <p className="font-medium text-charcoal text-sm px-2 py-1.5 border border-sage-dark/20 rounded bg-white whitespace-pre-wrap min-h-[2rem]">
-                      {effective.metadata?.notes || effective.metadata?.customer_notes || 'None'}
-                    </p>
+                    <label className="text-xs text-warm-gray mb-0.5">Created At</label>
+                    <p className="font-medium text-charcoal text-sm px-2 py-1 border border-sage-dark/20 rounded bg-white">{formatDate(effective.created_at)}</p>
                   </div>
                 </div>
               </div>
 
               {/* Client History - Right Side */}
               {effective.client_email && (
-                <div className="bg-sand/20 rounded-lg p-3">
-                  <h3 className="text-base font-semibold text-charcoal mb-2 flex items-center gap-2">
-                    <History className="w-4 h-4" />
+                <div className="bg-sand/20 rounded-lg p-2">
+                  <h3 className="text-sm font-semibold text-charcoal mb-1.5 flex items-center gap-2">
+                    <History className="w-3.5 h-3.5" />
                     Client History (Last 5)
                   </h3>
                   {loading ? (
