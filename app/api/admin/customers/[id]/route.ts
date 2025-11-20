@@ -148,17 +148,57 @@ export async function PATCH(
 
     // Execute update - always update all fields (simpler and more efficient)
     // If field is undefined, use existing value via COALESCE
+    const finalFirstName = first_name !== undefined ? first_name : existing.first_name || null;
+    const finalLastName = last_name !== undefined ? last_name : existing.last_name || null;
+    const finalPhone = phone !== undefined ? phone : existing.phone || null;
+    const finalEmail = email !== undefined && email !== existing.email ? email : existing.email;
+    const finalMarketingOptIn = marketing_opt_in !== undefined ? marketing_opt_in : existing.marketing_opt_in;
+
+    console.log(`[Admin Customers API] Updating customer ${customerId}:`, {
+      email: { from: existing.email, to: finalEmail },
+      firstName: { from: existing.first_name, to: finalFirstName },
+      lastName: { from: existing.last_name, to: finalLastName },
+      phone: { from: existing.phone, to: finalPhone },
+      marketing_opt_in: { from: existing.marketing_opt_in, to: finalMarketingOptIn },
+    });
+
     await sql`
       UPDATE customers 
       SET 
-        first_name = ${first_name !== undefined ? first_name : existing.first_name || null},
-        last_name = ${last_name !== undefined ? last_name : existing.last_name || null},
-        phone = ${phone !== undefined ? phone : existing.phone || null},
-        email = ${email !== undefined && email !== existing.email ? email : existing.email},
-        marketing_opt_in = ${marketing_opt_in !== undefined ? marketing_opt_in : existing.marketing_opt_in},
+        first_name = ${finalFirstName},
+        last_name = ${finalLastName},
+        phone = ${finalPhone},
+        email = ${finalEmail},
+        marketing_opt_in = ${finalMarketingOptIn},
         updated_at = NOW()
       WHERE id = ${customerId}
     `;
+
+    // Verify the update actually happened
+    const verifyResult = await sql`
+      SELECT first_name, last_name, phone, email, marketing_opt_in, updated_at
+      FROM customers 
+      WHERE id = ${customerId}
+      LIMIT 1
+    `;
+    const verified = Array.isArray(verifyResult) ? verifyResult[0] : (verifyResult as any)?.rows?.[0];
+    
+    if (!verified) {
+      console.error(`[Admin Customers API] CRITICAL: Customer ${customerId} not found after update!`);
+      return NextResponse.json(
+        { error: 'Update failed - customer not found after update' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[Admin Customers API] Verified update for customer ${customerId}:`, {
+      email: verified.email,
+      firstName: verified.first_name,
+      lastName: verified.last_name,
+      phone: verified.phone,
+      marketing_opt_in: verified.marketing_opt_in,
+      updated_at: verified.updated_at,
+    });
 
     // CRITICAL: Always sync to Brevo after Neon update (if marketing opt-in is true)
     // This ensures Brevo stays in sync with Neon (source of truth)
@@ -231,7 +271,7 @@ export async function PATCH(
       }
     }
 
-    // Fetch updated customer
+    // Fetch updated customer (use verified data from above if available, otherwise fetch fresh)
     const updatedResult = await sql`
       SELECT 
         id, email, first_name, last_name, phone, 
@@ -243,7 +283,21 @@ export async function PATCH(
     `;
     const updated = Array.isArray(updatedResult) ? updatedResult[0] : (updatedResult as any)?.rows?.[0];
 
-    return NextResponse.json({ success: true, customer: updated });
+    if (!updated) {
+      console.error(`[Admin Customers API] CRITICAL: Customer ${customerId} not found when fetching updated data!`);
+      return NextResponse.json(
+        { error: 'Update may have failed - customer not found' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[Admin Customers API] Successfully updated customer ${customerId} (${updated.email})`);
+
+    return NextResponse.json({ 
+      success: true, 
+      customer: updated,
+      message: 'Customer updated successfully in Neon and synced to Brevo',
+    });
   } catch (error: any) {
     console.error('[Admin Customers API] Error updating customer:', error);
     return NextResponse.json(

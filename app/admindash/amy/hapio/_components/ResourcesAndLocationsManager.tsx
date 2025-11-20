@@ -16,7 +16,7 @@ export default function ResourcesAndLocationsManager() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Sub-tabs */}
       <div className="border-b border-sand">
         <div className="flex overflow-x-auto">
@@ -24,7 +24,7 @@ export default function ResourcesAndLocationsManager() {
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 md:px-6 py-3 font-medium text-xs md:text-sm transition-colors whitespace-nowrap min-h-[44px] ${
                 activeSubTab === tab.id
                   ? 'text-dark-sage border-b-2 border-dark-sage bg-sage-light/30'
                   : 'text-warm-gray hover:text-charcoal hover:bg-sand/20'

@@ -367,28 +367,28 @@ export default function BookingsCalendar() {
   const selectedDayAvailability = selectedDate ? availability[selectedDate.toISOString().split('T')[0]] || [] : [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {error && <ErrorDisplay error={error} />}
 
-      <div className={`flex gap-6 transition-all duration-300 ${selectedDate ? 'items-start' : 'items-center justify-center'}`}>
+      <div className={`flex flex-col md:flex-row gap-4 md:gap-6 transition-all duration-300 ${selectedDate ? 'md:items-start' : 'md:items-center md:justify-center'}`}>
         {/* Calendar */}
-        <div className={`bg-white border border-sand rounded-lg p-4 transition-all duration-300 ${selectedDate ? 'w-[420px] flex-shrink-0' : 'w-[420px]'} relative`}>
+        <div className={`bg-white border border-sand rounded-lg p-3 md:p-4 transition-all duration-300 ${selectedDate ? 'md:w-[420px] md:flex-shrink-0' : 'md:w-[420px]'} w-full relative`}>
           {/* Calendar Header */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2 md:mb-3">
             <button
               onClick={handlePreviousMonth}
-              className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
+              className="p-2 md:p-1.5 hover:bg-sand/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-5 h-5 md:w-4 md:h-4" />
             </button>
-            <h3 className="text-base font-semibold text-charcoal">
+            <h3 className="text-sm md:text-base font-semibold text-charcoal">
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h3>
             <button
               onClick={handleNextMonth}
-              className="p-1.5 hover:bg-sand/20 rounded-lg transition-colors"
+              className="p-2 md:p-1.5 hover:bg-sand/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-5 h-5 md:w-4 md:h-4" />
             </button>
           </div>
 
@@ -443,12 +443,12 @@ export default function BookingsCalendar() {
                     }}
                     onClick={() => setSelectedDate(isSelected ? null : date)}
                     disabled={isPast}
-                    className={`aspect-square border rounded-lg text-xs transition-colors w-full ${
+                    className={`aspect-square border rounded-lg text-xs md:text-sm transition-colors w-full min-h-[44px] md:min-h-0 ${
                       isPast
                         ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                         : isSelected
                         ? 'ring-2 ring-dark-sage ring-offset-1'
-                        : 'hover:bg-sand/20 cursor-pointer'
+                        : 'hover:bg-sand/20 cursor-pointer active:bg-sand/30'
                     } ${
                       isPast
                         ? ''
@@ -511,9 +511,9 @@ export default function BookingsCalendar() {
 
         {/* Right Panel */}
         {selectedDate ? (
-          <div className="flex-1 bg-white border border-sand rounded-lg p-4">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-charcoal mb-1">{formatDate(selectedDate)}</h3>
+          <div className="flex-1 bg-white border border-sand rounded-lg p-3 md:p-4 w-full md:w-auto">
+            <div className="mb-3 md:mb-4">
+              <h3 className="text-base md:text-lg font-semibold text-charcoal mb-1">{formatDate(selectedDate)}</h3>
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${
                   selectedDayStatus === 'closed' ? 'bg-red-500' :

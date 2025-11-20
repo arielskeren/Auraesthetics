@@ -182,6 +182,56 @@ export default function ClientsManager() {
     }
   };
 
+  const handleComprehensiveSync = async () => {
+    if (!confirm('Run comprehensive sync? This will:\n1. Pull all contacts from Brevo\n2. Pull all customers from Neon\n3. Create missing contacts in Neon first\n4. Update Neon with any missing data from Brevo\n5. Sync all Neon customers to Brevo (Neon is source of truth)\n\nThis may take several minutes. Continue?')) {
+      return;
+    }
+
+    try {
+      setSyncingAll(true);
+      setError(null);
+
+      const response = await fetch('/api/admin/customers/comprehensive-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to run comprehensive sync');
+      }
+
+      const result = await response.json();
+      
+      // Reload data and status
+      await Promise.all([loadData(), loadSyncStatus()]);
+      
+      const results = result.results || {};
+      const errorCount = results.errors?.length || 0;
+      const errorMsg = errorCount > 0 ? `\n\n${errorCount} errors occurred. Check console for details.` : '';
+      
+      alert(
+        `Comprehensive sync complete!\n\n` +
+        `Created in Neon: ${results.createdInNeon || 0}\n` +
+        `Updated in Neon: ${results.updatedInNeon || 0}\n` +
+        `Synced to Brevo: ${results.syncedToBrevo || 0}\n` +
+        `Total Brevo contacts: ${results.totalBrevoContacts || 0}\n` +
+        `Total Neon customers: ${results.totalNeonCustomers || 0}` +
+        errorMsg
+      );
+      
+      if (errorCount > 0) {
+        console.error('[Comprehensive Sync] Errors:', results.errors);
+      }
+    } catch (err: any) {
+      setError(err);
+      alert(`Comprehensive sync failed: ${err.message}`);
+      console.error('[Comprehensive Sync] Error:', err);
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
   const handleEdit = (client: UnifiedClient) => {
     setEditing(client);
     setEditForm({
@@ -456,10 +506,10 @@ export default function ClientsManager() {
         </div>
       )}
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div>
-          <h2 className="text-xl font-semibold text-charcoal">Clients</h2>
-          <p className="text-sm text-warm-gray mt-1">
+          <h2 className="text-lg md:text-xl font-semibold text-charcoal">Clients</h2>
+          <p className="text-xs md:text-sm text-warm-gray mt-1">
             {viewMode === 'all' && `Showing all ${unifiedClients.length} clients (Neon and Brevo)`}
             {viewMode === 'matched' && `Showing ${matchedCount} clients in both Neon and Brevo`}
             {viewMode === 'unmatched' && `Showing ${unmatchedCount} clients not in both systems`}
@@ -468,19 +518,20 @@ export default function ClientsManager() {
         <div className="flex items-center gap-3">
           <button
             onClick={loadData}
-            className="px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2"
+            className="px-3 md:px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
+            <span className="sm:hidden">Refresh</span>
           </button>
         </div>
       </div>
 
       {/* View Mode Tabs */}
-      <div className="flex items-center gap-2 border-b border-sand">
+      <div className="flex items-center gap-2 border-b border-sand overflow-x-auto">
         <button
           onClick={() => setViewMode('all')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+          className={`px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors border-b-2 whitespace-nowrap min-h-[44px] ${
             viewMode === 'all'
               ? 'border-dark-sage text-dark-sage'
               : 'border-transparent text-warm-gray hover:text-charcoal'
@@ -490,7 +541,7 @@ export default function ClientsManager() {
         </button>
         <button
           onClick={() => setViewMode('matched')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+          className={`px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors border-b-2 whitespace-nowrap min-h-[44px] ${
             viewMode === 'matched'
               ? 'border-dark-sage text-dark-sage'
               : 'border-transparent text-warm-gray hover:text-charcoal'
@@ -500,7 +551,7 @@ export default function ClientsManager() {
         </button>
         <button
           onClick={() => setViewMode('unmatched')}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+          className={`px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors border-b-2 whitespace-nowrap min-h-[44px] ${
             viewMode === 'unmatched'
               ? 'border-dark-sage text-dark-sage'
               : 'border-transparent text-warm-gray hover:text-charcoal'
@@ -512,10 +563,10 @@ export default function ClientsManager() {
 
       {/* Mismatch Warning */}
       {mismatchCount > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 md:p-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-yellow-600" />
-            <p className="text-sm text-yellow-800">
+            <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+            <p className="text-xs md:text-sm text-yellow-800">
               {mismatchCount} client{mismatchCount !== 1 ? 's' : ''} have data mismatches between Neon and Brevo. Rows are highlighted in yellow.
             </p>
           </div>
@@ -524,33 +575,53 @@ export default function ClientsManager() {
 
       {/* Sync Status and Actions */}
       {viewMode === 'unmatched' && syncStatus && (
-        <div className="bg-sage-light/30 border border-sage-dark/20 rounded-lg p-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-sage-light/30 border border-sage-dark/20 rounded-lg p-3 md:p-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
             <div>
-              <p className="text-sm font-medium text-charcoal">
+              <p className="text-xs md:text-sm font-medium text-charcoal">
                 Sync Status: {syncStatus.synced} of {syncStatus.total} customers synced to Brevo
               </p>
               <p className="text-xs text-warm-gray mt-1">
                 {syncStatus.pending} pending sync (customers with marketing opt-in)
               </p>
             </div>
-            <button
-              onClick={handleSyncAll}
-              disabled={syncingAll || syncStatus.pending === 0}
-              className="px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {syncingAll ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4" />
-                  Sync All to Brevo
-                </>
-              )}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleSyncAll}
+                disabled={syncingAll || syncStatus.pending === 0}
+                className="px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs md:text-sm min-h-[44px] justify-center md:justify-start"
+              >
+                {syncingAll ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Sync All to Brevo
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleComprehensiveSync}
+                disabled={syncingAll}
+                className="px-4 py-2 bg-charcoal text-white rounded-lg hover:bg-warm-gray disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs md:text-sm min-h-[44px] justify-center md:justify-start"
+                title="Comprehensive sync: Pulls from both systems, creates missing records in Neon first, then syncs all to Brevo"
+              >
+                {syncingAll ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Comprehensive Sync
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -564,13 +635,13 @@ export default function ClientsManager() {
             placeholder="Search by email, name, or phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+            className="w-full pl-10 pr-4 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
           />
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white border border-sand rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-sage-light/30">
@@ -695,8 +766,138 @@ export default function ClientsManager() {
         </div>
       </div>
 
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-2">
+        {filteredData.length === 0 ? (
+          <div className="bg-white border border-sand rounded-lg p-8 text-center text-warm-gray">
+            No clients found
+          </div>
+        ) : (
+          filteredData.map((client) => (
+            <div
+              key={client.email}
+              className={`bg-white border rounded-lg p-3 ${
+                client.hasMismatch ? 'border-yellow-300 bg-yellow-50/30' : 'border-sand'
+              }`}
+            >
+              {/* Primary Info */}
+              <div className="space-y-2">
+                <div>
+                  <div className="font-semibold text-sm text-charcoal">{client.email}</div>
+                  <div className="text-xs text-warm-gray mt-0.5">
+                    {`${client.firstName} ${client.lastName}`.trim() || 'N/A'}
+                  </div>
+                  {client.phone && (
+                    <div className="text-xs text-warm-gray mt-0.5">{client.phone}</div>
+                  )}
+                </div>
+
+                {/* Status Indicators */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    {client.marketingOptIn ? (
+                      <CheckCircle className="w-3 h-3 text-green-600" />
+                    ) : (
+                      <XCircle className="w-3 h-3 text-gray-400" />
+                    )}
+                    <span className="text-xs text-warm-gray">Marketing</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {client.usedWelcomeOffer ? (
+                      <CheckCircle className="w-3 h-3 text-green-600" />
+                    ) : (
+                      <XCircle className="w-3 h-3 text-gray-400" />
+                    )}
+                    <span className="text-xs text-warm-gray">Welcome Offer</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className={`px-1.5 py-0.5 rounded ${
+                      client.inNeon && client.inBrevo ? 'bg-green-100 text-green-700' :
+                      client.inNeon ? 'bg-blue-100 text-blue-700' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {client.inNeon && client.inBrevo ? 'Both' : client.inNeon ? 'Neon' : 'Brevo'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Secondary Info (IDs) */}
+                <div className="pt-2 border-t border-sand/50 space-y-1">
+                  {client.neonId && (
+                    <div className="text-xs">
+                      <span className="text-warm-gray">Neon:</span>
+                      <span className="ml-1 font-mono text-charcoal">{client.neonId}</span>
+                    </div>
+                  )}
+                  {client.brevoId && (
+                    <div className="text-xs">
+                      <span className="text-warm-gray">Brevo:</span>
+                      <span className="ml-1 font-mono text-charcoal">{client.brevoId}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 border-t border-sand/50 flex flex-wrap gap-2">
+                  {client.inNeon && !client.inBrevo && client.marketingOptIn && (
+                    <button
+                      onClick={() => handleSyncToBrevo(client.neonId!)}
+                      disabled={syncingToBrevo === client.neonId}
+                      className="px-2 py-1.5 bg-dark-sage text-white rounded hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
+                      title="Sync to Brevo"
+                    >
+                      <Upload className="w-3 h-3" />
+                      To Brevo
+                    </button>
+                  )}
+                  {!client.inNeon && client.inBrevo && (
+                    <button
+                      onClick={() => handleSyncToNeon(client.brevoId!)}
+                      disabled={syncingToNeon === client.brevoId}
+                      className="px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
+                      title="Create in Neon from Brevo"
+                    >
+                      <Download className="w-3 h-3" />
+                      To Neon
+                    </button>
+                  )}
+                  {client.inNeon && client.inBrevo && client.hasMismatch && (
+                    <button
+                      onClick={() => handleSyncToBrevo(client.neonId!)}
+                      disabled={syncingToBrevo === client.neonId}
+                      className="px-2 py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
+                      title="Sync Neon data to Brevo (fix mismatch)"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Fix Sync
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleEdit(client)}
+                    className="px-2 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
+                    title="Edit client"
+                  >
+                    <Edit className="w-3 h-3" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(client)}
+                    disabled={deleting === (client.neonId || client.brevoId)}
+                    className="px-2 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs flex items-center gap-1 min-h-[44px]"
+                    title="Delete client"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Summary */}
-      <div className="text-sm text-warm-gray">
+      <div className="text-xs md:text-sm text-warm-gray">
         Showing {filteredData.length} of {filteredByMode.length} clients
         {mismatchCount > 0 && (
           <span className="ml-2 text-yellow-700">
@@ -707,14 +908,14 @@ export default function ClientsManager() {
 
       {/* Edit Modal */}
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
-            <div className="p-6">
+        <div className="fixed inset-0 z-50 bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-md md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-charcoal">Edit Client</h3>
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Edit Client</h3>
                 <button
                   onClick={() => setEditing(null)}
-                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
                 </button>
@@ -729,19 +930,19 @@ export default function ClientsManager() {
                     type="email"
                     value={editForm.email}
                     onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    className="w-full px-3 py-3 md:py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     required
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-charcoal mb-1">First Name</label>
                     <input
                       type="text"
                       value={editForm.firstName}
                       onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
-                      className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                      className="w-full px-3 py-3 md:py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     />
                   </div>
                   <div>
@@ -750,7 +951,7 @@ export default function ClientsManager() {
                       type="text"
                       value={editForm.lastName}
                       onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
-                      className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                      className="w-full px-3 py-3 md:py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     />
                   </div>
                 </div>
@@ -761,38 +962,39 @@ export default function ClientsManager() {
                     type="tel"
                     value={editForm.phone}
                     onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    className="w-full px-3 py-3 md:py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     placeholder="(555) 123-4567"
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-h-[44px]">
                   <input
                     type="checkbox"
                     id="marketing-opt-in"
                     checked={editForm.marketingOptIn}
                     onChange={(e) => setEditForm({ ...editForm, marketingOptIn: e.target.checked })}
-                    className="w-4 h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
+                    className="w-5 h-5 md:w-4 md:h-4 text-dark-sage border-sand rounded focus:ring-dark-sage"
                   />
                   <label htmlFor="marketing-opt-in" className="text-sm text-charcoal">
                     Marketing Opt-In
                   </label>
                 </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setEditing(null)}
-                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveEdit}
-                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors font-medium"
-                  >
-                    Save Changes
-                  </button>
-                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <div className="flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={() => setEditing(null)}
+                  className="flex-1 px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="flex-1 px-4 py-3 md:py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Save Changes
+                </button>
               </div>
             </div>
           </div>

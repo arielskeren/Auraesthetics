@@ -521,15 +521,15 @@ export default function ServicesManager() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-charcoal">Services</h2>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+        <h2 className="text-lg md:text-xl font-semibold text-charcoal">Services</h2>
+        <div className="flex flex-wrap items-center gap-2">
           {!viewingHapioServices && (
             <>
               <button
                 onClick={() => setShowReorderModal(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors text-sm font-medium"
+                className="flex items-center gap-2 px-3 md:px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/20 transition-colors text-xs md:text-sm font-medium min-h-[44px]"
               >
                 <ListOrdered className="w-4 h-4" />
                 Reorder Services
@@ -537,7 +537,7 @@ export default function ServicesManager() {
               <button
                 onClick={handleSyncAll}
                 disabled={syncingAll}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs md:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
               >
                 <RefreshCw className={`w-4 h-4 ${syncingAll ? 'animate-spin' : ''}`} />
                 {syncingAll ? 'Syncing All...' : 'Sync All to Hapio'}
@@ -545,7 +545,7 @@ export default function ServicesManager() {
               <button
                 onClick={handleStripeSyncAll}
                 disabled={syncingStripeAll}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs md:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
               >
                 <RefreshCw className={`w-4 h-4 ${syncingStripeAll ? 'animate-spin' : ''}`} />
                 {syncingStripeAll ? 'Syncing All…' : 'Sync All to Stripe'}
@@ -562,7 +562,7 @@ export default function ServicesManager() {
           </button>
           <button
             onClick={handleAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-dark-sage text-charcoal rounded-lg hover:bg-dark-sage/80 transition-colors text-xs md:text-sm font-medium min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
             Add Service
@@ -582,7 +582,7 @@ export default function ServicesManager() {
               <button
                 onClick={handleBulkDeleteHapioServices}
                 disabled={bulkDeleting}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs md:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
               >
                 <Trash2 className={`w-4 h-4 ${bulkDeleting ? 'animate-pulse' : ''}`} />
                 {bulkDeleting ? 'Deleting...' : `Delete Selected (${selectedHapioServices.size})`}

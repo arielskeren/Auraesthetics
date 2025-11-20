@@ -284,33 +284,35 @@ export default function GlobalCodesManager() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div>
-          <h3 className="text-lg font-semibold text-charcoal">Global Discount Codes</h3>
-          <p className="text-sm text-warm-gray mt-1">
+          <h3 className="text-base md:text-lg font-semibold text-charcoal">Global Discount Codes</h3>
+          <p className="text-xs md:text-sm text-warm-gray mt-1">
             Manage reusable discount codes available to all customers
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={loadCodes}
-            className="px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2"
+            className="px-3 md:px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
+            <span className="sm:hidden">Refresh</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors flex items-center gap-2"
+            className="px-3 md:px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
-            Create Code
+            <span className="hidden sm:inline">Create Code</span>
+            <span className="sm:hidden">Create</span>
           </button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white border border-sand rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-sage-light/30">
@@ -400,16 +402,75 @@ export default function GlobalCodesManager() {
         </div>
       </div>
 
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-2">
+        {codes.length === 0 ? (
+          <div className="bg-white border border-sand rounded-lg p-8 text-center text-warm-gray text-sm">
+            No global discount codes found
+          </div>
+        ) : (
+          codes.map((code) => (
+            <div key={code.id} className="bg-white border border-sand rounded-lg p-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-dark-sage" />
+                  <span className="font-mono font-semibold text-sm text-charcoal">{code.code}</span>
+                  {getStatusBadge(code)}
+                </div>
+                <div className="text-xs text-charcoal">
+                  <div><strong>Discount:</strong> {code.discount_type === 'percent' 
+                    ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                    : `$${code.discount_value}`}</div>
+                  <div><strong>Usage:</strong> {code.usage_count || 0} {code.usage_count && code.usage_count > 0 && (
+                    <button
+                      onClick={() => handleViewUsage(code)}
+                      className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1 ml-1"
+                      title="View customers who used this code"
+                    >
+                      <Eye className="w-3 h-3" />
+                      View
+                    </button>
+                  )}</div>
+                  <div><strong>Max Uses:</strong> {code.max_uses ? code.max_uses : 'Unlimited'}</div>
+                  <div><strong>Expires:</strong> {formatDate(code.expires_at)}</div>
+                </div>
+                <div className="pt-2 border-t border-sand/50 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleEdit(code)}
+                    className="px-2 py-1.5 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1 min-h-[44px]"
+                    title="Edit code"
+                  >
+                    <Edit className="w-3 h-3" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedCode(code);
+                      setShowDeleteModal(true);
+                    }}
+                    className="px-2 py-1.5 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1 min-h-[44px]"
+                    title="Delete code"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+        <div className="fixed inset-0 z-[60] bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-md md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-charcoal">Create Global Discount Code</h3>
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Create Global Discount Code</h3>
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
                 </button>
@@ -541,21 +602,23 @@ export default function GlobalCodesManager() {
                   </label>
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreate}
-                    disabled={!createForm.code || !createForm.discountValue}
-                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Create
-                  </button>
-                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <div className="flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={!createForm.code || !createForm.discountValue}
+                  className="flex-1 px-4 py-3 md:py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Create
+                </button>
               </div>
             </div>
           </div>

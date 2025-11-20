@@ -456,10 +456,10 @@ export default function DiscountCodesManager() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
         <div>
-          <h3 className="text-lg font-semibold text-charcoal">Discount Codes</h3>
-          <p className="text-sm text-warm-gray mt-1">
+          <h3 className="text-base md:text-lg font-semibold text-charcoal">Discount Codes</h3>
+          <p className="text-xs md:text-sm text-warm-gray mt-1">
             Manage discount codes for customers
           </p>
         </div>
@@ -495,10 +495,10 @@ export default function DiscountCodesManager() {
       {activeTab === 'one-time' ? (
         <div className="space-y-4">
           {/* One-Time Codes Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
             <div>
-              <h4 className="text-md font-semibold text-charcoal">One-Time Discount Codes</h4>
-              <p className="text-sm text-warm-gray mt-1">
+              <h4 className="text-base md:text-md font-semibold text-charcoal">One-Time Discount Codes</h4>
+              <p className="text-xs md:text-sm text-warm-gray mt-1">
                 Manage one-time discount codes for individual customers
               </p>
             </div>
@@ -511,18 +511,20 @@ export default function DiscountCodesManager() {
               setError(null);
               await loadCodes();
             }}
-            className="px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2"
+            className="px-3 md:px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
             title="Hard refresh - clears cache and reloads"
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
+            <span className="sm:hidden">Refresh</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors flex items-center gap-2"
+            className="px-3 md:px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
-            Create Code
+            <span className="hidden sm:inline">Create Code</span>
+            <span className="sm:hidden">Create</span>
           </button>
         </div>
       </div>
@@ -546,118 +548,205 @@ export default function DiscountCodesManager() {
           )}
         </button>
         {activeSectionOpen && (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-sage-light/20">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sand">
-                {activeCodes.length === 0 ? (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-sage-light/20">
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
-                      No active discount codes found
-                    </td>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
                   </tr>
-                ) : (
-                  activeCodes.map((code) => {
-                    const usage = usageDetails[code.id];
-                    return (
-                      <tr key={code.id} className="hover:bg-sand/10">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Tag className="w-4 h-4 text-dark-sage" />
-                            <span className="font-mono font-semibold text-charcoal">{code.code}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          {code.customer_name || code.customer_email || 'General'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          {code.discount_type === 'percent' 
-                            ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
-                            : `$${code.discount_value}`}
-                        </td>
-                        <td className="px-4 py-3">
-                          {getStatusBadge(code)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          {formatDate(code.expires_at)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          <span className="text-warm-gray">Not used</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleEdit(code)}
-                              className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
-                              title="Edit code"
-                            >
-                              <Edit className="w-3 h-3" />
-                              Edit
-                            </button>
-                            {code.expires_at && (
+                </thead>
+                <tbody className="divide-y divide-sand">
+                  {activeCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
+                        No active discount codes found
+                      </td>
+                    </tr>
+                  ) : (
+                    activeCodes.map((code) => {
+                      const usage = usageDetails[code.id];
+                      return (
+                        <tr key={code.id} className="hover:bg-sand/10">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <Tag className="w-4 h-4 text-dark-sage" />
+                              <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {code.customer_name || code.customer_email || 'General'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {code.discount_type === 'percent' 
+                              ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                              : `$${code.discount_value}`}
+                          </td>
+                          <td className="px-4 py-3">
+                            {getStatusBadge(code)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {formatDate(code.expires_at)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            <span className="text-warm-gray">Not used</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEdit(code)}
+                                className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
+                                title="Edit code"
+                              >
+                                <Edit className="w-3 h-3" />
+                                Edit
+                              </button>
+                              {code.expires_at && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedCode(code);
+                                    setShowExtendModal(true);
+                                  }}
+                                  className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 flex items-center gap-1"
+                                  title="Extend expiry"
+                                >
+                                  <Calendar className="w-3 h-3" />
+                                  Extend
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleLock(code.id, !isExpired(code))}
+                                className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${
+                                  isExpired(code)
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                    : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                }`}
+                                title={isExpired(code) ? 'Unlock code (extend by 30 days)' : 'Lock code (set to expired)'}
+                              >
+                                {isExpired(code) ? (
+                                  <>
+                                    <Unlock className="w-3 h-3" />
+                                    Unlock
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="w-3 h-3" />
+                                    Lock
+                                  </>
+                                )}
+                              </button>
                               <button
                                 onClick={() => {
                                   setSelectedCode(code);
-                                  setShowExtendModal(true);
+                                  setShowDeleteModal(true);
                                 }}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 flex items-center gap-1"
-                                title="Extend expiry"
+                                className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
+                                title="Delete code"
                               >
-                                <Calendar className="w-3 h-3" />
-                                Extend
+                                <Trash2 className="w-3 h-3" />
+                                Delete
                               </button>
-                            )}
-                            <button
-                              onClick={() => handleLock(code.id, !isExpired(code))}
-                              className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${
-                                isExpired(code)
-                                  ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                  : 'bg-red-100 text-red-800 hover:bg-red-200'
-                              }`}
-                              title={isExpired(code) ? 'Unlock code (extend by 30 days)' : 'Lock code (set to expired)'}
-                            >
-                              {isExpired(code) ? (
-                                <>
-                                  <Unlock className="w-3 h-3" />
-                                  Unlock
-                                </>
-                              ) : (
-                                <>
-                                  <Lock className="w-3 h-3" />
-                                  Lock
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedCode(code);
-                                setShowDeleteModal(true);
-                              }}
-                              className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
-                              title="Delete code"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-2 p-2">
+              {activeCodes.length === 0 ? (
+                <div className="text-center py-8 text-warm-gray text-sm">
+                  No active discount codes found
+                </div>
+              ) : (
+                activeCodes.map((code) => (
+                  <div key={code.id} className="bg-white border border-sand rounded-lg p-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-dark-sage" />
+                        <span className="font-mono font-semibold text-sm text-charcoal">{code.code}</span>
+                        {getStatusBadge(code)}
+                      </div>
+                      <div className="text-xs text-charcoal">
+                        <div><strong>Customer:</strong> {code.customer_name || code.customer_email || 'General'}</div>
+                        <div><strong>Discount:</strong> {code.discount_type === 'percent' 
+                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                          : `$${code.discount_value}`}</div>
+                        <div><strong>Expires:</strong> {formatDate(code.expires_at)}</div>
+                        <div className="text-warm-gray">Not used</div>
+                      </div>
+                      <div className="pt-2 border-t border-sand/50 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleEdit(code)}
+                          className="px-2 py-1.5 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1 min-h-[44px]"
+                          title="Edit code"
+                        >
+                          <Edit className="w-3 h-3" />
+                          Edit
+                        </button>
+                        {code.expires_at && (
+                          <button
+                            onClick={() => {
+                              setSelectedCode(code);
+                              setShowExtendModal(true);
+                            }}
+                            className="px-2 py-1.5 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 flex items-center gap-1 min-h-[44px]"
+                            title="Extend expiry"
+                          >
+                            <Calendar className="w-3 h-3" />
+                            Extend
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleLock(code.id, !isExpired(code))}
+                          className={`px-2 py-1.5 text-xs rounded flex items-center gap-1 min-h-[44px] ${
+                            isExpired(code)
+                              ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                              : 'bg-red-100 text-red-800 hover:bg-red-200'
+                          }`}
+                          title={isExpired(code) ? 'Unlock code (extend by 30 days)' : 'Lock code (set to expired)'}
+                        >
+                          {isExpired(code) ? (
+                            <>
+                              <Unlock className="w-3 h-3" />
+                              Unlock
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-3 h-3" />
+                              Lock
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedCode(code);
+                            setShowDeleteModal(true);
+                          }}
+                          className="px-2 py-1.5 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1 min-h-[44px]"
+                          title="Delete code"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -680,88 +769,144 @@ export default function DiscountCodesManager() {
           )}
         </button>
         {usedSectionOpen && (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-sage-light/20">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sand">
-                {usedCodes.length === 0 ? (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-sage-light/20">
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
-                      No used discount codes found
-                    </td>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
                   </tr>
-                ) : (
-                  usedCodes.map((code) => {
-                    const usage = usageDetails[code.id];
-                    return (
-                      <tr key={code.id} className="hover:bg-sand/10">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Tag className="w-4 h-4 text-dark-sage" />
-                            <span className="font-mono font-semibold text-charcoal">{code.code}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          {code.customer_name || code.customer_email || 'General'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          {code.discount_type === 'percent' 
-                            ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
-                            : `$${code.discount_value}`}
-                        </td>
-                        <td className="px-4 py-3">
+                </thead>
+                <tbody className="divide-y divide-sand">
+                  {usedCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
+                        No used discount codes found
+                      </td>
+                    </tr>
+                  ) : (
+                    usedCodes.map((code) => {
+                      const usage = usageDetails[code.id];
+                      return (
+                        <tr key={code.id} className="hover:bg-sand/10">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <Tag className="w-4 h-4 text-dark-sage" />
+                              <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {code.customer_name || code.customer_email || 'General'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {code.discount_type === 'percent' 
+                              ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                              : `$${code.discount_value}`}
+                          </td>
+                          <td className="px-4 py-3">
+                            {getStatusBadge(code)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {formatDate(code.expires_at)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-charcoal">
+                            {usage ? (
+                              <div className="space-y-1">
+                                <div className="font-medium">{usage.customer_name}</div>
+                                <div className="text-xs text-warm-gray">
+                                  {usage.service_name} • {formatDate(usage.booking_date)}
+                                </div>
+                                <div className="text-xs text-warm-gray">
+                                  Used: {formatDate(usage.used_at)}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-warm-gray">Used</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {usage?.booking_id || code.booking_id ? (
+                              <button
+                                onClick={() => handleViewBooking(code)}
+                                disabled={loadingBooking}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                title="View booking details"
+                              >
+                                <Eye className="w-3 h-3" />
+                                {loadingBooking ? 'Loading...' : 'View Booking'}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-warm-gray">No booking</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-2 p-2">
+              {usedCodes.length === 0 ? (
+                <div className="text-center py-8 text-warm-gray text-sm">
+                  No used discount codes found
+                </div>
+              ) : (
+                usedCodes.map((code) => {
+                  const usage = usageDetails[code.id];
+                  return (
+                    <div key={code.id} className="bg-white border border-sand rounded-lg p-3">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-dark-sage" />
+                          <span className="font-mono font-semibold text-sm text-charcoal">{code.code}</span>
                           {getStatusBadge(code)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
-                          {formatDate(code.expires_at)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-charcoal">
+                        </div>
+                        <div className="text-xs text-charcoal">
+                          <div><strong>Customer:</strong> {code.customer_name || code.customer_email || 'General'}</div>
+                          <div><strong>Discount:</strong> {code.discount_type === 'percent' 
+                            ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                            : `$${code.discount_value}`}</div>
+                          <div><strong>Expires:</strong> {formatDate(code.expires_at)}</div>
                           {usage ? (
-                            <div className="space-y-1">
-                              <div className="font-medium">{usage.customer_name}</div>
-                              <div className="text-xs text-warm-gray">
-                                {usage.service_name} • {formatDate(usage.booking_date)}
-                              </div>
-                              <div className="text-xs text-warm-gray">
-                                Used: {formatDate(usage.used_at)}
-                              </div>
+                            <div className="mt-1 space-y-0.5">
+                              <div><strong>Used by:</strong> {usage.customer_name}</div>
+                              <div className="text-warm-gray">{usage.service_name} • {formatDate(usage.booking_date)}</div>
+                              <div className="text-warm-gray">Used: {formatDate(usage.used_at)}</div>
                             </div>
                           ) : (
-                            <span className="text-warm-gray">Used</span>
+                            <div className="text-warm-gray">Used</div>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {usage?.booking_id || code.booking_id ? (
+                        </div>
+                        {usage?.booking_id || code.booking_id ? (
+                          <div className="pt-2 border-t border-sand/50">
                             <button
                               onClick={() => handleViewBooking(code)}
                               disabled={loadingBooking}
-                              className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              className="w-full px-2 py-1.5 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 min-h-[44px]"
                               title="View booking details"
                             >
                               <Eye className="w-3 h-3" />
                               {loadingBooking ? 'Loading...' : 'View Booking'}
                             </button>
-                          ) : (
-                            <span className="text-xs text-warm-gray">No booking</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -783,14 +928,14 @@ export default function DiscountCodesManager() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
-            <div className="p-6">
+        <div className="fixed inset-0 z-[60] bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-md md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-charcoal">Create Discount Code</h3>
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Create Discount Code</h3>
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
                 </button>
@@ -805,7 +950,7 @@ export default function DiscountCodesManager() {
                     type="email"
                     value={createForm.customerEmail}
                     onChange={(e) => setCreateForm({ ...createForm, customerEmail: e.target.value })}
-                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    className="w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     placeholder="customer@example.com"
                   />
                 </div>
@@ -814,10 +959,10 @@ export default function DiscountCodesManager() {
                   <label className="block text-sm font-medium text-charcoal mb-2">
                     Discount Type <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col md:flex-row gap-2">
                     <button
                       onClick={() => setCreateForm({ ...createForm, discountType: 'percent' })}
-                      className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex-1 px-4 py-3 md:py-2 rounded-lg transition-colors text-sm min-h-[44px] ${
                         createForm.discountType === 'percent'
                           ? 'bg-dark-sage text-white'
                           : 'bg-sand/30 text-charcoal hover:bg-sand/50'
@@ -827,7 +972,7 @@ export default function DiscountCodesManager() {
                     </button>
                     <button
                       onClick={() => setCreateForm({ ...createForm, discountType: 'dollar' })}
-                      className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex-1 px-4 py-3 md:py-2 rounded-lg transition-colors text-sm min-h-[44px] ${
                         createForm.discountType === 'dollar'
                           ? 'bg-dark-sage text-white'
                           : 'bg-sand/30 text-charcoal hover:bg-sand/50'
@@ -850,7 +995,7 @@ export default function DiscountCodesManager() {
                       type="number"
                       value={createForm.discountValue}
                       onChange={(e) => setCreateForm({ ...createForm, discountValue: e.target.value })}
-                      className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                      className="flex-1 px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                       placeholder={createForm.discountType === 'percent' ? '15' : '30'}
                       min="0"
                       max={createForm.discountType === 'percent' ? '100' : undefined}
@@ -872,7 +1017,7 @@ export default function DiscountCodesManager() {
                         type="number"
                         value={createForm.discountCap}
                         onChange={(e) => setCreateForm({ ...createForm, discountCap: e.target.value })}
-                        className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                        className="flex-1 px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                         placeholder="40 (e.g., 15% off up to $40)"
                         min="0"
                         step="0.01"
@@ -892,27 +1037,29 @@ export default function DiscountCodesManager() {
                     type="number"
                     value={createForm.expiresInDays}
                     onChange={(e) => setCreateForm({ ...createForm, expiresInDays: e.target.value })}
-                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    className="w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     placeholder="30 (leave empty for no expiry)"
                     min="1"
                   />
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreate}
-                    disabled={!createForm.customerEmail || !createForm.discountValue}
-                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Create & Email
-                  </button>
-                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <div className="flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={!createForm.customerEmail || !createForm.discountValue}
+                  className="flex-1 px-4 py-3 md:py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Create & Email
+                </button>
               </div>
             </div>
           </div>
@@ -921,18 +1068,18 @@ export default function DiscountCodesManager() {
 
       {/* Extend Modal */}
       {showExtendModal && selectedCode && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
-            <div className="p-6">
+        <div className="fixed inset-0 z-[60] bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-md md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-charcoal">Extend Expiry</h3>
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Extend Expiry</h3>
                 <button
                   onClick={() => {
                     setShowExtendModal(false);
                     setSelectedCode(null);
                     setExtendDays('');
                   }}
-                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
                 </button>
@@ -956,31 +1103,32 @@ export default function DiscountCodesManager() {
                     type="number"
                     value={extendDays}
                     onChange={(e) => setExtendDays(e.target.value)}
-                    className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    className="w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                     placeholder="30"
                     min="1"
                   />
                 </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setShowExtendModal(false);
-                      setSelectedCode(null);
-                      setExtendDays('');
-                    }}
-                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleExtend}
-                    disabled={!extendDays}
-                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Extend
-                  </button>
-                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <div className="flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setShowExtendModal(false);
+                    setSelectedCode(null);
+                    setExtendDays('');
+                  }}
+                  className="flex-1 px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExtend}
+                  disabled={!extendDays}
+                  className="flex-1 px-4 py-3 md:py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Extend
+                </button>
               </div>
             </div>
           </div>
@@ -989,17 +1137,17 @@ export default function DiscountCodesManager() {
 
       {/* Edit Modal */}
       {showEditModal && selectedCode && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
-            <div className="p-6">
+        <div className="fixed inset-0 z-[60] bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-md md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-charcoal">Edit Discount Code</h3>
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Edit Discount Code</h3>
                 <button
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedCode(null);
                   }}
-                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
                 </button>
@@ -1016,10 +1164,10 @@ export default function DiscountCodesManager() {
                   <label className="block text-sm font-medium text-charcoal mb-2">
                     Discount Type <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col md:flex-row gap-2">
                     <button
                       onClick={() => setEditForm({ ...editForm, discountType: 'percent' })}
-                      className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex-1 px-4 py-3 md:py-2 rounded-lg transition-colors text-sm min-h-[44px] ${
                         editForm.discountType === 'percent'
                           ? 'bg-dark-sage text-white'
                           : 'bg-sand/30 text-charcoal hover:bg-sand/50'
@@ -1029,7 +1177,7 @@ export default function DiscountCodesManager() {
                     </button>
                     <button
                       onClick={() => setEditForm({ ...editForm, discountType: 'dollar' })}
-                      className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex-1 px-4 py-3 md:py-2 rounded-lg transition-colors text-sm min-h-[44px] ${
                         editForm.discountType === 'dollar'
                           ? 'bg-dark-sage text-white'
                           : 'bg-sand/30 text-charcoal hover:bg-sand/50'
@@ -1097,24 +1245,26 @@ export default function DiscountCodesManager() {
                   />
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setShowEditModal(false);
-                      setSelectedCode(null);
-                    }}
-                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleUpdate}
-                    disabled={!editForm.discountValue}
-                    className="flex-1 px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Update
-                  </button>
-                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <div className="flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedCode(null);
+                  }}
+                  className="flex-1 px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdate}
+                  disabled={!editForm.discountValue}
+                  className="flex-1 px-4 py-3 md:py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Update
+                </button>
               </div>
             </div>
           </div>
@@ -1123,17 +1273,17 @@ export default function DiscountCodesManager() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedCode && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-charcoal/80 backdrop-blur-sm">
-          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
-            <div className="p-6">
+        <div className="fixed inset-0 z-[60] bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-md md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-charcoal">Delete Discount Code</h3>
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Delete Discount Code</h3>
                 <button
                   onClick={() => {
                     setShowDeleteModal(false);
                     setSelectedCode(null);
                   }}
-                  className="p-1 hover:bg-sand/30 rounded-full transition-colors"
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
                 </button>
@@ -1150,24 +1300,26 @@ export default function DiscountCodesManager() {
                     </p>
                   </div>
                 )}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setShowDeleteModal(false);
-                      setSelectedCode(null);
-                    }}
-                    className="flex-1 px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={selectedCode.used}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Delete
-                  </button>
-                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <div className="flex flex-col md:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedCode(null);
+                  }}
+                  className="flex-1 px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={selectedCode.used}
+                  className="flex-1 px-4 py-3 md:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm min-h-[44px]"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           </div>
