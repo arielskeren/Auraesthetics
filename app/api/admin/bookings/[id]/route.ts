@@ -242,31 +242,18 @@ export async function POST(
         return NextResponse.json({ error: 'Outlook sync is disabled' }, { status: 400 });
       }
 
-      // Fetch booking data
-      const bookingResult = await sql`
-        SELECT 
-          id, service_id, service_name, client_name, client_email, booking_date, metadata, outlook_event_id
-        FROM bookings
-        WHERE id = ${bookingInternalId}
-        LIMIT 1
+      // Verify booking exists
+      const bookingCheck = await sql`
+        SELECT id FROM bookings WHERE id = ${bookingInternalId} LIMIT 1
       `;
-      const bookingRows = normalizeRows(bookingResult);
-      if (bookingRows.length === 0) {
+      const bookingCheckRows = normalizeRows(bookingCheck);
+      if (bookingCheckRows.length === 0) {
         return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
       }
-      const bookingData = bookingRows[0];
 
       try {
-        const outlookResult = await ensureOutlookEventForBooking({
-          id: bookingInternalId,
-          service_id: bookingData.service_id,
-          service_name: bookingData.service_name,
-          client_name: bookingData.client_name || null,
-          client_email: bookingData.client_email || null,
-          booking_date: bookingData.booking_date || null,
-          outlook_event_id: bookingData.outlook_event_id || null,
-          metadata: bookingData.metadata || {},
-        });
+        // Pass just the booking ID - function will fetch all necessary data including payment, refund, events, etc.
+        const outlookResult = await ensureOutlookEventForBooking(bookingInternalId);
 
         // Update booking with Outlook sync status
         await sql`
@@ -410,23 +397,27 @@ export async function POST(
           WHERE id = ${bookingInternalId}
         `;
 
+        // Record reschedule event for change history
+        await sql`
+          INSERT INTO booking_events (booking_id, type, data)
+          VALUES (${bookingInternalId}, ${'rescheduled'}, ${JSON.stringify({ 
+            oldDate: bookingData.booking_date,
+            newDate: newDateTime.toISOString(),
+            rescheduledBy: 'admin',
+          })}::jsonb)
+        `;
+
         // Commit transaction before non-critical operations
         await sql`COMMIT`;
 
         // Update Outlook event if it exists (best-effort, after commit)
-        if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.metadata?.outlook?.eventId) {
+        // Update Outlook event if it exists (best-effort)
+        // The function will fetch all booking data including events, payment, refund info
+        if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.outlook_event_id) {
           try {
             const { ensureOutlookEventForBooking } = await import('@/lib/outlookBookingSync');
-            await ensureOutlookEventForBooking({
-              id: bookingInternalId,
-              service_id: bookingData.service_id,
-              service_name: bookingData.service_name,
-              client_name: bookingData.client_name || bookingData.metadata?.client_name || null,
-              client_email: bookingData.client_email || bookingData.metadata?.client_email || null,
-              booking_date: newDateTime.toISOString(),
-              outlook_event_id: bookingData.metadata.outlook.eventId,
-              metadata: bookingData.metadata || {},
-            });
+            // Pass just the booking ID - function will fetch all necessary data
+            await ensureOutlookEventForBooking(bookingInternalId);
           } catch (outlookError) {
             console.error('[Reschedule] Outlook update failed:', outlookError);
             // Non-critical - continue
@@ -483,6 +474,7 @@ export async function POST(
               oldBookingTime,
               newBookingDate: newDateTime,
               newBookingTime,
+              bookingId: bookingData.hapio_booking_id || bookingInternalId, // Use Hapio ID or internal ID
             });
 
             await sendBrevoEmail({
@@ -812,6 +804,7 @@ export async function POST(
              refundId: refundId || null,
              receiptUrl: null, // Stripe sends receipts separately
              refundReason: null, // Cancellation doesn't have a reason field
+             bookingId: bookingData.hapio_booking_id || bookingInternalId, // Use Hapio ID or internal ID
            });
 
           await sendBrevoEmail({
@@ -1113,17 +1106,8 @@ export async function POST(
         // Update Outlook event if it exists (best-effort)
         if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && bookingData.outlook_event_id) {
           try {
-            const bookingForOutlook = {
-              id: bookingInternalId,
-              service_id: bookingData.service_id,
-              service_name: bookingData.service_name,
-              client_name: bookingData.client_name,
-              client_email: bookingData.client_email,
-              booking_date: bookingData.booking_date,
-              outlook_event_id: bookingData.outlook_event_id,
-              metadata: bookingData.metadata || {},
-            };
-            await ensureOutlookEventForBooking(bookingForOutlook);
+            // Pass just the booking ID - function will fetch all necessary data including payment, refund, events, etc.
+            await ensureOutlookEventForBooking(bookingInternalId);
             await sql`
               UPDATE bookings 
               SET outlook_sync_status = 'updated', updated_at = NOW()
@@ -1186,6 +1170,7 @@ export async function POST(
               refundId: refund.id,
               receiptUrl: null, // Stripe sends receipts separately
               refundReason: refundReason,
+              bookingId: bookingData.hapio_booking_id || bookingInternalId, // Use Hapio ID or internal ID
             });
 
             await sendBrevoEmail({

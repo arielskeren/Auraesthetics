@@ -21,6 +21,7 @@ export function generateBookingRescheduleEmail(params: {
   newBookingDate: Date;
   newBookingTime: string;
   address?: string;
+  bookingId?: string; // Internal booking ID or Hapio booking ID
   bookUrl?: string;
   cancelUrl?: string;
 }) {
@@ -33,9 +34,15 @@ export function generateBookingRescheduleEmail(params: {
     newBookingDate,
     newBookingTime,
     address = '2998 Green Palm Court, Dania Beach, FL, 33312',
-    bookUrl = 'https://www.theauraesthetics.com/book',
-    cancelUrl = 'https://www.theauraesthetics.com/book',
+    bookingId,
+    bookUrl,
+    cancelUrl,
   } = params;
+
+  // Generate URLs with booking ID if provided
+  const baseUrl = 'https://www.theauraesthetics.com/manage-booking';
+  const finalBookUrl = bookUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
+  const finalCancelUrl = cancelUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
 
   const formattedOldDate = oldBookingDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -132,15 +139,24 @@ export function generateBookingRescheduleEmail(params: {
               <table role="presentation" style="width: 100%; margin: 30px 0; border-collapse: collapse;">
                 <tr>
                   <td align="center" style="padding: 0;">
-                    <a href="${escapeHtml(bookUrl)}" style="display: inline-block; background-color: #4a7c2a; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 5px;">View Booking Details</a>
+                    <a href="${escapeHtml(finalBookUrl)}" style="display: inline-block; background-color: #4a7c2a; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 5px;">View Booking Details</a>
                   </td>
                 </tr>
                 <tr>
                   <td align="center" style="padding: 10px 0 0 0;">
-                    <a href="${escapeHtml(cancelUrl)}" style="display: inline-block; color: #dc3545; text-decoration: none; font-size: 14px;">Need to cancel or reschedule?</a>
+                    <a href="${escapeHtml(finalCancelUrl)}" style="display: inline-block; color: #dc3545; text-decoration: none; font-size: 14px;">Need to cancel or reschedule?</a>
                   </td>
                 </tr>
               </table>
+
+              <!-- Booking ID -->
+              ${bookingId ? `
+              <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; margin-top: 30px;">
+                <p style="margin: 0; color: #666666; font-size: 13px; line-height: 1.6; text-align: center;">
+                  <strong>Booking ID:</strong> ${escapeHtml(bookingId)}
+                </p>
+              </div>
+              ` : ''}
 
               <!-- Footer -->
               <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; margin-top: 30px;">

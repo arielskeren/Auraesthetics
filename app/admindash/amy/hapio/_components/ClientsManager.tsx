@@ -430,12 +430,31 @@ export default function ClientsManager() {
     return <LoadingState message="Loading clients..." />;
   }
 
-  if (error) {
-    return <ErrorDisplay error={error} />;
-  }
-
   return (
     <div className="space-y-4">
+      {/* Error Display - Inline, not blocking */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-semibold text-red-800 mb-1">Error</h4>
+                <p className="text-sm text-red-700">
+                  {error?.message || error?.error || 'An error occurred'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="p-1 hover:bg-red-100 rounded transition-colors flex-shrink-0"
+              title="Dismiss error"
+            >
+              <X className="w-4 h-4 text-red-600" />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

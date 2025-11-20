@@ -394,13 +394,15 @@ export async function syncCustomerToBrevo(params: {
         brevoResult = { id: brevoContactId, success: true };
         console.log(`[syncCustomerToBrevo] Created new Brevo contact for ${customer.email} with ID ${brevoContactId}`);
       } else if (resp.status === 400) {
-        // Contact exists - fetch it by email to get the ID, then update
+        // POST returned 400 - could mean contact exists OR validation error
+        // Try to fetch by email to see if contact exists
         try {
           const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
             headers: { 'api-key': apiKey, 'Accept': 'application/json' },
           });
           
           if (existingResp.ok) {
+            // Contact exists - update it
             const existing = await existingResp.json();
             brevoContactId = existing.id;
             
@@ -492,7 +494,47 @@ export async function syncCustomerToBrevo(params: {
                 brevoResult = { id: brevoContactId, success: false };
               }
             }
+          } else if (existingResp.status === 404) {
+            // Contact doesn't exist (404) - POST 400 was likely a validation error, not "contact exists"
+            // Try to create again, but this time handle validation errors better
+            console.warn(`[syncCustomerToBrevo] Contact ${customer.email} not found in Brevo (404). POST returned 400, likely validation error. Attempting to create with minimal data.`);
+            
+            // Try creating with minimal required data (email only) to avoid validation errors
+            const minimalBody: any = {
+              email: customer.email,
+              attributes: {
+                FIRSTNAME: customer.first_name || '',
+                LASTNAME: customer.last_name || '',
+                USED_WELCOME_OFFER: customer.used_welcome_offer === true ? 'true' : 'false',
+              },
+              updateEnabled: true,
+            };
+            // Only add phone if it was successfully formatted
+            if (attributes.PHONE) {
+              minimalBody.attributes.PHONE = attributes.PHONE;
+              minimalBody.attributes.LANDLINE_NUMBER = attributes.LANDLINE_NUMBER;
+              minimalBody.attributes.SMS = attributes.SMS;
+            }
+            if (finalListId && Number.isFinite(finalListId)) minimalBody.listIds = [finalListId];
+            if (tags?.length) minimalBody.tags = tags;
+            
+            const retryResp = await fetch(`${BREVO_API_BASE}/contacts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+              body: JSON.stringify(minimalBody),
+            });
+            
+            if (retryResp.status === 200 || retryResp.status === 201) {
+              const retryData = await retryResp.json().catch(() => ({}));
+              brevoContactId = retryData?.id;
+              brevoResult = { id: brevoContactId, success: true };
+              console.log(`[syncCustomerToBrevo] Created new Brevo contact for ${customer.email} with ID ${brevoContactId} (retry after 404)`);
+            } else {
+              const retryErrorText = await retryResp.text().catch(() => '');
+              console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email} after 404:`, retryResp.status, retryErrorText);
+            }
           } else {
+            // Other error status
             const errorText = await existingResp.text().catch(() => '');
             console.error(`[syncCustomerToBrevo] Failed to fetch existing contact for ${customer.email}:`, existingResp.status, errorText);
           }
@@ -500,8 +542,20 @@ export async function syncCustomerToBrevo(params: {
           console.error(`[syncCustomerToBrevo] Error fetching/updating contact by email ${customer.email}:`, e);
         }
       } else {
+        // POST failed with non-400 status (e.g., 401, 403, 500, etc.)
         const errorText = await resp.text().catch(() => '');
-        console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email}:`, resp.status, errorText);
+        let errorData: any;
+        try {
+          errorData = typeof errorText === 'string' ? JSON.parse(errorText) : errorText;
+        } catch {
+          errorData = { message: errorText };
+        }
+        console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email}:`, resp.status, errorData);
+        
+        // If it's an authentication error, provide helpful message
+        if (resp.status === 401 || resp.status === 403) {
+          console.error(`[syncCustomerToBrevo] Authentication error - check BREVO_API_KEY is valid`);
+        }
       }
     }
     

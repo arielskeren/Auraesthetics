@@ -360,26 +360,12 @@ export async function finalizeBookingTransactional(args: {
     await sql`COMMIT`;
 
     // Sync to Outlook Calendar (best-effort, after commit)
+    // The function will fetch all booking data including payment, discount, etc.
     let outlookEventId: string | null = null;
     if (process.env.OUTLOOK_SYNC_ENABLED !== 'false') {
       try {
-        const bookingForOutlook = {
-          id: ensuredBookingRowId,
-          service_id: svcId,
-          service_name: svcName,
-          client_name: displayName || fullNameFromPi,
-          client_email: emailFromPi,
-          booking_date: slotStart,
-          metadata: {
-            ...minimalMeta,
-            slot: {
-              start: slotStart,
-              end: pim.slot_end || null,
-            },
-            timezone: timezone || 'America/New_York',
-          },
-        };
-        const outlookResult = await ensureOutlookEventForBooking(bookingForOutlook);
+        // Pass just the booking ID - function will fetch all necessary data
+        const outlookResult = await ensureOutlookEventForBooking(ensuredBookingRowId);
         outlookEventId = outlookResult.eventId;
         
         // Update booking with Outlook event ID

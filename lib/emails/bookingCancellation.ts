@@ -24,6 +24,7 @@ export function generateBookingCancellationEmail(params: {
   receiptUrl?: string | null; // Stripe receipt URL
   refundReason?: string | null; // Reason for refund
   address?: string;
+  bookingId?: string; // Internal booking ID or Hapio booking ID
   bookUrl?: string;
 }) {
   const {
@@ -38,6 +39,7 @@ export function generateBookingCancellationEmail(params: {
     receiptUrl,
     refundReason,
     address = '2998 Green Palm Court, Dania Beach, FL, 33312',
+    bookingId,
     bookUrl = 'https://www.theauraesthetics.com/book',
   } = params;
 
@@ -176,6 +178,17 @@ export function generateBookingCancellationEmail(params: {
               <a href="${bookUrl}" style="display: inline-block; padding: 14px 24px; background-color: #6B8E6F; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600; width: 100%; max-width: 250px; box-sizing: border-box;">Book Another Appointment</a>
             </td>
           </tr>
+
+          <!-- Booking ID -->
+          ${bookingId ? `
+          <tr>
+            <td style="padding: 0 20px 20px 20px; border-top: 1px solid #E8E8E0;">
+              <p style="margin: 0; color: #5A5A5A; font-size: 13px; line-height: 1.6; text-align: center;">
+                <strong>Booking ID:</strong> ${escapeHtml(bookingId)}
+              </p>
+            </td>
+          </tr>
+          ` : ''}
 
           <!-- Footer -->
           <tr>

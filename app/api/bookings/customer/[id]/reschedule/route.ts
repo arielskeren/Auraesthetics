@@ -159,6 +159,16 @@ export async function POST(
         WHERE id = ${bookingData.id}
       `;
 
+      // Record reschedule event for change history
+      await sql`
+        INSERT INTO booking_events (booking_id, type, data)
+        VALUES (${bookingData.id}, ${'rescheduled'}, ${JSON.stringify({ 
+          oldDate: bookingData.booking_date,
+          newDate: newDateTime.toISOString(),
+          rescheduledBy: 'customer',
+        })}::jsonb)
+      `;
+
       await sql`COMMIT`;
 
       // Update Outlook event if it exists (best-effort)
@@ -176,23 +186,9 @@ export async function POST(
 
       if (process.env.OUTLOOK_SYNC_ENABLED !== 'false' && outlookEventId) {
         try {
-          await ensureOutlookEventForBooking({
-            id: bookingData.id,
-            service_id: bookingData.service_id, // Can be UUID or slug, Outlook sync handles both
-            service_name: bookingData.service_name,
-            client_name: bookingData.client_name || null,
-            client_email: bookingData.client_email || null,
-            booking_date: newDateTime.toISOString(),
-            outlook_event_id: outlookEventId,
-            metadata: {
-              ...(bookingData.metadata || {}),
-              slot: {
-                start: newDateTime.toISOString(),
-                end: newEndDateTime.toISOString(),
-                timezone: 'America/New_York',
-              },
-            },
-          });
+          // Pass just the booking ID - function will fetch all necessary data including payment, refund, events, etc.
+          // The function will also get the updated booking_date from the database
+          await ensureOutlookEventForBooking(bookingData.id);
         } catch (outlookError) {
           console.error('[Customer Reschedule] Outlook update failed:', outlookError);
         }
@@ -244,6 +240,7 @@ export async function POST(
             oldBookingTime,
             newBookingDate: newDateTime,
             newBookingTime,
+            bookingId: bookingData.hapio_booking_id || bookingData.id, // Use Hapio ID or internal ID
           });
 
           await sendBrevoEmail({

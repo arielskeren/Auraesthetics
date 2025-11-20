@@ -1414,6 +1414,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                                       const isSelected = selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
                                       const startDate = new Date(slot.start);
                                       const endDate = new Date(slot.end);
+                                      // Format time as "10:00 AM to 11:00 AM" (no date, just time with AM/PM)
                                       const startLabel = formatInEST(startDate, {
                                         hour: 'numeric',
                                         minute: '2-digit',
@@ -1438,7 +1439,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                                               : 'bg-white/90 border-dark-sage/30 text-charcoal hover:bg-dark-sage/10 hover:border-dark-sage/60'
                                           }`}
                                         >
-                                          {startLabel} – {endLabel}
+                                          {startLabel} to {endLabel}
                                         </button>
                                       );
                                     })}

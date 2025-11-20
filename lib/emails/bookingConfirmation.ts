@@ -275,6 +275,17 @@ export function generateBookingConfirmationEmail(params: {
             </td>
           </tr>
 
+          <!-- Booking ID -->
+          ${bookingId ? `
+          <tr>
+            <td style="padding: 0 20px 20px 20px; border-top: 1px solid #E8E8E0;">
+              <p style="margin: 0; color: #5A5A5A; font-size: 13px; line-height: 1.6; text-align: center;">
+                <strong>Booking ID:</strong> ${escapeHtml(bookingId)}
+              </p>
+            </td>
+          </tr>
+          ` : ''}
+
           <!-- Footer -->
           <tr>
             <td style="background-color: #F9F9F5; padding: 25px 20px; text-align: center; border-top: 1px solid #E8E8E0;">

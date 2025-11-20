@@ -277,6 +277,7 @@ export async function POST(
           refundId: refundId || null,
           receiptUrl: null,
           refundReason: 'Cancelled by customer',
+          bookingId: bookingData.hapio_booking_id || bookingData.id, // Use Hapio ID or internal ID
         });
 
         await sendBrevoEmail({
