@@ -210,11 +210,26 @@ export async function DELETE(
     }
 
     // Delete from database
-    await sql`
+    const deleteResult = await sql`
       DELETE FROM one_time_discount_codes
       WHERE id = ${codeId}
     `;
 
+    // Verify deletion
+    const verifyResult = await sql`
+      SELECT id FROM one_time_discount_codes WHERE id = ${codeId} LIMIT 1
+    `;
+    const verifyRows = normalizeRows(verifyResult);
+    
+    if (verifyRows.length > 0) {
+      console.error('[Delete Discount Code] Code still exists after deletion attempt');
+      return NextResponse.json(
+        { error: 'Failed to delete discount code from database' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[Delete Discount Code] Successfully deleted code ${existingCode.code} (ID: ${codeId})`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[Delete Discount Code] Error:', error);

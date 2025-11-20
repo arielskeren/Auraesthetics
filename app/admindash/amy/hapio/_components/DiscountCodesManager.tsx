@@ -288,21 +288,39 @@ export default function DiscountCodesManager() {
     try {
       const response = await fetch(`/api/admin/discount-codes/${selectedCode.id}`, {
         method: 'DELETE',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
+        console.error('[Delete Discount Code] Failed:', data);
         alert(data.error || 'Failed to delete discount code');
         return;
       }
 
+      const data = await response.json();
+      if (!data.success) {
+        alert('Delete operation did not complete successfully');
+        return;
+      }
+
+      console.log('[Delete Discount Code] Success, refreshing list...');
       alert('Discount code deleted successfully!');
       setShowDeleteModal(false);
       setSelectedCode(null);
       // Force refresh by clearing usage details and reloading
       setUsageDetails({});
+      // Clear codes array first to ensure UI updates immediately
+      setCodes([]);
+      // Small delay to ensure database transaction is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
       await loadCodes();
     } catch (err: any) {
+      console.error('[Delete Discount Code] Error:', err);
       alert(err.message || 'Failed to delete discount code');
     }
   };
@@ -1117,4 +1135,5 @@ export default function DiscountCodesManager() {
     </div>
   );
 }
+
 
