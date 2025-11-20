@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listResources, createResource } from '@/lib/hapioClient';
+import { deduplicateRequest, getCacheKey } from '../_utils/requestDeduplication';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,10 +9,19 @@ export async function GET(request: NextRequest) {
     const page = searchParams.get('page') ? Number(searchParams.get('page')) : undefined;
     const perPage = searchParams.get('per_page') ? Number(searchParams.get('per_page')) : undefined;
 
-    const response = await listResources({
-      location_id: locationId,
-      page,
-      per_page: perPage,
+    const cacheKey = getCacheKey({
+      endpoint: 'resources',
+      locationId: locationId || '',
+      page: page || '',
+      perPage: perPage || '',
+    });
+
+    const response = await deduplicateRequest(cacheKey, async () => {
+      return await listResources({
+        location_id: locationId,
+        page,
+        per_page: perPage,
+      });
     });
 
     return NextResponse.json(response);

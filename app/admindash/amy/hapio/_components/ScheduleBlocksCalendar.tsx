@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, X, Trash2, Edit2, Plus } from 'lucide-react'
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface ScheduleBlocksCalendarProps {
   resourceId: string;
@@ -22,6 +23,7 @@ export default function ScheduleBlocksCalendar({
   resourceId,
   locationId,
 }: ScheduleBlocksCalendarProps) {
+  const { getScheduleBlocks, getAvailability } = useHapioData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [availability, setAvailability] = useState<Record<string, Array<{ start: string; end: string }>>>({});
@@ -75,17 +77,8 @@ export default function ScheduleBlocksCalendar({
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/schedule-blocks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&per_page=100`
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load schedule blocks');
-      }
-
-      const data = await response.json();
-      setBlocks(data.data || []);
+      const blocksData = await getScheduleBlocks(resourceId, from, to);
+      setBlocks(blocksData);
     } catch (err: any) {
       setError(err);
     } finally {
@@ -105,18 +98,19 @@ export default function ScheduleBlocksCalendar({
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
+      // Note: getAvailability returns availabilityByDate format
+      // We still need to fetch the full response for recurringBlocksByDate
+      // This is a limitation - we may need to extend the context later
+      const availabilityData = await getAvailability(resourceId, from, to);
+      setAvailability(availabilityData);
+      
+      // For now, we'll fetch the full response to get recurringBlocksByDate
+      // This can be optimized later by extending the context
       const response = await fetch(
         `/api/admin/hapio/resources/${resourceId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
       );
-
       if (response.ok) {
         const data = await response.json();
-        console.log('[ScheduleBlocksCalendar] Availability data:', {
-          dates: Object.keys(data.availabilityByDate || {}).length,
-          recurringBlocksDates: Object.keys(data.recurringBlocksByDate || {}).length,
-          sample: Object.entries(data.availabilityByDate || {}).slice(0, 3),
-        });
-        setAvailability(data.availabilityByDate || {});
         setRecurringBlocks(data.recurringBlocksByDate || {});
       } else {
         const errorData = await response.json().catch(() => ({}));

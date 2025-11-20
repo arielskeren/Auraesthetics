@@ -7,10 +7,12 @@ import ErrorDisplay from './ErrorDisplay';
 import RecurringSchedulesEditor from './RecurringSchedulesEditor';
 import ScheduleBlocksCalendar from './ScheduleBlocksCalendar';
 import RecurringScheduleBlocksEditor from './RecurringScheduleBlocksEditor';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 type ScheduleTab = 'recurring' | 'blocks' | 'recurring-blocks';
 
 export default function SchedulesManager() {
+  const { resources, locations, loadResources, loadLocations, isLoadingResources, isLoadingLocations } = useHapioData();
   const [activeTab, setActiveTab] = useState<ScheduleTab>('recurring');
   const [resourceId, setResourceId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -19,39 +21,24 @@ export default function SchedulesManager() {
   const [showDeveloperInfo, setShowDeveloperInfo] = useState(false);
 
   useEffect(() => {
-    loadFirstResourceAndLocation();
-  }, []);
+    loadResources();
+    loadLocations();
+  }, [loadResources, loadLocations]);
 
-  const loadFirstResourceAndLocation = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Load first resource
-      const resourceResponse = await fetch('/api/admin/hapio/resources?per_page=1');
-      if (!resourceResponse.ok) {
-        throw new Error('Failed to load resources');
-      }
-      const resourceData = await resourceResponse.json();
-      if (resourceData.data && resourceData.data.length > 0) {
-        setResourceId(resourceData.data[0].id);
-      }
-
-      // Load first location
-      const locationResponse = await fetch('/api/admin/hapio/locations?per_page=1');
-      if (!locationResponse.ok) {
-        throw new Error('Failed to load locations');
-      }
-      const locationData = await locationResponse.json();
-      if (locationData.data && locationData.data.length > 0) {
-        setLocationId(locationData.data[0].id);
-      }
-    } catch (err: any) {
-      setError(err);
-    } finally {
+  // Set first resource and location from context data
+  useEffect(() => {
+    if (Object.keys(resources).length > 0 && !resourceId) {
+      const firstResourceId = Object.keys(resources)[0];
+      setResourceId(firstResourceId);
+    }
+    if (locations.length > 0 && !locationId) {
+      setLocationId(locations[0].id);
+    }
+    if ((Object.keys(resources).length > 0 || isLoadingResources === false) && 
+        (locations.length > 0 || isLoadingLocations === false)) {
       setLoading(false);
     }
-  };
+  }, [resources, locations, resourceId, locationId, isLoadingResources, isLoadingLocations]);
 
   if (loading) {
     return <LoadingState message="Loading schedule configuration..." />;

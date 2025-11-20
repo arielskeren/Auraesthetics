@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import BookingDetailModal from '../../BookingDetailModal';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface Booking {
   id: string;
@@ -31,6 +32,21 @@ interface DayStatus {
 }
 
 export default function BookingsCalendar() {
+  const {
+    services,
+    resources,
+    locations,
+    loadServices,
+    loadResources,
+    loadLocations,
+    getBookings,
+    getAvailability,
+    getScheduleBlocks,
+    isLoadingBookings,
+    isLoadingAvailability,
+    isLoadingScheduleBlocks,
+  } = useHapioData();
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [availability, setAvailability] = useState<Record<string, Array<{ start: string; end: string }>>>({});
@@ -44,89 +60,40 @@ export default function BookingsCalendar() {
   const dateButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [resourceId, setResourceId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
-  const [services, setServices] = useState<Record<string, { id: string; name: string }>>({});
-  const [resources, setResources] = useState<Record<string, { id: string; name: string }>>({});
-  const [scheduleBlocks, setScheduleBlocks] = useState<Array<{ starts_at: string; ends_at: string; metadata?: Record<string, unknown> | null }>>([]);
-  // Simple client-side caches keyed by resourceId + month
-  const bookingsCacheRef = useRef<Map<string, Booking[]>>(new Map());
-  const availabilityCacheRef = useRef<Map<string, Record<string, Array<{ start: string; end: string }>>>>(new Map());
+  const [allScheduleBlocks, setAllScheduleBlocks] = useState<Array<{ starts_at: string; ends_at: string; metadata?: Record<string, unknown> | null }>>([]);
 
-  useEffect(() => {
-    loadFirstLocation();
-  }, []);
-
+  // Load initial data once
   useEffect(() => {
     loadServices();
     loadResources();
-  }, []);
+    loadLocations();
+  }, [loadServices, loadResources, loadLocations]);
 
+  // Set first location when locations are loaded
+  useEffect(() => {
+    if (locations.length > 0 && !locationId) {
+      setLocationId(locations[0].id);
+    }
+  }, [locations, locationId]);
+
+  // Set first resource when resources are loaded
+  useEffect(() => {
+    if (Object.keys(resources).length > 0 && !resourceId) {
+      const firstResourceId = Object.keys(resources)[0];
+      setResourceId(firstResourceId);
+    }
+  }, [resources, resourceId]);
+
+  // Load bookings, availability, and schedule blocks when resource/location/date changes
   useEffect(() => {
     if (resourceId && locationId) {
       loadBookings();
       loadAvailability();
+      loadScheduleBlocksForMonth();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, locationId, currentDate]);
 
-  useEffect(() => {
-    if (selectedDate && resourceId) {
-      loadScheduleBlocksForDate(selectedDate);
-    } else {
-      setScheduleBlocks([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, resourceId]);
-
-  const loadServices = async () => {
-    try {
-      const response = await fetch('/api/admin/hapio/services?per_page=100');
-      if (response.ok) {
-        const data = await response.json();
-        const servicesMap: Record<string, { id: string; name: string }> = {};
-        (data.data || []).forEach((service: any) => {
-          servicesMap[service.id] = { id: service.id, name: service.name || 'Unknown Service' };
-        });
-        setServices(servicesMap);
-      }
-    } catch (err) {
-      console.warn('[BookingsCalendar] Error loading services:', err);
-    }
-  };
-
-  const loadResources = async () => {
-    try {
-      const response = await fetch('/api/admin/hapio/resources?per_page=100');
-      if (response.ok) {
-        const data = await response.json();
-        const resourcesMap: Record<string, { id: string; name: string }> = {};
-        (data.data || []).forEach((resource: any) => {
-          resourcesMap[resource.id] = { id: resource.id, name: resource.name || 'Unknown Resource' };
-        });
-        setResources(resourcesMap);
-        // If no resource selected yet, pick the first one
-        if (!resourceId && Array.isArray(data.data) && data.data.length > 0) {
-          setResourceId(data.data[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn('[BookingsCalendar] Error loading resources:', err);
-    }
-  };
-
-  const loadFirstLocation = async () => {
-    try {
-      // Load first location
-      const locationResponse = await fetch('/api/admin/hapio/locations?per_page=1');
-      if (locationResponse.ok) {
-        const locationData = await locationResponse.json();
-        if (locationData.data && locationData.data.length > 0) {
-          setLocationId(locationData.data[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn('[BookingsCalendar] Error loading location:', err);
-    }
-  };
 
   const loadBookings = async () => {
     try {
@@ -143,27 +110,13 @@ export default function BookingsCalendar() {
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
-      const params = new URLSearchParams();
-      params.append('from', from.split('T')[0]);
-      params.append('to', to.split('T')[0]);
-      if (resourceId) params.append('resource_id', resourceId);
-      if (locationId) params.append('location_id', locationId);
-      params.append('per_page', '100'); // Hapio API limit is 100
-      const monthKey = `${resourceId || 'none'}|${from.split('T')[0]}`;
-      if (bookingsCacheRef.current.has(monthKey)) {
-        setBookings(bookingsCacheRef.current.get(monthKey)!);
-      } else {
-        const response = await fetch(`/api/admin/hapio/bookings?${params.toString()}`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to load bookings');
-        }
-        const data = await response.json();
-        // Filter out canceled bookings for status calculation
-        const activeBookings = (data.data || []).filter((b: Booking) => !b.isCanceled);
-        bookingsCacheRef.current.set(monthKey, activeBookings);
-        setBookings(activeBookings);
-      }
+      const activeBookings = await getBookings({
+        from,
+        to,
+        resourceId: resourceId || undefined,
+        locationId: locationId || undefined,
+      });
+      setBookings(activeBookings);
     } catch (err: any) {
       setError(err);
     } finally {
@@ -185,50 +138,44 @@ export default function BookingsCalendar() {
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
-      const monthKey = `${resourceId}|${from.split('T')[0]}|${to.split('T')[0]}`;
-      if (availabilityCacheRef.current.has(monthKey)) {
-        setAvailability(availabilityCacheRef.current.get(monthKey)!);
-      } else {
-        const response = await fetch(
-          `/api/admin/hapio/resources/${resourceId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          availabilityCacheRef.current.set(monthKey, data.availabilityByDate || {});
-          setAvailability(data.availabilityByDate || {});
-        }
-      }
+      const availabilityData = await getAvailability(resourceId, from, to);
+      setAvailability(availabilityData);
     } catch (err) {
       console.warn('[BookingsCalendar] Error loading availability:', err);
     }
   };
 
-  const loadScheduleBlocksForDate = async (date: Date) => {
+  const loadScheduleBlocksForMonth = async () => {
     if (!resourceId) return;
 
     try {
-      const dateStr = date.toISOString().split('T')[0];
-      const fromDate = new Date(date);
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const fromDate = new Date(year, month, 1);
       fromDate.setHours(0, 0, 0, 0);
-      const toDate = new Date(date);
+      const toDate = new Date(year, month + 1, 0);
       toDate.setHours(23, 59, 59, 999);
 
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/schedule-blocks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&per_page=100`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setScheduleBlocks(data.data || []);
-      }
+      const blocks = await getScheduleBlocks(resourceId, from, to);
+      setAllScheduleBlocks(blocks);
     } catch (err) {
       console.warn('[BookingsCalendar] Error loading schedule blocks:', err);
-      setScheduleBlocks([]);
+      setAllScheduleBlocks([]);
     }
   };
+
+  // Filter schedule blocks for selected date
+  const scheduleBlocks = useMemo(() => {
+    if (!selectedDate) return [];
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    return allScheduleBlocks.filter((block) => {
+      const blockDate = new Date(block.starts_at).toISOString().split('T')[0];
+      return blockDate === dateStr;
+    });
+  }, [selectedDate, allScheduleBlocks]);
 
   const getDaysInMonth = (): (Date | null)[] => {
     const year = currentDate.getFullYear();
@@ -393,7 +340,7 @@ export default function BookingsCalendar() {
     });
   };
 
-  if (loading && bookings.length === 0) {
+  if ((loading || isLoadingBookings) && bookings.length === 0) {
     return <div className="text-center py-8 text-warm-gray">Loading calendar...</div>;
   }
 

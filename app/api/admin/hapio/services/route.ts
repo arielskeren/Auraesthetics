@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listServices } from '@/lib/hapioClient';
+import { deduplicateRequest, getCacheKey } from '../_utils/requestDeduplication';
 
 /**
  * GET /api/admin/hapio/services
@@ -12,7 +13,15 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const perPage = parseInt(searchParams.get('per_page') || '100', 10);
 
-    const response = await listServices({ page, per_page: perPage });
+    const cacheKey = getCacheKey({
+      endpoint: 'services',
+      page,
+      perPage,
+    });
+
+    const response = await deduplicateRequest(cacheKey, async () => {
+      return await listServices({ page, per_page: perPage });
+    });
 
     // Return raw Hapio API response - it already has all the correct field names
     return NextResponse.json({

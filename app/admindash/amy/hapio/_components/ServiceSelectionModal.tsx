@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, CheckSquare, Square } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface ServiceSelectionModalProps {
   selectedServiceIds: string[];
@@ -15,6 +16,7 @@ export default function ServiceSelectionModal({
   onClose,
   onSave,
 }: ServiceSelectionModalProps) {
+  const { loadServices } = useHapioData();
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -24,14 +26,16 @@ export default function ServiceSelectionModal({
 
   useEffect(() => {
     loadServices();
+    loadFullServices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadServices = async () => {
+  const loadFullServices = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Load full service objects (context only has id/name map)
       const response = await fetch('/api/admin/hapio/services?per_page=100');
       if (!response.ok) {
         const errorData = await response.json();

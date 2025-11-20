@@ -6,6 +6,7 @@ import LoadingState from './LoadingState';
 import ErrorDisplay from './ErrorDisplay';
 import PaginationControls from './PaginationControls';
 import LocationEditModal from './LocationEditModal';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function LocationsManager() {
   const [locations, setLocations] = useState<any[]>([]);

@@ -852,16 +852,24 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   const balanceDue = Math.max(0, finalAmount - depositAmount);
   const hapioBookingId = effective.hapio_booking_id;
   const hasLegacyCalBooking = !!effective.cal_booking_id;
+  const isRefunded = (effective.payment_status === 'refunded' || (effective.refunded_cents != null && effective.refunded_cents > 0)) && effective.payment_status !== 'cancelled';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/60 backdrop-blur-sm">
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[95vh] overflow-y-auto shadow-xl">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-sage-dark/20 px-4 py-2 flex justify-between items-center">
-          <h2 className="text-xl font-serif text-charcoal">Booking Details</h2>
+        <div className="sticky top-0 bg-white border-b border-sage-dark/20 px-4 py-2 flex justify-between items-center gap-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <h2 className="text-xl font-serif text-charcoal">Booking Details</h2>
+            {isRefunded && (
+              <div className="px-2.5 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full border border-yellow-300 whitespace-nowrap">
+                This booking has been refunded (booking remains active)
+              </div>
+            )}
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-sand/30 rounded-full transition-colors"
+            className="p-2 hover:bg-sand/30 rounded-full transition-colors flex-shrink-0"
           >
             <X className="w-5 h-5 text-charcoal" />
           </button>
@@ -892,13 +900,13 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
             {/* Quick Actions - Full Width at Top */}
             <div className="bg-sand/20 rounded-lg p-2">
               <h3 className="text-sm font-semibold text-charcoal mb-1.5">Quick Actions</h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 overflow-x-auto">
                     {effective.payment_status !== 'cancelled' && (
                       <>
                         <button
                           onClick={handleReschedule}
                           disabled={actionLoading !== null || !effective.hapio_booking_id}
-                          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          className="px-3 py-1.5 text-sm bg-sage text-charcoal rounded hover:bg-dark-sage disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
                         >
                           <ClockIcon className="w-3.5 h-3.5" />
                           Reschedule
@@ -906,7 +914,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                         <button
                           onClick={handleCancel}
                           disabled={actionLoading === 'cancel' || actionLoading === 'refund'}
-                          className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          className="px-3 py-1.5 text-sm bg-taupe/80 text-white rounded hover:bg-taupe disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
                         >
                           <XCircle className="w-3.5 h-3.5" />
                           {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id && !effective.refunded_cents)
@@ -916,11 +924,11 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                         
                         {/* Only show refund button if paid/succeeded AND not already refunded */}
                         {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded' || effective.payment_status === 'refunded') && effective.payment_intent_id && (effective.refund_count == null || effective.refund_count < 3)) ? (
-                          <div className="flex gap-2">
+                          <>
                             <button
                               onClick={handleRefund}
                               disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
-                              className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                              className="px-3 py-1.5 text-sm bg-sage-dark/90 text-white rounded hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
                             >
                               <DollarSign className="w-3.5 h-3.5" />
                               {effective.refund_count && effective.refund_count > 0 ? `Refund (${effective.refund_count}/3)` : 'Refund Only'}
@@ -929,36 +937,30 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                               <button
                                 onClick={handleFullRefund}
                                 disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
-                                className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                className="px-3 py-1.5 text-sm bg-dark-sage/90 text-charcoal rounded hover:bg-dark-sage disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
                                 title={`Refund remaining $${(((effective.payment_amount_cents - (effective.refunded_cents || 0)) / 100).toFixed(2))}`}
                               >
                                 <DollarSign className="w-3.5 h-3.5" />
                                 Full Refund
                               </button>
                             )}
-                          </div>
+                          </>
                         ) : null}
                       </>
                     )}
                     
                     {effective.payment_status === 'cancelled' && (
-                      <div className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded">
+                      <div className="px-3 py-1.5 text-sm bg-sand/60 text-warm-gray rounded whitespace-nowrap flex-shrink-0">
                         This booking has been cancelled
                       </div>
                     )}
-                    
-                    {(effective.payment_status === 'refunded' || (effective.refunded_cents != null && effective.refunded_cents > 0)) && effective.payment_status !== 'cancelled' ? (
-                      <div className="px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded">
-                        This booking has been refunded (booking remains active)
-                      </div>
-                    ) : null}
                     
                     {/* Force Sync to Outlook button */}
                     {process.env.NEXT_PUBLIC_OUTLOOK_SYNC_ENABLED !== 'false' && (
                       <button
                         onClick={handleForceSyncOutlook}
                         disabled={actionLoading === 'outlook-sync'}
-                        className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        className="px-3 py-1.5 text-sm bg-sage-light text-charcoal rounded hover:bg-sage disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
                         title="Force sync this booking with Outlook calendar"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${actionLoading === 'outlook-sync' ? 'animate-spin' : ''}`} />

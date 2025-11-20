@@ -8,8 +8,10 @@ import PaginationControls from './PaginationControls';
 import ResourceEditModal from './ResourceEditModal';
 import ResourceScheduleModal from './ResourceScheduleModal';
 import IdDisplay from './IdDisplay';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function ResourcesManager() {
+  const { locations, loadLocations } = useHapioData();
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -18,7 +20,6 @@ export default function ResourcesManager() {
   const [perPage] = useState(20);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedResource, setSelectedResource] = useState<any>(null);
-  const [locations, setLocations] = useState<any[]>([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedResourceForSchedule, setSelectedResourceForSchedule] = useState<any>(null);
 
@@ -27,18 +28,6 @@ export default function ResourcesManager() {
     loadLocations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
-
-  const loadLocations = async () => {
-    try {
-      const response = await fetch('/api/admin/hapio/locations?per_page=100');
-      if (response.ok) {
-        const data = await response.json();
-        setLocations(data.data || []);
-      }
-    } catch (err) {
-      // Silently fail - locations are optional for the form
-    }
-  };
 
   const loadResources = async () => {
     try {

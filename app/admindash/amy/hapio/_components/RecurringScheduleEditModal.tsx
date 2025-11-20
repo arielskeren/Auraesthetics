@@ -6,6 +6,7 @@ import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { detectOverlaps, validateSchedule } from '@/lib/scheduleUtils';
 import { getHapioWeekdayString, getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface RecurringScheduleEditModalProps {
   resourceId: string;
@@ -45,6 +46,7 @@ export default function RecurringScheduleEditModal({
   onClose,
   onSave,
 }: RecurringScheduleEditModalProps) {
+  const { loadServices, getRecurringSchedules, getRecurringScheduleBlocks } = useHapioData();
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DAYS.map((day) => ({
       dayOfWeek: day.value,
@@ -85,6 +87,10 @@ export default function RecurringScheduleEditModal({
 
   const loadAllServices = async () => {
     try {
+      // Load services from context first (will use cache if available)
+      await loadServices();
+      
+      // Fetch full service list to get IDs
       const response = await fetch('/api/admin/hapio/services?per_page=100');
       if (response.ok) {
         const data = await response.json();
@@ -130,15 +136,11 @@ export default function RecurringScheduleEditModal({
           setEndDateType('indefinite');
         }
         
-        // Load blocks for this schedule
+        // Load blocks for this schedule using context
         try {
-          const blocksResponse = await fetch(
-            `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?recurring_schedule_id=${scheduleId}&per_page=100`
-          );
+          const blocks = await getRecurringScheduleBlocks(resourceId, scheduleId);
           
-          if (blocksResponse.ok) {
-            const blocksData = await blocksResponse.json();
-            const blocks = blocksData.data || [];
+          if (blocks && blocks.length > 0) {
             
             // Initialize all days with empty time ranges
             const initializedSchedules: DaySchedule[] = DAYS.map((day) => ({

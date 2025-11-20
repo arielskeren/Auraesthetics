@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import RecurringScheduleEditModal from './RecurringScheduleEditModal';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface RecurringSchedulesEditorProps {
   resourceId: string;
@@ -42,6 +43,7 @@ export default function RecurringSchedulesEditor({
   resourceId,
   locationId,
 }: RecurringSchedulesEditorProps) {
+  const { getRecurringSchedules } = useHapioData();
   const [existingSchedules, setExistingSchedules] = useState<ExistingSchedule[]>([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -56,12 +58,7 @@ export default function RecurringSchedulesEditor({
   const loadSchedulesList = async () => {
     try {
       setLoadingList(true);
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/recurring-schedules?per_page=100`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const schedulesList = (data.data || []) as ExistingSchedule[];
+      const schedulesList = (await getRecurringSchedules(resourceId)) as ExistingSchedule[];
         
         // Sort by start_date (most recent first, then by created_at)
         schedulesList.sort((a, b) => {
@@ -73,11 +70,8 @@ export default function RecurringSchedulesEditor({
           return (b.created_at || '').localeCompare(a.created_at || '');
         });
         
-        setExistingSchedules(schedulesList);
-        console.log('[RecurringSchedulesEditor] Loaded schedules list:', schedulesList);
-      } else if (response.status === 404) {
-        setExistingSchedules([]);
-      }
+      setExistingSchedules(schedulesList);
+      console.log('[RecurringSchedulesEditor] Loaded schedules list:', schedulesList);
     } catch (err) {
       console.warn('[RecurringSchedulesEditor] Error loading schedules list:', err);
       setExistingSchedules([]);

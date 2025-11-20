@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listBookings, createBooking } from '@/lib/hapioClient';
+import { deduplicateRequest, getCacheKey } from '../_utils/requestDeduplication';
 
 /**
  * Format date for Hapio API: Y-m-d\TH:i:sP format
@@ -46,15 +47,29 @@ export async function GET(request: NextRequest) {
     const from = fromRaw ? convertDateToHapioFormat(fromRaw, false) : undefined;
     const to = toRaw ? convertDateToHapioFormat(toRaw, true) : undefined;
 
-    const response = await listBookings({
-      from,
-      to,
-      location_id: locationId,
-      service_id: serviceId,
-      resource_id: resourceId,
-      status,
-      page,
-      per_page: perPage,
+    const cacheKey = getCacheKey({
+      endpoint: 'bookings',
+      from: from || '',
+      to: to || '',
+      locationId: locationId || '',
+      serviceId: serviceId || '',
+      resourceId: resourceId || '',
+      status: status || '',
+      page: page || '',
+      perPage: perPage || '',
+    });
+
+    const response = await deduplicateRequest(cacheKey, async () => {
+      return await listBookings({
+        from,
+        to,
+        location_id: locationId,
+        service_id: serviceId,
+        resource_id: resourceId,
+        status,
+        page,
+        per_page: perPage,
+      });
     });
 
     return NextResponse.json(response);

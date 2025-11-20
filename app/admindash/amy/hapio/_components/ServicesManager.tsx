@@ -9,8 +9,10 @@ import ServiceEditModal from './ServiceEditModal';
 import ServiceReorderModal from './ServiceReorderModal';
 import UnstarServiceModal from './UnstarServiceModal';
 import IdDisplay from './IdDisplay';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function ServicesManager() {
+  const { loadServices: loadHapioServicesFromContext, isLoadingServices, refreshData } = useHapioData();
   const [allServices, setAllServices] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -333,20 +335,15 @@ export default function ServicesManager() {
       setLoadingHapio(true);
       setError(null);
       
-      // Load both Hapio services and Neon DB services to check links
-      const [hapioResponse, neonResponse] = await Promise.all([
-        fetch('/api/admin/hapio/services'),
-        fetch('/api/admin/services?per_page=1000'), // Get all Neon services to check links
-      ]);
-
-      if (!hapioResponse.ok) {
-        throw new Error('Failed to load Hapio services');
-      }
+      // Load Hapio services from context (will use cache if available)
+      await loadHapioServicesFromContext();
+      
+      // Load Neon DB services to check links
+      const neonResponse = await fetch('/api/admin/services?per_page=1000');
       if (!neonResponse.ok) {
         throw new Error('Failed to load Neon DB services');
       }
 
-      const hapioData = await hapioResponse.json();
       const neonData = await neonResponse.json();
 
       // Build set of linked Hapio service IDs
@@ -356,6 +353,13 @@ export default function ServicesManager() {
           linkedIds.add(service.hapio_service_id);
         }
       });
+
+      // Fetch full Hapio services list (context only has id/name map)
+      const hapioResponse = await fetch('/api/admin/hapio/services?per_page=100');
+      if (!hapioResponse.ok) {
+        throw new Error('Failed to load Hapio services');
+      }
+      const hapioData = await hapioResponse.json();
 
       setHapioServices(hapioData.data || []);
       setLinkedHapioIds(linkedIds);
