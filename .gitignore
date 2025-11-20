@@ -35,3 +35,23 @@ next-env.d.ts
 # local service photos (migrated to blob storage)
 /public/services/
 
+# testing and internal documentation
+TESTING_CHECKLIST.md
+CRITICAL_PRE_LAUNCH_REVIEW.md
+SERVICE_PHOTO_FILENAMES.txt
+test-client.html
+
+# archived documentation
+docs/archive/
+
+# internal notes and documentation (keep README.md files)
+docs/admin-dashboard-notes.md
+docs/next-steps.md
+docs/PHASE_1_TESTING_CHECKLIST.md
+
+# temporary and development files
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
