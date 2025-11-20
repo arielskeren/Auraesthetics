@@ -93,7 +93,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingScheduleBlocks, setIsLoadingScheduleBlocks] = useState(false);
   const [isLoadingRecurringSchedules, setIsLoadingRecurringSchedules] = useState(false);
   const [isLoadingRecurringScheduleBlocks, setIsLoadingRecurringScheduleBlocks] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const hasInitializedRef = useRef(false); // Use ref to prevent double initialization in React Strict Mode
 
   // Deduplicated fetch helper
   const deduplicatedFetch = useCallback(async <T,>(
@@ -548,9 +548,10 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
   }, [clearCache, loadServices, loadResources, loadLocations]);
 
   // Auto-load services, resources, and locations ONCE when provider mounts
+  // Use ref instead of state to prevent double initialization in React Strict Mode
   useEffect(() => {
-    if (!hasInitialized) {
-      setHasInitialized(true);
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
       // Load all static data once on mount - these will be deduplicated if called multiple times
       // Don't await - let them load in parallel
       loadServices().catch(err => console.error('[HapioDataContext] Error auto-loading services:', err));
@@ -558,7 +559,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
       loadLocations().catch(err => console.error('[HapioDataContext] Error auto-loading locations:', err));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasInitialized]);
+  }, []);
 
   const value: HapioDataContextType = {
     services,
