@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import BookingDetailModal from '../../BookingDetailModal';
+import GlobalCodesManager from './GlobalCodesManager';
 
 interface DiscountCode {
   id: string;
@@ -33,7 +34,10 @@ interface UsageDetails {
   used_at: string;
 }
 
+type TabType = 'one-time' | 'global';
+
 export default function DiscountCodesManager() {
+  const [activeTab, setActiveTab] = useState<TabType>('one-time');
   const [codes, setCodes] = useState<DiscountCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -400,9 +404,48 @@ export default function DiscountCodesManager() {
         <div>
           <h3 className="text-lg font-semibold text-charcoal">Discount Codes</h3>
           <p className="text-sm text-warm-gray mt-1">
-            Manage one-time discount codes for customers
+            Manage discount codes for customers
           </p>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+        <div className="flex border-b border-sand">
+          <button
+            onClick={() => setActiveTab('one-time')}
+            className={`flex-1 px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'one-time'
+                ? 'text-dark-sage border-b-2 border-dark-sage bg-sage-light/30'
+                : 'text-warm-gray hover:text-charcoal hover:bg-sand/20'
+            }`}
+          >
+            One-Time Codes
+          </button>
+          <button
+            onClick={() => setActiveTab('global')}
+            className={`flex-1 px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'global'
+                ? 'text-dark-sage border-b-2 border-dark-sage bg-sage-light/30'
+                : 'text-warm-gray hover:text-charcoal hover:bg-sand/20'
+            }`}
+          >
+            Global Codes
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'one-time' ? (
+        <div className="space-y-4">
+          {/* One-Time Codes Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-md font-semibold text-charcoal">One-Time Discount Codes</h4>
+              <p className="text-sm text-warm-gray mt-1">
+                Manage one-time discount codes for individual customers
+              </p>
+            </div>
         <div className="flex gap-2">
           <button
             onClick={loadCodes}
@@ -1066,6 +1109,10 @@ export default function DiscountCodesManager() {
             </div>
           </div>
         </div>
+      )}
+        </div>
+      ) : (
+        <GlobalCodesManager />
       )}
     </div>
   );
