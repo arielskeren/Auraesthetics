@@ -301,10 +301,23 @@ function buildBody(booking: BookingForOutlook): string {
   
   // Discount (only show if discount was given)
   if (booking.discount_code || (booking.discount_amount_cents && booking.discount_amount_cents > 0)) {
-    const discountAmount = booking.discount_amount_cents 
-      ? `$${(booking.discount_amount_cents / 100).toFixed(2)}` 
-      : booking.discount_code || 'Applied';
-    lines.push(`<p><strong>Discount:</strong> ${discountAmount}${booking.discount_code ? ` (${booking.discount_code})` : ''}</p>`);
+    // Calculate discount amount - ensure it's a number
+    let discountAmountCents = 0;
+    if (booking.discount_amount_cents && typeof booking.discount_amount_cents === 'number' && booking.discount_amount_cents > 0) {
+      discountAmountCents = booking.discount_amount_cents;
+    }
+    
+    // Format: $AMOUNT (CODE) - show amount and code separately
+    if (discountAmountCents > 0 && booking.discount_code) {
+      // We have both amount and code - show "$AMOUNT (CODE)"
+      lines.push(`<p><strong>Discount:</strong> $${(discountAmountCents / 100).toFixed(2)} (${booking.discount_code})</p>`);
+    } else if (discountAmountCents > 0) {
+      // We have amount but no code
+      lines.push(`<p><strong>Discount:</strong> $${(discountAmountCents / 100).toFixed(2)}</p>`);
+    } else if (booking.discount_code) {
+      // We have code but no amount - just show the code
+      lines.push(`<p><strong>Discount:</strong> ${booking.discount_code}</p>`);
+    }
   }
   
   // Refund information (only show if refunded)
@@ -456,12 +469,15 @@ export async function ensureOutlookEventForBooking(booking: BookingForOutlook | 
     return { eventId: fullBooking.outlook_event_id ?? null, action: 'skipped' };
   }
 
+  const location = '2998 Green Palm Court, Dania Beach, FL 33312';
+  
   const payload = {
     subject: buildSubject(fullBooking),
     body: buildBody(fullBooking),
     start: slot.start,
     end: slot.end,
     timeZone: slot.timeZone,
+    location: location,
   };
 
   if (fullBooking.outlook_event_id) {
@@ -478,6 +494,10 @@ export async function ensureOutlookEventForBooking(booking: BookingForOutlook | 
       end: {
         dateTime: payload.end,
         timeZone: payload.timeZone,
+      },
+      isOnlineMeeting: false, // Ensure it's an in-person event
+      location: {
+        displayName: location,
       },
     });
     return { eventId: fullBooking.outlook_event_id, action: 'updated' };

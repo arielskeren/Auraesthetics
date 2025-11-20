@@ -178,14 +178,16 @@ export async function createOutlookEvent({
   start,
   end,
   timeZone = 'UTC',
+  location,
 }: {
   subject: string;
   body?: string;
   start: string;
   end: string;
   timeZone?: string;
+  location?: string;
 }) {
-  const payload = {
+  const payload: any = {
     subject,
     body: body
       ? {
@@ -201,6 +203,10 @@ export async function createOutlookEvent({
       dateTime: end,
       timeZone,
     },
+    isOnlineMeeting: false, // Default to in-person event
+    location: location ? {
+      displayName: location,
+    } : undefined,
   };
 
   const data = await graphRequest<{ id: string }>('/me/events', {
