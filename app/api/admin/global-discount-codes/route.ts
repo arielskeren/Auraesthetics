@@ -213,10 +213,10 @@ export async function POST(request: NextRequest) {
 
     // Create promotion code for the coupon
     const promotionCode = await stripe.promotionCodes.create({
-      coupon: coupon.id,
+      coupon: coupon.id as string,
       code: codeUpper,
       active: isActive,
-    });
+    } as any);
 
     // Insert into database
     await sql`
