@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DiscountCode {
   id: string;
@@ -42,6 +42,8 @@ export default function DiscountCodesManager() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedCode, setSelectedCode] = useState<DiscountCode | null>(null);
   const [usageDetails, setUsageDetails] = useState<Record<string, UsageDetails>>({});
+  const [activeSectionOpen, setActiveSectionOpen] = useState(true);
+  const [usedSectionOpen, setUsedSectionOpen] = useState(true);
   
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -65,6 +67,7 @@ export default function DiscountCodesManager() {
 
   useEffect(() => {
     loadCodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadCodes = async () => {
@@ -252,6 +255,14 @@ export default function DiscountCodesManager() {
   const handleDelete = async () => {
     if (!selectedCode) return;
 
+    // Prevent deletion of used codes
+    if (selectedCode.used) {
+      alert('Used discount codes cannot be deleted from the website. Please delete them directly in Neon if needed.');
+      setShowDeleteModal(false);
+      setSelectedCode(null);
+      return;
+    }
+
     try {
       const response = await fetch(`/api/admin/discount-codes/${selectedCode.id}`, {
         method: 'DELETE',
@@ -288,13 +299,17 @@ export default function DiscountCodesManager() {
 
   const getStatusBadge = (code: DiscountCode) => {
     if (code.used) {
-      return <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">Used</span>;
+      return <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">Used</span>;
     }
     if (isExpired(code)) {
       return <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">Expired</span>;
     }
-    return <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Active</span>;
+    return <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">Active</span>;
   };
+
+  // Separate codes into active and used
+  const activeCodes = codes.filter(code => !code.used);
+  const usedCodes = codes.filter(code => code.used);
 
   if (loading) {
     return (
@@ -346,73 +361,75 @@ export default function DiscountCodesManager() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Active Codes Section */}
       <div className="bg-white border border-sand rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-sage-light/30">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sand">
-              {codes.length === 0 ? (
+        <button
+          onClick={() => setActiveSectionOpen(!activeSectionOpen)}
+          className="w-full px-4 py-3 bg-sage-light/30 hover:bg-sage-light/40 transition-colors flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-semibold">Active</span>
+            <span className="text-sm font-semibold text-charcoal">
+              Active Codes ({activeCodes.length})
+            </span>
+          </div>
+          {activeSectionOpen ? (
+            <ChevronUp className="w-4 h-4 text-charcoal" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-charcoal" />
+          )}
+        </button>
+        {activeSectionOpen && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-sage-light/20">
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
-                    No discount codes found
-                  </td>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
                 </tr>
-              ) : (
-                codes.map((code) => {
-                  const usage = usageDetails[code.id];
-                  return (
-                    <tr key={code.id} className="hover:bg-sand/10">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4 text-dark-sage" />
-                          <span className="font-mono font-semibold text-charcoal">{code.code}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {code.customer_name || code.customer_email || 'General'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {code.discount_type === 'percent' 
-                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
-                          : `$${code.discount_value}`}
-                      </td>
-                      <td className="px-4 py-3">
-                        {getStatusBadge(code)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {formatDate(code.expires_at)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {usage ? (
-                          <div className="space-y-1">
-                            <div className="font-medium">{usage.customer_name}</div>
-                            <div className="text-xs text-warm-gray">
-                              {usage.service_name} • {formatDate(usage.booking_date)}
-                            </div>
-                            <div className="text-xs text-warm-gray">
-                              Used: {formatDate(usage.used_at)}
-                            </div>
+              </thead>
+              <tbody className="divide-y divide-sand">
+                {activeCodes.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
+                      No active discount codes found
+                    </td>
+                  </tr>
+                ) : (
+                  activeCodes.map((code) => {
+                    const usage = usageDetails[code.id];
+                    return (
+                      <tr key={code.id} className="hover:bg-sand/10">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-dark-sage" />
+                            <span className="font-mono font-semibold text-charcoal">{code.code}</span>
                           </div>
-                        ) : code.used ? (
-                          <span className="text-warm-gray">Used</span>
-                        ) : (
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {code.customer_name || code.customer_email || 'General'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {code.discount_type === 'percent' 
+                            ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                            : `$${code.discount_value}`}
+                        </td>
+                        <td className="px-4 py-3">
+                          {getStatusBadge(code)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {formatDate(code.expires_at)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
                           <span className="text-warm-gray">Not used</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {!code.used && (
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleEdit(code)}
                               className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
@@ -421,21 +438,19 @@ export default function DiscountCodesManager() {
                               <Edit className="w-3 h-3" />
                               Edit
                             </button>
-                          )}
-                          {!code.used && code.expires_at && (
-                            <button
-                              onClick={() => {
-                                setSelectedCode(code);
-                                setShowExtendModal(true);
-                              }}
-                              className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 flex items-center gap-1"
-                              title="Extend expiry"
-                            >
-                              <Calendar className="w-3 h-3" />
-                              Extend
-                            </button>
-                          )}
-                          {!code.used && (
+                            {code.expires_at && (
+                              <button
+                                onClick={() => {
+                                  setSelectedCode(code);
+                                  setShowExtendModal(true);
+                                }}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 flex items-center gap-1"
+                                title="Extend expiry"
+                              >
+                                <Calendar className="w-3 h-3" />
+                                Extend
+                              </button>
+                            )}
                             <button
                               onClick={() => handleLock(code.id, isExpired(code))}
                               className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${
@@ -457,27 +472,115 @@ export default function DiscountCodesManager() {
                                 </>
                               )}
                             </button>
+                            <button
+                              onClick={() => {
+                                setSelectedCode(code);
+                                setShowDeleteModal(true);
+                              }}
+                              className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
+                              title="Delete code"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Used Codes Section */}
+      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+        <button
+          onClick={() => setUsedSectionOpen(!usedSectionOpen)}
+          className="w-full px-4 py-3 bg-sage-light/30 hover:bg-sage-light/40 transition-colors flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-semibold">Used</span>
+            <span className="text-sm font-semibold text-charcoal">
+              Used Codes ({usedCodes.length})
+            </span>
+          </div>
+          {usedSectionOpen ? (
+            <ChevronUp className="w-4 h-4 text-charcoal" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-charcoal" />
+          )}
+        </button>
+        {usedSectionOpen && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-sage-light/20">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sand">
+                {usedCodes.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
+                      No used discount codes found
+                    </td>
+                  </tr>
+                ) : (
+                  usedCodes.map((code) => {
+                    const usage = usageDetails[code.id];
+                    return (
+                      <tr key={code.id} className="hover:bg-sand/10">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-dark-sage" />
+                            <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {code.customer_name || code.customer_email || 'General'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {code.discount_type === 'percent' 
+                            ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                            : `$${code.discount_value}`}
+                        </td>
+                        <td className="px-4 py-3">
+                          {getStatusBadge(code)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {formatDate(code.expires_at)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {usage ? (
+                            <div className="space-y-1">
+                              <div className="font-medium">{usage.customer_name}</div>
+                              <div className="text-xs text-warm-gray">
+                                {usage.service_name} • {formatDate(usage.booking_date)}
+                              </div>
+                              <div className="text-xs text-warm-gray">
+                                Used: {formatDate(usage.used_at)}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-warm-gray">Used</span>
                           )}
-                          <button
-                            onClick={() => {
-                              setSelectedCode(code);
-                              setShowDeleteModal(true);
-                            }}
-                            className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
-                            title="Delete code"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Create Modal */}
@@ -843,9 +946,9 @@ export default function DiscountCodesManager() {
                   Are you sure you want to delete discount code <span className="font-mono font-semibold text-charcoal">{selectedCode.code}</span>?
                 </p>
                 {selectedCode.used && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800">
-                      ⚠️ This code has already been used. Deleting it will remove the record but won&apos;t affect the booking that used it.
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-sm text-red-800">
+                      ⚠️ This code has already been used and cannot be deleted from the website. Used codes can only be deleted directly in Neon.
                     </p>
                   </div>
                 )}
@@ -861,7 +964,8 @@ export default function DiscountCodesManager() {
                   </button>
                   <button
                     onClick={handleDelete}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                    disabled={selectedCode.used}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                   >
                     Delete
                   </button>

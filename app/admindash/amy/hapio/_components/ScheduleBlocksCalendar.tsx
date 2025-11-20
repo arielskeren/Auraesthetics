@@ -21,9 +21,12 @@ interface ScheduleBlock {
 
 export default function ScheduleBlocksCalendar({
   resourceId,
-  locationId,
+  locationId: propLocationId,
 }: ScheduleBlocksCalendarProps) {
-  const { getScheduleBlocks, getAvailabilityFull } = useHapioData();
+  const { getScheduleBlocks, getAvailabilityFull, locations } = useHapioData();
+  
+  // Use prop locationId, or fallback to first location from context, or null
+  const locationId = propLocationId ?? (locations && locations.length > 0 ? locations[0].id : null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [availability, setAvailability] = useState<Record<string, Array<{ start: string; end: string }>>>({});
@@ -159,8 +162,13 @@ export default function ScheduleBlocksCalendar({
   };
 
   const handleSave = async () => {
-    if (!selectedDate || !locationId) {
-      setError(new Error('Date and location are required'));
+    if (!selectedDate) {
+      setError(new Error('Date is required'));
+      return;
+    }
+    
+    if (!locationId) {
+      setError(new Error('Location ID is required. Please ensure a location exists and HAPIO_DEFAULT_LOCATION_ID is set, or select a location.'));
       return;
     }
 

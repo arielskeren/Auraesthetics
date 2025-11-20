@@ -1287,6 +1287,7 @@ export async function listResourceSchedule(
   params?: {
     from?: string;
     to?: string;
+    location_id?: string;
     page?: number;
     per_page?: number;
   }
@@ -1294,6 +1295,7 @@ export async function listResourceSchedule(
   const query: Record<string, string | number> = {};
   if (params?.from) query.from = params.from;
   if (params?.to) query.to = params.to;
+  if (params?.location_id) query.location_id = params.location_id;
   if (params?.page) query.page = params.page;
   if (params?.per_page) query.per_page = params.per_page;
 

@@ -55,6 +55,8 @@ export default function ResourceScheduleModal({
         const toDate = new Date(filters.to + 'T23:59:59Z');
         params.append('to', formatDateForHapio(toDate));
       }
+      // location_id will be handled by API route using HAPIO_DEFAULT_LOCATION_ID env var
+      // Can be optionally passed here if needed for multi-location support
       params.append('page', String(page));
       params.append('per_page', String(perPage));
 

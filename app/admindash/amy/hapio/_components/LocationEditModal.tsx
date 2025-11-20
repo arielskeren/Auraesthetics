@@ -283,7 +283,7 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
               </div>
             )}
             <p className="text-xs text-warm-gray mt-1">
-              Must use IANA timezone format (e.g., America/New_York). Abbreviations like "EST" are not supported.
+              Must use IANA timezone format (e.g., America/New_York). Abbreviations like &quot;EST&quot; are not supported.
             </p>
           </div>
 

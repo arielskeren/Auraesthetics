@@ -11,10 +11,23 @@ export async function GET(
     const to = searchParams.get('to') ?? undefined;
     const page = searchParams.get('page') ? Number(searchParams.get('page')) : undefined;
     const perPage = searchParams.get('per_page') ? Number(searchParams.get('per_page')) : undefined;
+    
+    // Get location_id from query param or fallback to env var
+    const locationId = searchParams.get('location_id') ?? process.env.HAPIO_DEFAULT_LOCATION_ID ?? undefined;
+    
+    if (!locationId) {
+      return NextResponse.json(
+        {
+          error: 'Location ID is required. Please provide location_id query parameter or set HAPIO_DEFAULT_LOCATION_ID environment variable.',
+        },
+        { status: 400 }
+      );
+    }
 
     const response = await listResourceSchedule(params.id, {
       from,
       to,
+      location_id: locationId,
       page,
       per_page: perPage,
     });
