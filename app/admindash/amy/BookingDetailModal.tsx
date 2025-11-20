@@ -31,6 +31,19 @@ interface Booking {
   refund_id?: string | null;
   refund_reason?: string | null;
   refund_date?: string | null;
+  refunds?: Array<{
+    id: string;
+    stripe_refund_id: string;
+    amount_cents: number;
+    requested_amount_cents?: number | null;
+    reason: string | null;
+    refund_type: string | null;
+    refund_percentage?: number | null;
+    status: string;
+    created_at: string;
+    metadata?: any;
+  }>;
+  refund_count?: number;
   created_at?: string;
   metadata?: any;
   // Hapio booking object fields (for compatibility)
@@ -202,6 +215,31 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   };
 
   const handleRefund = () => {
+    setRefundAmount('');
+    setRefundType('dollar');
+    setShowRefundModal(true);
+  };
+
+  const handleFullRefund = () => {
+    const effective = bookingDetails || booking;
+    if (!effective) return;
+    
+    const paymentAmountCents = effective.payment_amount_cents || 0;
+    const alreadyRefundedCents = effective.refunded_cents || 0;
+    const remainingRefundableCents = paymentAmountCents - alreadyRefundedCents;
+    const remainingRefundableDollars = remainingRefundableCents / 100;
+    
+    if (remainingRefundableDollars <= 0) {
+      setActionMessage({ 
+        type: 'error', 
+        text: 'No remaining refundable amount. This payment has already been fully refunded.' 
+      });
+      return;
+    }
+    
+    // Pre-fill the refund modal with the remaining refundable amount
+    setRefundAmount(remainingRefundableDollars.toFixed(2));
+    setRefundType('dollar');
     setShowRefundModal(true);
   };
 
@@ -627,13 +665,22 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       return;
     }
 
-    // Get payment amount to validate against
+    // Get payment amount and already refunded amount to validate against
     const paymentAmountCents = effective.payment_amount_cents || 0;
     if (paymentAmountCents <= 0) {
       setActionMessage({ type: 'error', text: 'No payment found for this booking' });
       return;
     }
     const paymentAmountDollars = paymentAmountCents / 100;
+    const alreadyRefundedCents = effective.refunded_cents || 0;
+    const alreadyRefundedDollars = alreadyRefundedCents / 100;
+    const remainingRefundableDollars = paymentAmountDollars - alreadyRefundedDollars;
+
+    // Validate remaining refundable amount
+    if (remainingRefundableDollars <= 0) {
+      setActionMessage({ type: 'error', text: 'No remaining refundable amount. This payment has already been fully refunded.' });
+      return;
+    }
 
     let percentage: number | null = null;
     let amountCents: number | null = null;
@@ -643,10 +690,21 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
         setActionMessage({ type: 'error', text: 'Percentage must be between 1 and 100' });
         return;
       }
+      // Calculate what the percentage would be of the remaining refundable amount
+      const calculatedRefundDollars = (amountValue / 100) * remainingRefundableDollars;
+      if (calculatedRefundDollars > remainingRefundableDollars) {
+        setActionMessage({ type: 'error', text: `This percentage would result in a refund of $${calculatedRefundDollars.toFixed(2)}, which exceeds the remaining refundable amount of $${remainingRefundableDollars.toFixed(2)}` });
+        return;
+      }
       percentage = amountValue;
     } else {
-      if (amountValue > paymentAmountDollars) {
-        setActionMessage({ type: 'error', text: `Refund amount cannot exceed payment amount of $${paymentAmountDollars.toFixed(2)}` });
+      // Validate against remaining refundable amount, not total payment
+      if (amountValue > remainingRefundableDollars) {
+        setActionMessage({ type: 'error', text: `Refund amount ($${amountValue.toFixed(2)}) cannot exceed remaining refundable amount of $${remainingRefundableDollars.toFixed(2)}. Total paid: $${paymentAmountDollars.toFixed(2)}, Already refunded: $${alreadyRefundedDollars.toFixed(2)}` });
+        return;
+      }
+      if (amountValue <= 0) {
+        setActionMessage({ type: 'error', text: 'Refund amount must be greater than 0' });
         return;
       }
       amountCents = Math.round(amountValue * 100);
@@ -889,15 +947,28 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                         </button>
                         
                         {/* Only show refund button if paid/succeeded AND not already refunded */}
-                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded') && effective.payment_intent_id && (effective.refunded_cents == null || effective.refunded_cents === 0)) ? (
-                          <button
-                            onClick={handleRefund}
-                            disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
-                            className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                          >
-                            <DollarSign className="w-3.5 h-3.5" />
-                            Refund Only
-                          </button>
+                        {((effective.payment_status === 'paid' || effective.payment_status === 'succeeded' || effective.payment_status === 'refunded') && effective.payment_intent_id && (effective.refund_count == null || effective.refund_count < 3)) ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleRefund}
+                              disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
+                              className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                              {effective.refund_count && effective.refund_count > 0 ? `Refund (${effective.refund_count}/3)` : 'Refund Only'}
+                            </button>
+                            {effective.payment_amount_cents && effective.refunded_cents !== undefined && (effective.payment_amount_cents - (effective.refunded_cents || 0)) > 0 && (
+                              <button
+                                onClick={handleFullRefund}
+                                disabled={actionLoading === 'refund' || actionLoading === 'cancel'}
+                                className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                                title={`Refund remaining $${(((effective.payment_amount_cents - (effective.refunded_cents || 0)) / 100).toFixed(2))}`}
+                              >
+                                <DollarSign className="w-3.5 h-3.5" />
+                                Full Refund
+                              </button>
+                            )}
+                          </div>
                         ) : null}
                       </>
                     )}
@@ -1020,36 +1091,51 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     </div>
                   )}
                   {/* Refund Information */}
-                  {(effective.refunded_cents != null && effective.refunded_cents > 0) ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
-                      <label className="text-xs font-semibold text-yellow-800 mb-1 block">Refund Information</label>
-                      <div className="space-y-1">
-                        <p className="text-xs text-yellow-800">
-                          <strong>Amount Refunded:</strong> ${((effective.refunded_cents || 0) / 100).toFixed(2)}
-                        </p>
-                        {effective.refund_date && (
-                          <p className="text-xs text-yellow-800">
-                            <strong>Date Refunded:</strong> {formatDate(effective.refund_date)}
+                  {(effective.refunds && effective.refunds.length > 0) ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                      <label className="text-xs font-semibold text-yellow-800 mb-2 block">
+                        Refund Information {effective.refund_count && effective.refund_count > 0 ? `(${effective.refund_count} refund${effective.refund_count > 1 ? 's' : ''})` : ''}
+                      </label>
+                      <div className="space-y-3">
+                        {effective.refunds.map((refund, index) => (
+                          <div key={refund.id} className="bg-white rounded p-2 border border-yellow-300">
+                            <div className="flex justify-between items-start mb-1">
+                              <p className="text-xs font-semibold text-yellow-900">Refund #{index + 1}</p>
+                              <span className="text-xs text-yellow-700">{formatDate(refund.created_at)}</span>
+                            </div>
+                            <p className="text-xs text-yellow-800">
+                              <strong>Amount:</strong> ${(refund.amount_cents / 100).toFixed(2)}
+                            </p>
+                            {refund.reason && (
+                              <p className="text-xs text-yellow-800">
+                                <strong>Reason:</strong> {refund.reason}
+                              </p>
+                            )}
+                            {refund.stripe_refund_id && (
+                              <p className="text-xs text-yellow-800 font-mono break-all">
+                                <strong>Refund ID:</strong> {refund.stripe_refund_id}
+                              </p>
+                            )}
+                            {refund.status && (
+                              <p className="text-xs text-yellow-700">
+                                <strong>Status:</strong> {refund.status}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                        {effective.payment_amount_cents && effective.refunded_cents && effective.refunded_cents < effective.payment_amount_cents && (
+                          <p className="text-xs text-yellow-700 italic pt-1 border-t border-yellow-300">
+                            Total refunded: ${(effective.refunded_cents / 100).toFixed(2)} of ${(effective.payment_amount_cents / 100).toFixed(2)} (${((effective.payment_amount_cents - effective.refunded_cents) / 100).toFixed(2)} remaining)
                           </p>
                         )}
-                        {effective.refund_reason && (
-                          <p className="text-xs text-yellow-800">
-                            <strong>Reason:</strong> {effective.refund_reason}
+                        {effective.payment_amount_cents && effective.refunded_cents && effective.refunded_cents >= effective.payment_amount_cents && (
+                          <p className="text-xs text-yellow-700 italic pt-1 border-t border-yellow-300">
+                            Full refund completed
                           </p>
                         )}
-                        {effective.refund_id && (
-                          <p className="text-xs text-yellow-800 font-mono break-all">
-                            <strong>Refund ID:</strong> {effective.refund_id}
-                          </p>
-                        )}
-                        {effective.payment_amount_cents && effective.refunded_cents < effective.payment_amount_cents && (
-                          <p className="text-xs text-yellow-700 italic">
-                            Partial refund (${((effective.payment_amount_cents - effective.refunded_cents) / 100).toFixed(2)} remaining)
-                          </p>
-                        )}
-                        {effective.payment_amount_cents && effective.refunded_cents >= effective.payment_amount_cents && (
-                          <p className="text-xs text-yellow-700 italic">
-                            Full refund
+                        {effective.refund_count && effective.refund_count >= 3 && (
+                          <p className="text-xs text-red-600 italic pt-1 border-t border-yellow-300">
+                            Maximum of 3 refunds reached for this payment
                           </p>
                         )}
                       </div>
@@ -1190,7 +1276,13 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                       type="number"
                       step={refundType === 'percent' ? '1' : '0.01'}
                       min="0"
-                      max={refundType === 'percent' ? '100' : undefined}
+                      max={refundType === 'percent' 
+                        ? '100' 
+                        : effective.payment_amount_cents && effective.refunded_cents
+                          ? ((effective.payment_amount_cents - effective.refunded_cents) / 100).toFixed(2)
+                          : effective.payment_amount_cents
+                            ? (effective.payment_amount_cents / 100).toFixed(2)
+                            : undefined}
                       value={refundAmount}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -1199,23 +1291,91 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                           setRefundAmount(value);
                         }
                       }}
-                      placeholder={refundType === 'percent' ? 'Enter percentage (1-100)' : 'Enter amount'}
-                      className="flex-1 px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage focus:border-transparent"
+                      placeholder={refundType === 'percent' 
+                        ? 'Enter percentage (1-100)' 
+                        : effective.payment_amount_cents && effective.refunded_cents
+                          ? `Max: $${((effective.payment_amount_cents - effective.refunded_cents) / 100).toFixed(2)}`
+                          : 'Enter amount'}
+                      className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                        (() => {
+                          if (!effective.payment_amount_cents || !refundAmount) return 'border-sage-dark/20 focus:ring-dark-sage';
+                          const paymentAmountDollars = effective.payment_amount_cents / 100;
+                          const alreadyRefundedDollars = (effective.refunded_cents || 0) / 100;
+                          const remainingRefundableDollars = paymentAmountDollars - alreadyRefundedDollars;
+                          const enteredValue = parseFloat(refundAmount);
+                          if (isNaN(enteredValue)) return 'border-sage-dark/20 focus:ring-dark-sage';
+                          if (refundType === 'dollar' && enteredValue > remainingRefundableDollars) {
+                            return 'border-red-500 focus:ring-red-500';
+                          }
+                          if (refundType === 'percent') {
+                            const calculatedDollars = (enteredValue / 100) * remainingRefundableDollars;
+                            if (calculatedDollars > remainingRefundableDollars) {
+                              return 'border-red-500 focus:ring-red-500';
+                            }
+                          }
+                          return 'border-sage-dark/20 focus:ring-dark-sage';
+                        })()
+                      }`}
                     />
                     {refundType === 'percent' && (
                       <span className="text-charcoal font-medium">%</span>
                     )}
                   </div>
-                  {effective.payment_amount_cents && (
-                    <p className="text-xs text-warm-gray mt-1">
-                      Payment amount: ${((effective.payment_amount_cents || 0) / 100).toFixed(2)}
-                      {refundType === 'percent' && refundAmount && !isNaN(parseFloat(refundAmount)) && (
-                        <span className="ml-2">
-                          ({parseFloat(refundAmount)}% = ${((parseFloat(refundAmount) / 100) * (effective.payment_amount_cents || 0) / 100).toFixed(2)})
-                        </span>
-                      )}
-                    </p>
-                  )}
+                  {effective.payment_amount_cents && (() => {
+                    const paymentAmountDollars = effective.payment_amount_cents / 100;
+                    const alreadyRefundedDollars = (effective.refunded_cents || 0) / 100;
+                    const remainingRefundableDollars = paymentAmountDollars - alreadyRefundedDollars;
+                    const enteredValue = parseFloat(refundAmount);
+                    const isValid = !isNaN(enteredValue) && enteredValue > 0 && (
+                      refundType === 'dollar' 
+                        ? enteredValue <= remainingRefundableDollars
+                        : enteredValue <= 100 && (enteredValue / 100) * remainingRefundableDollars <= remainingRefundableDollars
+                    );
+                    const calculatedRefundDollars = refundType === 'percent' && !isNaN(enteredValue)
+                      ? (enteredValue / 100) * remainingRefundableDollars
+                      : enteredValue;
+                    
+                    return (
+                      <div className="text-xs mt-1 space-y-1">
+                        <div className="grid grid-cols-2 gap-2 text-warm-gray">
+                          <p><strong>Total Paid:</strong> ${paymentAmountDollars.toFixed(2)}</p>
+                          <p><strong>Already Refunded:</strong> ${alreadyRefundedDollars.toFixed(2)}</p>
+                        </div>
+                        <p className={`font-medium ${remainingRefundableDollars > 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          <strong>Remaining Refundable:</strong> ${remainingRefundableDollars.toFixed(2)}
+                        </p>
+                        {refundAmount && !isNaN(enteredValue) && enteredValue > 0 && (
+                          <div>
+                            {refundType === 'percent' ? (
+                              <p className={isValid ? 'text-green-700' : 'text-red-600'}>
+                                {enteredValue}% = ${calculatedRefundDollars.toFixed(2)}
+                                {!isValid && (
+                                  <span className="ml-1">(exceeds remaining refundable)</span>
+                                )}
+                              </p>
+                            ) : (
+                              <p className={isValid ? 'text-green-700' : 'text-red-600'}>
+                                Requested: ${enteredValue.toFixed(2)}
+                                {!isValid && (
+                                  <span className="ml-1">(exceeds remaining refundable of ${remainingRefundableDollars.toFixed(2)})</span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {effective.refund_count !== undefined && effective.refund_count > 0 && (
+                          <p className="text-orange-600 font-medium">
+                            Refunds issued: {effective.refund_count}/3
+                          </p>
+                        )}
+                        {remainingRefundableDollars <= 0 && (
+                          <p className="text-red-600 font-medium">
+                            ⚠️ This payment has been fully refunded. No additional refunds can be issued.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Refund Reason (Required) */}

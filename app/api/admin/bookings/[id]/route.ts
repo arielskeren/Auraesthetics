@@ -96,10 +96,7 @@ export async function GET(
           s.duration_display AS service_duration,
           p.amount_cents AS payment_amount_cents,
           p.status AS payment_status_override,
-          p.refunded_cents AS refunded_cents,
-          refund_event.data->>'refundId' AS refund_id,
-          refund_event.data->>'reason' AS refund_reason,
-          refund_event.created_at AS refund_date
+          p.refunded_cents AS refunded_cents
         FROM bookings b
         LEFT JOIN customers c ON b.customer_id = c.id
         LEFT JOIN services s ON (b.service_id = s.id::text OR b.service_id = s.slug)
@@ -111,13 +108,6 @@ export async function GET(
           FROM payments
           WHERE booking_id = b.id
         ) p ON true
-        LEFT JOIN LATERAL (
-          SELECT data, created_at
-          FROM booking_events
-          WHERE booking_id = b.id AND type = 'refund'
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) refund_event ON true
         WHERE b.id = ${internalId}
         LIMIT 1
       `,
@@ -157,6 +147,38 @@ export async function GET(
     const paymentAmountCents = row.payment_amount_cents ? Number(row.payment_amount_cents) : null;
     const finalAmount = paymentAmountCents ? paymentAmountCents / 100 : null;
     const refundedCents = row.refunded_cents ? Number(row.refunded_cents) : null;
+    
+    // Fetch all refunds for this booking
+    const refundsResult = await sql`
+      SELECT 
+        r.id,
+        r.stripe_refund_id,
+        r.amount_cents,
+        r.requested_amount_cents,
+        r.reason,
+        r.refund_type,
+        r.refund_percentage,
+        r.status,
+        r.created_at,
+        r.metadata
+      FROM refunds r
+      JOIN payments p ON r.payment_id = p.id
+      WHERE p.booking_id = ${internalId}
+      ORDER BY r.created_at DESC
+    `;
+    const refunds = normalizeRows(refundsResult).map((r: any) => ({
+      id: r.id,
+      stripe_refund_id: r.stripe_refund_id,
+      amount_cents: Number(r.amount_cents),
+      requested_amount_cents: r.requested_amount_cents ? Number(r.requested_amount_cents) : null,
+      reason: r.reason,
+      refund_type: r.refund_type,
+      refund_percentage: r.refund_percentage ? Number(r.refund_percentage) : null,
+      status: r.status,
+      created_at: r.created_at,
+      metadata: r.metadata,
+    }));
+    
     const clientHistory = normalizeRows(historyResult).map((h: any) => ({
       id: h.id,
       service_name: h.service_name,
@@ -189,6 +211,8 @@ export async function GET(
       service_display_name: row.service_display_name || row.service_name,
       service_image_url: row.service_image_url,
       service_duration: row.service_duration,
+      refunds: refunds, // Include all refunds
+      refund_count: refunds.length, // Include refund count
     };
 
     return NextResponse.json({ success: true, booking: bookingData, clientHistory });
@@ -1017,6 +1041,25 @@ export async function POST(
         const totalCents = Number(paymentRow.total_amount_cents);
         const alreadyRefundedTotal = Number(paymentRow.total_refunded_cents || 0);
         const remainingRefundable = totalCents - alreadyRefundedTotal;
+        
+        // Check refund count limit (max 3 refunds per payment intent)
+        const refundCountResult = await sql`
+          SELECT COUNT(*) as refund_count
+          FROM refunds r
+          JOIN payments p ON r.payment_id = p.id
+          WHERE p.booking_id = ${bookingInternalId}
+            AND p.stripe_pi_id = ${bookingData.payment_intent_id}
+        `;
+        const refundCountRows = normalizeRows(refundCountResult);
+        const refundCount = Number(refundCountRows[0]?.refund_count || 0);
+        
+        if (refundCount >= 3) {
+          await sql`ROLLBACK`;
+          return NextResponse.json(
+            { error: 'Maximum of 3 refunds allowed per payment. This payment has already reached the limit.' },
+            { status: 400 }
+          );
+        }
         
         // Calculate refund amount based on request
         let requestedRefundCents = remainingRefundable; // Default to remaining refundable amount
