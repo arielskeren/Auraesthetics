@@ -531,12 +531,77 @@ export async function syncCustomerToBrevo(params: {
               console.log(`[syncCustomerToBrevo] Created new Brevo contact for ${customer.email} with ID ${brevoContactId} (retry after 404)`);
             } else {
               const retryErrorText = await retryResp.text().catch(() => '');
-              console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email} after 404:`, retryResp.status, retryErrorText);
+              let retryErrorData: any;
+              try {
+                retryErrorData = typeof retryErrorText === 'string' ? JSON.parse(retryErrorText) : retryErrorText;
+              } catch {
+                retryErrorData = { message: retryErrorText };
+              }
+              
+              // If it's a duplicate error, try to fetch the contact again
+              if (retryResp.status === 400 && (retryErrorData?.code === 'duplicate_parameter' || retryErrorData?.message?.toLowerCase().includes('already exist'))) {
+                console.warn(`[syncCustomerToBrevo] Retry creation returned duplicate error for ${customer.email}. Attempting to fetch by email again.`);
+                const finalFetch = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+                  headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+                });
+                
+                if (finalFetch.ok) {
+                  const finalData = await finalFetch.json().catch(() => ({}));
+                  brevoContactId = finalData?.id;
+                  brevoResult = { id: brevoContactId, success: true };
+                  console.log(`[syncCustomerToBrevo] Found existing Brevo contact for ${customer.email} with ID ${brevoContactId} (after duplicate error)`);
+                } else {
+                  console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email} after 404 and duplicate error. Final fetch status: ${finalFetch.status}`);
+                }
+              } else {
+                console.error(`[syncCustomerToBrevo] Failed to create contact for ${customer.email} after 404:`, retryResp.status, retryErrorData);
+              }
             }
           } else {
-            // Other error status
+            // Other error status (not 200/201/404)
             const errorText = await existingResp.text().catch(() => '');
-            console.error(`[syncCustomerToBrevo] Failed to fetch existing contact for ${customer.email}:`, existingResp.status, errorText);
+            let errorData: any;
+            try {
+              errorData = typeof errorText === 'string' ? JSON.parse(errorText) : errorText;
+            } catch {
+              errorData = { message: errorText };
+            }
+            console.error(`[syncCustomerToBrevo] Failed to fetch existing contact for ${customer.email}:`, existingResp.status, errorData);
+            
+            // Even if fetch failed, try to create the contact as a last resort
+            console.warn(`[syncCustomerToBrevo] Attempting to create contact ${customer.email} as fallback after fetch error.`);
+            const fallbackBody: any = {
+              email: customer.email,
+              attributes: {
+                FIRSTNAME: customer.first_name || '',
+                LASTNAME: customer.last_name || '',
+                USED_WELCOME_OFFER: customer.used_welcome_offer === true ? 'true' : 'false',
+              },
+              updateEnabled: true,
+            };
+            if (attributes.PHONE) {
+              fallbackBody.attributes.PHONE = attributes.PHONE;
+              fallbackBody.attributes.LANDLINE_NUMBER = attributes.LANDLINE_NUMBER;
+              fallbackBody.attributes.SMS = attributes.SMS;
+            }
+            if (finalListId && Number.isFinite(finalListId)) fallbackBody.listIds = [finalListId];
+            if (tags?.length) fallbackBody.tags = tags;
+            
+            const fallbackResp = await fetch(`${BREVO_API_BASE}/contacts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+              body: JSON.stringify(fallbackBody),
+            });
+            
+            if (fallbackResp.status === 200 || fallbackResp.status === 201) {
+              const fallbackData = await fallbackResp.json().catch(() => ({}));
+              brevoContactId = fallbackData?.id;
+              brevoResult = { id: brevoContactId, success: true };
+              console.log(`[syncCustomerToBrevo] Created Brevo contact for ${customer.email} with ID ${brevoContactId} (fallback after fetch error)`);
+            } else {
+              const fallbackErrorText = await fallbackResp.text().catch(() => '');
+              console.error(`[syncCustomerToBrevo] Fallback creation also failed for ${customer.email}:`, fallbackResp.status, fallbackErrorText);
+            }
           }
         } catch (e) {
           console.error(`[syncCustomerToBrevo] Error fetching/updating contact by email ${customer.email}:`, e);
