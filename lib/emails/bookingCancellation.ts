@@ -2,6 +2,8 @@
  * Generate cancellation email template
  */
 
+import { EST_TIMEZONE } from '../timezone';
+
 function escapeHtml(text: string | null | undefined): string {
   if (!text) return '';
   return text
@@ -43,7 +45,6 @@ export function generateBookingCancellationEmail(params: {
     bookUrl = 'https://www.theauraesthetics.com/book',
   } = params;
 
-  const { EST_TIMEZONE } = await import('../timezone');
   const formattedDate = bookingDate.toLocaleDateString('en-US', {
     timeZone: EST_TIMEZONE,
     weekday: 'long',

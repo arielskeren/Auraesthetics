@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import Stripe from 'stripe';
 import crypto from 'crypto';
+import { rateLimit, getClientIp } from '@/app/_utils/rateLimit';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+if (!STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+}
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2025-10-29.clover',
 });
 
@@ -201,9 +206,34 @@ async function upsertBrevoBookingContact(attendee: {
   }
 }
 
+// Rate limiter: 10 requests per minute per IP (prevent booking spam)
+const limiter = rateLimit({ windowMs: 60 * 1000, maxRequests: 10 });
+
 export async function POST(request: NextRequest) {
+  // Check rate limit
+  const clientIp = getClientIp(request);
+  const rateLimitCheck = limiter.check(clientIp);
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      {
+        error: 'Too many booking requests. Please try again later.',
+        retryAfter: Math.ceil((rateLimitCheck.resetAt - Date.now()) / 1000),
+      },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': Math.ceil((rateLimitCheck.resetAt - Date.now()) / 1000).toString(),
+          'X-RateLimit-Limit': '10',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': new Date(rateLimitCheck.resetAt).toISOString(),
+        },
+      }
+    );
+  }
+
+  let body: any = null;
   try {
-    const body = await request.json();
+    body = await request.json();
     const {
       paymentIntentId,
       selectedSlot,
@@ -492,7 +522,12 @@ export async function POST(request: NextRequest) {
       publicBookingUrl: null, // Legacy Cal.com URL removed (Hapio migration)
     });
   } catch (error: any) {
-    console.error('Token creation error:', error);
+    console.error('[Create Token] Error:', {
+      paymentIntentId: body?.paymentIntentId,
+      attendeeEmail: body?.attendee?.email,
+      error: error?.message,
+      stack: error?.stack,
+    });
     return NextResponse.json(
       { error: 'Failed to create booking token' },
       { status: 500 }

@@ -2,6 +2,8 @@
  * Generate reschedule email template
  */
 
+import { EST_TIMEZONE } from '../timezone';
+
 function escapeHtml(text: string | null | undefined): string {
   if (!text) return '';
   return text
@@ -44,7 +46,6 @@ export function generateBookingRescheduleEmail(params: {
   const finalBookUrl = bookUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
   const finalCancelUrl = cancelUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
 
-  const { EST_TIMEZONE } = await import('../timezone');
   const formattedOldDate = oldBookingDate.toLocaleDateString('en-US', {
     timeZone: EST_TIMEZONE,
     weekday: 'long',

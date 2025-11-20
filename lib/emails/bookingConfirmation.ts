@@ -2,6 +2,8 @@
  * Generate calendar links for booking confirmation emails
  */
 
+import { EST_TIMEZONE } from '../timezone';
+
 export function generateCalendarLinks(
   serviceName: string,
   startDate: Date,
@@ -98,7 +100,6 @@ export function generateBookingConfirmationEmail(params: {
   const finalCancelUrl = cancelUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
   const finalRescheduleUrl = rescheduleUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
 
-  const { EST_TIMEZONE } = await import('../timezone');
   const formattedDate = bookingDate.toLocaleDateString('en-US', {
     timeZone: EST_TIMEZONE,
     weekday: 'long',

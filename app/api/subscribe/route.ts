@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit, getClientIp } from '@/app/_utils/rateLimit';
 
 // Generate unique welcome offer code
 function generateWelcomeCode(): string {
@@ -10,9 +11,34 @@ function generateWelcomeCode(): string {
   return code;
 }
 
+// Rate limiter: 5 requests per minute per IP (prevent Brevo spam)
+const limiter = rateLimit({ windowMs: 60 * 1000, maxRequests: 5 });
+
 export async function POST(request: NextRequest) {
+  // Check rate limit
+  const clientIp = getClientIp(request);
+  const rateLimitCheck = limiter.check(clientIp);
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      {
+        error: 'Too many subscription requests. Please try again later.',
+        retryAfter: Math.ceil((rateLimitCheck.resetAt - Date.now()) / 1000),
+      },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': Math.ceil((rateLimitCheck.resetAt - Date.now()) / 1000).toString(),
+          'X-RateLimit-Limit': '5',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': new Date(rateLimitCheck.resetAt).toISOString(),
+        },
+      }
+    );
+  }
+
+  let body: any = null;
   try {
-    const body = await request.json();
+    body = await request.json();
     const { firstName, lastName, email, phone, birthday, address, signupSource } = body;
 
     // Validate required fields
@@ -51,7 +77,11 @@ export async function POST(request: NextRequest) {
 
 
     if (!apiKey || !listId) {
-      console.error('Missing Brevo credentials');
+      console.error('[Subscribe] Missing Brevo credentials:', {
+        email: body?.email,
+        hasApiKey: !!apiKey,
+        hasListId: !!listId,
+      });
       return NextResponse.json(
         { error: 'Server configuration error' },
         { status: 500 }
@@ -185,6 +215,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      console.error('[Subscribe] Brevo API error:', {
+        email: body?.email,
+        status: response.status,
+        errorCode: errorData?.code,
+        errorMessage: errorData?.message,
+        errorData,
+      });
+
       return NextResponse.json(
         { error: errorData.message || 'Failed to subscribe', details: errorData },
         { status: response.status }
@@ -196,8 +234,15 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-  } catch (error) {
-    console.error('Subscription error:', error);
+  } catch (error: any) {
+    console.error('[Subscribe] Error:', {
+      email: body?.email,
+      firstName: body?.firstName,
+      lastName: body?.lastName,
+      signupSource: body?.signupSource,
+      error: error?.message,
+      stack: error?.stack,
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

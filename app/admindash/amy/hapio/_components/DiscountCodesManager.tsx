@@ -845,7 +845,7 @@ export default function DiscountCodesManager() {
                 {selectedCode.used && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                     <p className="text-sm text-yellow-800">
-                      ⚠️ This code has already been used. Deleting it will remove the record but won't affect the booking that used it.
+                      ⚠️ This code has already been used. Deleting it will remove the record but won&apos;t affect the booking that used it.
                     </p>
                   </div>
                 )}

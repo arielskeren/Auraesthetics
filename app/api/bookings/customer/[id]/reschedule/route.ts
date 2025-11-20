@@ -217,9 +217,9 @@ export async function POST(
           }
 
           // Format dates and times
+          const { EST_TIMEZONE } = await import('@/lib/timezone');
           const oldBookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
           const oldBookingTime = oldBookingDate.toLocaleTimeString('en-US', {
-            const { EST_TIMEZONE } = await import('@/lib/timezone');
             timeZone: EST_TIMEZONE,
             hour: 'numeric',
             minute: '2-digit',
@@ -227,7 +227,6 @@ export async function POST(
           });
 
           const newBookingTime = newDateTime.toLocaleTimeString('en-US', {
-            const { EST_TIMEZONE } = await import('@/lib/timezone');
             timeZone: EST_TIMEZONE,
             hour: 'numeric',
             minute: '2-digit',
