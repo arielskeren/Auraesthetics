@@ -41,12 +41,15 @@ const DAYS = [
 
 export default function RecurringScheduleEditModal({
   resourceId,
-  locationId,
+  locationId: propLocationId,
   scheduleId,
   onClose,
   onSave,
 }: RecurringScheduleEditModalProps) {
-  const { services, getRecurringSchedules, getRecurringScheduleBlocks } = useHapioData();
+  const { services, getRecurringSchedules, getRecurringScheduleBlocks, locations } = useHapioData();
+  
+  // Use prop locationId, or fallback to first location from context, or null
+  const locationId = propLocationId ?? (locations && locations.length > 0 ? locations[0].id : null);
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DAYS.map((day) => ({
       dayOfWeek: day.value,
@@ -390,7 +393,7 @@ export default function RecurringScheduleEditModal({
       const endDateValue = calculateEndDate();
 
       if (!locationId) {
-        throw new Error('Location ID is required. Please ensure a location exists.');
+        throw new Error('Location ID is required. Please ensure a location exists and HAPIO_DEFAULT_LOCATION_ID is set, or select a location.');
       }
 
       // Create or update recurring schedule

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import BookingDetailModal from '../../BookingDetailModal';
 
 interface DiscountCode {
   id: string;
@@ -44,6 +45,9 @@ export default function DiscountCodesManager() {
   const [usageDetails, setUsageDetails] = useState<Record<string, UsageDetails>>({});
   const [activeSectionOpen, setActiveSectionOpen] = useState(true);
   const [usedSectionOpen, setUsedSectionOpen] = useState(true);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [loadingBooking, setLoadingBooking] = useState(false);
   
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -75,7 +79,15 @@ export default function DiscountCodesManager() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/admin/discount-codes');
+      // Add timestamp to prevent caching
+      const timestamp = Date.now();
+      const response = await fetch(`/api/admin/discount-codes?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || errorData.details || 'Failed to load discount codes');
@@ -110,7 +122,13 @@ export default function DiscountCodesManager() {
 
   const loadUsageDetails = async (codeId: string) => {
     try {
-      const response = await fetch(`/api/admin/discount-codes/${codeId}/usage`);
+      const response = await fetch(`/api/admin/discount-codes/${codeId}/usage`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         if (data.usage) {
@@ -151,7 +169,7 @@ export default function DiscountCodesManager() {
       alert('Discount code created and emailed to customer!');
       setShowCreateModal(false);
       setCreateForm({ customerEmail: '', discountType: 'percent', discountValue: '', discountCap: '', expiresInDays: '' });
-      loadCodes();
+      await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to create discount code');
     }
@@ -181,7 +199,7 @@ export default function DiscountCodesManager() {
       setShowExtendModal(false);
       setSelectedCode(null);
       setExtendDays('');
-      loadCodes();
+      await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to extend expiry');
     }
@@ -201,7 +219,7 @@ export default function DiscountCodesManager() {
         return;
       }
 
-      loadCodes();
+      await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to update code status');
     }
@@ -246,7 +264,7 @@ export default function DiscountCodesManager() {
       alert('Discount code updated successfully!');
       setShowEditModal(false);
       setSelectedCode(null);
-      loadCodes();
+      await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to update discount code');
     }
@@ -277,7 +295,9 @@ export default function DiscountCodesManager() {
       alert('Discount code deleted successfully!');
       setShowDeleteModal(false);
       setSelectedCode(null);
-      loadCodes();
+      // Force refresh by clearing usage details and reloading
+      setUsageDetails({});
+      await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to delete discount code');
     }
@@ -310,6 +330,46 @@ export default function DiscountCodesManager() {
   // Separate codes into active and used
   const activeCodes = codes.filter(code => !code.used);
   const usedCodes = codes.filter(code => code.used);
+
+  const handleViewBooking = async (code: DiscountCode) => {
+    const usage = usageDetails[code.id];
+    const bookingId = usage?.booking_id || code.booking_id;
+    
+    if (!bookingId) {
+      alert('No booking ID found for this discount code');
+      return;
+    }
+
+    try {
+      setLoadingBooking(true);
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(errorData.error || 'Failed to load booking details');
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.booking) {
+        setSelectedBooking(data.booking);
+        setShowBookingModal(true);
+      } else {
+        alert('Booking not found');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to load booking details');
+    } finally {
+      setLoadingBooking(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -452,13 +512,13 @@ export default function DiscountCodesManager() {
                               </button>
                             )}
                             <button
-                              onClick={() => handleLock(code.id, isExpired(code))}
+                              onClick={() => handleLock(code.id, !isExpired(code))}
                               className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${
                                 isExpired(code)
                                   ? 'bg-green-100 text-green-800 hover:bg-green-200'
                                   : 'bg-red-100 text-red-800 hover:bg-red-200'
                               }`}
-                              title={isExpired(code) ? 'Unlock code' : 'Lock code'}
+                              title={isExpired(code) ? 'Unlock code (extend by 30 days)' : 'Lock code (set to expired)'}
                             >
                               {isExpired(code) ? (
                                 <>
@@ -524,12 +584,13 @@ export default function DiscountCodesManager() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand">
                 {usedCodes.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
+                    <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
                       No used discount codes found
                     </td>
                   </tr>
@@ -573,6 +634,21 @@ export default function DiscountCodesManager() {
                             <span className="text-warm-gray">Used</span>
                           )}
                         </td>
+                        <td className="px-4 py-3">
+                          {usage?.booking_id || code.booking_id ? (
+                            <button
+                              onClick={() => handleViewBooking(code)}
+                              disabled={loadingBooking}
+                              className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              title="View booking details"
+                            >
+                              <Eye className="w-3 h-3" />
+                              {loadingBooking ? 'Loading...' : 'View Booking'}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-warm-gray">No booking</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
@@ -582,6 +658,22 @@ export default function DiscountCodesManager() {
           </div>
         )}
       </div>
+
+      {/* Booking Detail Modal */}
+      {showBookingModal && selectedBooking && (
+        <BookingDetailModal
+          booking={selectedBooking}
+          isOpen={showBookingModal}
+          onClose={() => {
+            setShowBookingModal(false);
+            setSelectedBooking(null);
+          }}
+          onRefresh={() => {
+            // Refresh discount codes when booking is updated
+            loadCodes();
+          }}
+        />
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

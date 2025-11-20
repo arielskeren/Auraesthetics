@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import ServiceSelectionModal from './ServiceSelectionModal';
 import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface ScheduleBlockEditModalProps {
   resourceId: string;
@@ -17,12 +18,16 @@ interface ScheduleBlockEditModalProps {
 
 export default function ScheduleBlockEditModal({
   resourceId,
-  locationId,
+  locationId: propLocationId,
   selectedDate,
   selectedBlock,
   onClose,
   onSave,
 }: ScheduleBlockEditModalProps) {
+  const { locations } = useHapioData();
+  
+  // Use prop locationId, or fallback to first location from context, or null
+  const locationId = propLocationId ?? (locations && locations.length > 0 ? locations[0].id : null);
   const [formData, setFormData] = useState({
     date: '',
     startTime: '00:00',
@@ -96,7 +101,7 @@ export default function ScheduleBlockEditModal({
       const endsAtFormatted = formatDateForHapio(endDateTime);
 
       if (!locationId) {
-        throw new Error('Location ID is required. Please ensure a location exists.');
+        throw new Error('Location ID is required. Please ensure a location exists and HAPIO_DEFAULT_LOCATION_ID is set, or select a location.');
       }
 
       const payload: any = {
