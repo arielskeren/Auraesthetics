@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentProject } from '@/lib/hapioClient';
+import { deduplicateRequest, getCacheKey } from '../_utils/requestDeduplication';
 
 /**
  * Diagnostic endpoint to test Hapio API authentication
@@ -10,7 +11,16 @@ export async function GET(request: NextRequest) {
     const token = process.env.HAPIO_API_TOKEN;
     const baseUrl = process.env.HAPIO_BASE_URL || 'https://eu-central-1.hapio.net/v1';
     
-    console.log('[Hapio Auth Test] Environment check:', {
+    // Log request source to identify phantom calls
+    const userAgent = request.headers.get('user-agent');
+    const referer = request.headers.get('referer');
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    
+    console.log('[Hapio Auth Test] Request from:', {
+      userAgent,
+      referer,
+      ip,
+      timestamp: new Date().toISOString(),
       hasToken: !!token,
       tokenLength: token?.length || 0,
       tokenPrefix: token ? `${token.substring(0, 12)}...` : 'none',
@@ -27,9 +37,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Try to make a simple API call
+    // Try to make a simple API call with deduplication
     try {
-      const project = await getCurrentProject();
+      const cacheKey = getCacheKey({ endpoint: 'test-auth' });
+      const project = await deduplicateRequest(cacheKey, async () => {
+        return await getCurrentProject();
+      });
       return NextResponse.json({
         success: true,
         message: 'Authentication successful',

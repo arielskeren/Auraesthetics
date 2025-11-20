@@ -3,23 +3,35 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
+import { EST_TIMEZONE } from '@/lib/timezone';
 
 interface LocationEditModalProps {
   location?: any;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (updatedLocation?: any) => void;
 }
+
+// Common timezone options for dropdown
+const COMMON_TIMEZONES = [
+  { value: 'America/New_York', label: 'America/New_York (EST/EDT)' },
+  { value: 'America/Chicago', label: 'America/Chicago (CST/CDT)' },
+  { value: 'America/Denver', label: 'America/Denver (MST/MDT)' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles (PST/PDT)' },
+  { value: 'UTC', label: 'UTC' },
+  { value: 'Europe/London', label: 'Europe/London (GMT/BST)' },
+];
 
 export default function LocationEditModal({ location, onClose, onSave }: LocationEditModalProps) {
   const [formData, setFormData] = useState({
     name: '',
-    timezone: 'UTC',
+    timezone: EST_TIMEZONE, // Default to EST for Florida business
     enabled: true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
   const [success, setSuccess] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [useCustomTimezone, setUseCustomTimezone] = useState(false);
 
   useEffect(() => {
     // Don't update form if we're closing or loading - prevents clearing fields during save
@@ -29,28 +41,58 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
     
     if (location) {
       console.log('[Location Edit Modal] Location prop updated:', location);
+      const locationTimezone = location.timezone || location.time_zone || EST_TIMEZONE;
+      const isCommonTimezone = COMMON_TIMEZONES.some(tz => tz.value === locationTimezone);
+      
       setFormData({
         name: location.name || '',
-        timezone: location.timezone || 'UTC',
+        timezone: locationTimezone,
         enabled: location.enabled !== false,
       });
+      setUseCustomTimezone(!isCommonTimezone);
     } else if (!success) {
       // Only reset form for new location if we're not showing success
       setFormData({
         name: '',
-        timezone: 'UTC',
+        timezone: EST_TIMEZONE, // Default to EST for Florida
         enabled: true,
       });
+      setUseCustomTimezone(false);
     }
   }, [location, loading, success, isClosing]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate timezone format (must be IANA timezone or empty/null)
+    const timezoneValue = formData.timezone.trim();
+    if (timezoneValue && !timezoneValue.match(/^[A-Za-z_]+\/[A-Za-z_]+$/)) {
+      // Check if it's a common abbreviation that needs conversion
+      const abbreviationMap: Record<string, string> = {
+        'EST': 'America/New_York',
+        'EDT': 'America/New_York',
+        'CST': 'America/Chicago',
+        'CDT': 'America/Chicago',
+        'MST': 'America/Denver',
+        'MDT': 'America/Denver',
+        'PST': 'America/Los_Angeles',
+        'PDT': 'America/Los_Angeles',
+      };
+      
+      const upperTimezone = timezoneValue.toUpperCase();
+      if (abbreviationMap[upperTimezone]) {
+        setError(new Error(`"${timezoneValue}" is not a valid IANA timezone. Did you mean "${abbreviationMap[upperTimezone]}"? Please use IANA format (e.g., America/New_York).`));
+        return;
+      } else {
+        setError(new Error(`"${timezoneValue}" is not a valid IANA timezone format. Please use IANA format (e.g., America/New_York, UTC, Europe/London).`));
+        return;
+      }
+    }
+    
     // Normalize form data: convert empty strings to null for optional fields
     const dataToSave = {
       name: formData.name,
-      timezone: formData.timezone === '' ? null : formData.timezone,
+      timezone: timezoneValue === '' ? null : timezoneValue,
       enabled: formData.enabled,
     };
     
@@ -98,11 +140,16 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       if (responseData.location) {
         const savedLocation = responseData.location;
         console.log('[Location Edit] Updating form with saved location:', savedLocation);
+        // Handle both timezone (camelCase) and time_zone (snake_case) from API
+        const savedTimezone = savedLocation.timezone || savedLocation.time_zone || EST_TIMEZONE;
+        const isCommonTimezone = COMMON_TIMEZONES.some(tz => tz.value === savedTimezone);
+        
         setFormData({
           name: savedLocation.name || '',
-          timezone: savedLocation.timezone || 'UTC',
+          timezone: savedTimezone,
           enabled: savedLocation.enabled !== false,
         });
+        setUseCustomTimezone(!isCommonTimezone);
       }
 
       // Show success message
@@ -111,8 +158,9 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
       // Wait a moment to show success message
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Refresh the list - this will update the parent's state
-      await onSave();
+      // Pass the updated location to the parent so it can update its state
+      const updatedLocation = responseData.location || location;
+      await onSave(updatedLocation);
       
       // Small delay to ensure state updates propagate before closing
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -196,14 +244,47 @@ export default function LocationEditModal({ location, onClose, onSave }: Locatio
 
           <div>
             <label className="block text-sm font-medium text-charcoal mb-1">Timezone</label>
-            <input
-              type="text"
-              value={formData.timezone}
-              onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-              placeholder="UTC"
-              className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
-            />
-            <p className="text-xs text-warm-gray mt-1">e.g., UTC, America/New_York, Europe/London</p>
+            {!useCustomTimezone ? (
+              <select
+                value={formData.timezone}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    setUseCustomTimezone(true);
+                  } else {
+                    setFormData({ ...formData, timezone: e.target.value });
+                  }
+                }}
+                className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+              >
+                {COMMON_TIMEZONES.map(tz => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+                <option value="custom">Custom (enter IANA timezone)</option>
+              </select>
+            ) : (
+              <div>
+                <input
+                  type="text"
+                  value={formData.timezone}
+                  onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
+                  placeholder="America/New_York"
+                  className="w-full px-3 py-2 border border-sand rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseCustomTimezone(false);
+                    setFormData({ ...formData, timezone: EST_TIMEZONE });
+                  }}
+                  className="mt-1 text-xs text-dark-sage hover:underline"
+                >
+                  Use common timezone instead
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-warm-gray mt-1">
+              Must use IANA timezone format (e.g., America/New_York). Abbreviations like "EST" are not supported.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">

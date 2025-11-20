@@ -9,7 +9,7 @@ import LocationEditModal from './LocationEditModal';
 import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function LocationsManager() {
-  const { locations: contextLocations } = useHapioData();
+  const { locations: contextLocations, clearCache } = useHapioData();
   const [locations, setLocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -111,15 +111,23 @@ export default function LocationsManager() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (updatedLocation?: any) => {
+    // Clear the context cache first to ensure fresh data
+    if (clearCache) {
+      clearCache();
+    }
+    
     // Force refresh - always reload to get fresh data
     // This will update the locations state, which will cause the modal to re-render with fresh data
     await loadLocations();
     
-    // Note: We don't need to manually update selectedLocation here because:
-    // 1. The modal's useEffect depends on the location prop
-    // 2. When we reload, if the location is still selected, it will get fresh data from the updated locations array
-    // 3. However, we should clear the selection after save so the modal closes properly
+    // Update selectedLocation with the fresh data from the API if provided
+    if (updatedLocation && selectedLocation) {
+      setSelectedLocation(updatedLocation);
+    }
+    
+    // Note: The modal's useEffect depends on the location prop, so when we update
+    // selectedLocation or reload locations, the modal will get fresh data
   };
 
   if (loading && locations.length === 0) {
@@ -154,17 +162,22 @@ export default function LocationsManager() {
             </thead>
             <tbody className="divide-y divide-sand">
               {locations.map((location) => {
+                // Handle both timezone (camelCase) and time_zone (snake_case) from API
+                const timezone = location.timezone || location.time_zone || null;
+                // Ensure enabled is a boolean
+                const isEnabled = location.enabled !== false && location.enabled !== undefined;
+                
                 return (
                   <tr key={location.id} className="hover:bg-sand/20">
                     <td className="px-4 py-3 text-sm font-medium text-charcoal">{location.name}</td>
-                    <td className="px-4 py-3 text-sm text-warm-gray">{location.timezone || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-warm-gray">{timezone || '—'}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        location.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                        isEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                       }`}
                     >
-                      {location.enabled ? 'Enabled' : 'Disabled'}
+                      {isEnabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </td>
                   <td className="px-4 py-3">
