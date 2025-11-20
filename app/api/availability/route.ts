@@ -4,6 +4,8 @@ import { getAvailability } from '@/lib/hapioClient';
 import { getHapioServiceConfig } from '@/lib/hapioServiceCatalog';
 import { getOutlookBusySlots } from '@/lib/outlookClient';
 import { getSqlClient } from '@/app/_utils/db';
+import { formatDateForHapio } from '@/lib/hapioDateUtils';
+import { EST_TIMEZONE } from '@/lib/timezone';
 
 type CacheKey = string;
 
@@ -72,78 +74,6 @@ function parseDate(value: string | null): Date | null {
   return parsed;
 }
 
-/**
- * Format date for Hapio API: Y-m-d\TH:i:sP format
- * Example: 2025-11-15T03:17:09+00:00 (no milliseconds, timezone offset instead of Z)
- * Hapio expects format: Y-m-d\TH:i:sP where P is timezone offset like +00:00 or -05:00
- * 
- * We format dates in UTC with +00:00 offset since JavaScript Date objects are UTC-based internally.
- */
-function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
-  // Render date components in the provided IANA timeZone
-  // and compute the correct numeric offset (e.g., -05:00).
-  try {
-    const fmt = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      // timeZoneName: 'shortOffset' would be ideal, but not universally supported.
-    });
-    const parts = fmt.formatToParts(date);
-    const get = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((p) => p.type === type)?.value ?? '';
-    const year = get('year');
-    const month = get('month');
-    const day = get('day');
-    const hour = get('hour');
-    const minute = get('minute');
-    const second = get('second');
-
-    // Derive offset by comparing the same wall time vs UTC.
-    // Approach: get the clock components in the zone and UTC, then compute offset.
-    const utc = {
-      y: date.getUTCFullYear(),
-      m: date.getUTCMonth(),
-      d: date.getUTCDate(),
-      hh: date.getUTCHours(),
-      mm: date.getUTCMinutes(),
-      ss: date.getUTCSeconds(),
-    };
-    // Build a Date from the local parts interpreted as if they were UTC, then diff.
-    const pseudoUtc = new Date(Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second)
-    ));
-    // Offset minutes = (pseudoUtc - actualUTC)
-    const diffMs = pseudoUtc.getTime() - Date.UTC(utc.y, utc.m, utc.d, utc.hh, utc.mm, utc.ss);
-    const offsetMinutes = Math.round(diffMs / 60000);
-    const sign = offsetMinutes >= 0 ? '+' : '-';
-    const abs = Math.abs(offsetMinutes);
-    const offH = String(Math.floor(abs / 60)).padStart(2, '0');
-    const offM = String(abs % 60).padStart(2, '0');
-    const offset = `${sign}${offH}:${offM}`;
-
-    return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
-  } catch {
-    // Fallback to UTC if any error occurs
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    const hh = String(date.getUTCHours()).padStart(2, '0');
-    const mm = String(date.getUTCMinutes()).padStart(2, '0');
-    const ss = String(date.getUTCSeconds()).padStart(2, '0');
-    return `${y}-${m}-${d}T${hh}:${mm}:${ss}+00:00`;
-  }
-}
 
 function toIsoString(date: Date): string {
   return date.toISOString();
@@ -187,8 +117,8 @@ export async function GET(request: NextRequest) {
     const slug = searchParams.get('slug') ?? searchParams.get('serviceSlug');
     const explicitServiceId = searchParams.get('serviceId');
     const explicitLocationId = searchParams.get('locationId');
-    const timezone =
-      searchParams.get('timezone') ?? searchParams.get('timeZone') ?? 'America/New_York';
+    // Always use EST timezone for bookings
+    const timezone = EST_TIMEZONE;
 
     // Resolve Hapio identifiers
     // 1) If explicit query params provided, use them
@@ -269,8 +199,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Format dates for Hapio API (Y-m-d\TH:i:sP format, no milliseconds, timezone offset)
-    const fromIso = formatDateForHapio(baseFrom, timezone);
-    const toIso = formatDateForHapio(baseTo, timezone);
+    // formatDateForHapio always uses EST timezone internally
+    const fromIso = formatDateForHapio(baseFrom);
+    const toIso = formatDateForHapio(baseTo);
     const page = pageParam ? Number(pageParam) : undefined;
     // Hapio requires per_page to be max 100
     const perPage = Math.min(perPageParam ? Number(perPageParam) : 100, 100);
@@ -451,7 +382,7 @@ export async function GET(request: NextRequest) {
           // Get hour in EST
           const hourInEST = parseInt(
             new Intl.DateTimeFormat('en-US', {
-              timeZone: 'America/New_York',
+              timeZone: EST_TIMEZONE,
               hour: '2-digit',
               hour12: false,
             }).format(startDate)
@@ -470,7 +401,7 @@ export async function GET(request: NextRequest) {
           const startDate = new Date(slot.startsAt);
           // Get EST date key (YYYY-MM-DD)
           const estDateKey = new Intl.DateTimeFormat('en-CA', {
-            timeZone: 'America/New_York',
+              timeZone: EST_TIMEZONE,
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -483,7 +414,7 @@ export async function GET(request: NextRequest) {
           
           // Track first and last slot times in EST
           const estTime = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'America/New_York',
+              timeZone: EST_TIMEZONE,
             hour: 'numeric',
             minute: '2-digit',
           }).format(startDate);

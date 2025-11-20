@@ -444,8 +444,9 @@ export async function finalizeBookingTransactional(args: {
 
         // Format booking date and time
         const bookingDate = slotStart ? new Date(slotStart) : new Date();
+        const { EST_TIMEZONE } = await import('../timezone');
         const bookingTime = bookingDate.toLocaleTimeString('en-US', {
-          timeZone: timezone || 'America/New_York',
+          timeZone: EST_TIMEZONE,
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,

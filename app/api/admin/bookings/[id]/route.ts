@@ -303,15 +303,16 @@ export async function POST(
         return NextResponse.json({ error: 'New date and time are required' }, { status: 400 });
       }
 
-      // Parse new date/time and convert to UTC for Hapio
-      // Note: Assumes time is in EST/EDT (America/New_York timezone)
-      const newDateTime = new Date(`${newDate}T${newTime}`);
+      // Parse new date/time as EST and convert to UTC for Hapio
+      // Note: All bookings are in EST/EDT (America/New_York timezone)
+      const { parseESTDateTime, isPastDateEST, EST_TIMEZONE } = await import('@/lib/timezone');
+      const newDateTime = parseESTDateTime(newDate, newTime);
       if (isNaN(newDateTime.getTime())) {
         return NextResponse.json({ error: 'Invalid date or time format' }, { status: 400 });
       }
 
-      // Validate date is in the future
-      if (newDateTime <= new Date()) {
+      // Validate date is in the future (in EST context)
+      if (isPastDateEST(newDateTime)) {
         return NextResponse.json({ error: 'New date and time must be in the future' }, { status: 400 });
       }
 
@@ -450,15 +451,16 @@ export async function POST(
 
             // Format dates and times
             const oldBookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
+            const { EST_TIMEZONE: EST_TZ } = await import('@/lib/timezone');
             const oldBookingTime = oldBookingDate.toLocaleTimeString('en-US', {
-              timeZone: 'America/New_York',
+              timeZone: EST_TZ,
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,
             });
 
             const newBookingTime = newDateTime.toLocaleTimeString('en-US', {
-              timeZone: 'America/New_York',
+              timeZone: EST_TZ,
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,
@@ -567,12 +569,23 @@ export async function POST(
           
           if (paymentIntent.status === 'succeeded') {
             // CRITICAL: Use SELECT FOR UPDATE to lock payment rows and prevent race conditions
-            // Get payment amount from payments table with row-level locking
-            const paymentResult = await sql`
-              SELECT SUM(amount_cents) as total_amount_cents, SUM(refunded_cents) as total_refunded_cents
-              FROM payments 
+            // First lock the rows, then calculate sums separately
+            // Lock all payment rows for this booking
+            await sql`
+              SELECT id FROM payments 
               WHERE booking_id = ${bookingInternalId}
               FOR UPDATE
+            `;
+            
+            // Now calculate sums (rows are already locked)
+            // Also calculate total refunded from refunds table for accuracy
+            const paymentResult = await sql`
+              SELECT 
+                SUM(p.amount_cents) as total_amount_cents,
+                COALESCE(SUM(r.amount_cents), 0) as total_refunded_cents
+              FROM payments p
+              LEFT JOIN refunds r ON r.payment_id = p.id
+              WHERE p.booking_id = ${bookingInternalId}
             `;
             const paymentRows = normalizeRows(paymentResult);
             if (paymentRows.length === 0 || !paymentRows[0]?.total_amount_cents) {
@@ -615,19 +628,28 @@ export async function POST(
             refundProcessed = true;
             refundId = refund.id;
             
-            // Update payments.refunded_cents using actual refund amount from Stripe
+            // Get the payment record to link the refund to
             // CRITICAL: Use SELECT FOR UPDATE to lock the row
             const existingPaymentCheck = await sql`
-              SELECT id, refunded_cents, amount_cents 
+              SELECT id, amount_cents 
               FROM payments 
               WHERE booking_id = ${bookingInternalId} 
-              ORDER BY created_at DESC LIMIT 1
+              ORDER BY created_at DESC 
+              LIMIT 1
               FOR UPDATE
             `;
             const existingPaymentCheckRows = normalizeRows(existingPaymentCheck);
             if (existingPaymentCheckRows.length > 0) {
               const existing = existingPaymentCheckRows[0];
-              const alreadyRefundedOnThisPayment = existing.refunded_cents || 0;
+              
+              // Calculate total refunded on this specific payment record
+              const refundsOnThisPayment = await sql`
+                SELECT SUM(amount_cents) as total_refunded_on_payment
+                FROM refunds
+                WHERE payment_id = ${existing.id}
+              `;
+              const refundsOnPaymentRows = normalizeRows(refundsOnThisPayment);
+              const alreadyRefundedOnThisPayment = Number(refundsOnPaymentRows[0]?.total_refunded_on_payment || 0);
               const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + actualRefundAmount;
               
               // Safety check: ensure we don't exceed this payment record's amount
@@ -635,6 +657,42 @@ export async function POST(
                 // Also check total across all payments
                 const totalRefundedAfter = totalAlreadyRefunded + actualRefundAmount;
                 if (totalRefundedAfter <= totalPaymentAmount) {
+                  // Insert refund record into refunds table
+                  await sql`
+                    INSERT INTO refunds (
+                      payment_id,
+                      booking_id,
+                      stripe_refund_id,
+                      amount_cents,
+                      requested_amount_cents,
+                      currency,
+                      reason,
+                      refund_type,
+                      stripe_reason,
+                      status,
+                      metadata
+                    )
+                    VALUES (
+                      ${existing.id},
+                      ${bookingInternalId},
+                      ${refund.id},
+                      ${actualRefundAmount},
+                      ${requestedRefundAmount},
+                      ${'usd'},
+                      ${'Cancelled by admin'},
+                      ${'amount'},
+                      ${refund.reason || 'requested_by_customer'},
+                      ${refund.status || 'succeeded'},
+                      ${JSON.stringify({
+                        refunded_by: 'admin',
+                        cancellation: true,
+                        total_refunded_cents: totalRefundedAfter,
+                        total_payment_cents: totalPaymentAmount,
+                      })}::jsonb
+                    )
+                  `;
+                  
+                  // Update payments.refunded_cents to keep it in sync
                   await sql`
                     UPDATE payments 
                     SET refunded_cents = ${newTotalRefundedOnThisPayment}, updated_at = NOW()
@@ -772,9 +830,10 @@ export async function POST(
           }
 
           // Format booking date and time
+          const { EST_TIMEZONE: EST_TZ3 } = await import('@/lib/timezone');
           const bookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
           const bookingTime = bookingDate.toLocaleTimeString('en-US', {
-            timeZone: 'America/New_York',
+            timeZone: EST_TZ3,
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
@@ -929,12 +988,23 @@ export async function POST(
         }
 
         // CRITICAL: Use SELECT FOR UPDATE to lock payment rows and prevent race conditions
-        // Get payment amount from payments table with row-level locking
-        const paymentRows = await sql`
-          SELECT SUM(amount_cents) as total_amount_cents, SUM(refunded_cents) as total_refunded_cents
-          FROM payments 
+        // First lock the rows, then calculate sums separately
+        // Lock all payment rows for this booking
+        await sql`
+          SELECT id FROM payments 
           WHERE booking_id = ${bookingInternalId}
           FOR UPDATE
+        `;
+        
+        // Now calculate sums (rows are already locked)
+        // Also calculate total refunded from refunds table for accuracy
+        const paymentRows = await sql`
+          SELECT 
+            SUM(p.amount_cents) as total_amount_cents,
+            COALESCE(SUM(r.amount_cents), 0) as total_refunded_cents
+          FROM payments p
+          LEFT JOIN refunds r ON r.payment_id = p.id
+          WHERE p.booking_id = ${bookingInternalId}
         `;
         const paymentRow = normalizeRows(paymentRows)[0];
         if (!paymentRow || !paymentRow.total_amount_cents) {
@@ -1007,12 +1077,10 @@ export async function POST(
           );
         }
 
-        // Update payments.refunded_cents across all payment records for this booking
-        // Distribute refund proportionally or to the most recent payment
-        // For simplicity, we'll add to the most recent payment record
+        // Get the payment record to link the refund to
         // CRITICAL: Use SELECT FOR UPDATE to lock the row
         const existingRefundCheck = await sql`
-          SELECT id, refunded_cents, amount_cents 
+          SELECT id, amount_cents 
           FROM payments 
           WHERE booking_id = ${bookingInternalId} 
           ORDER BY created_at DESC 
@@ -1027,15 +1095,23 @@ export async function POST(
             { status: 400 }
           );
         }
-        const existingRefund = existingRefundCheckRows[0];
-        const alreadyRefundedOnThisPayment = existingRefund.refunded_cents || 0;
+        const paymentRecord = existingRefundCheckRows[0];
+        
+        // Calculate total refunded on this specific payment record
+        const refundsOnThisPayment = await sql`
+          SELECT SUM(amount_cents) as total_refunded_on_payment
+          FROM refunds
+          WHERE payment_id = ${paymentRecord.id}
+        `;
+        const refundsOnPaymentRows = normalizeRows(refundsOnThisPayment);
+        const alreadyRefundedOnThisPayment = Number(refundsOnPaymentRows[0]?.total_refunded_on_payment || 0);
         const newTotalRefundedOnThisPayment = alreadyRefundedOnThisPayment + actualRefundCents;
         
         // Safety check: ensure we don't refund more than this payment record's amount
-        if (newTotalRefundedOnThisPayment > existingRefund.amount_cents) {
+        if (newTotalRefundedOnThisPayment > paymentRecord.amount_cents) {
           await sql`ROLLBACK`;
           return NextResponse.json(
-            { error: `Cannot refund $${(actualRefundCents / 100).toFixed(2)}. Would exceed this payment record's amount. Payment: $${(existingRefund.amount_cents / 100).toFixed(2)}, Already refunded on this payment: $${(alreadyRefundedOnThisPayment / 100).toFixed(2)}` },
+            { error: `Cannot refund $${(actualRefundCents / 100).toFixed(2)}. Would exceed this payment record's amount. Payment: $${(paymentRecord.amount_cents / 100).toFixed(2)}, Already refunded on this payment: $${(alreadyRefundedOnThisPayment / 100).toFixed(2)}` },
             { status: 400 }
           );
         }
@@ -1050,10 +1126,51 @@ export async function POST(
           );
         }
         
+        // Insert refund record into refunds table
+        const refundRecord = await sql`
+          INSERT INTO refunds (
+            payment_id,
+            booking_id,
+            stripe_refund_id,
+            amount_cents,
+            requested_amount_cents,
+            currency,
+            reason,
+            refund_type,
+            refund_percentage,
+            stripe_reason,
+            status,
+            metadata
+          )
+          VALUES (
+            ${paymentRecord.id},
+            ${bookingInternalId},
+            ${refund.id},
+            ${actualRefundCents},
+            ${requestedRefundCents},
+            ${'usd'},
+            ${refundReason},
+            ${requestedPercent ? 'percentage' : 'amount'},
+            ${requestedPercent || null},
+            ${refund.reason || 'requested_by_customer'},
+            ${refund.status || 'succeeded'},
+            ${JSON.stringify({
+              refunded_by: 'admin',
+              total_refunded_cents: newTotalRefundedAcrossAll,
+              total_payment_cents: totalCents,
+              already_refunded_before: alreadyRefundedTotal,
+            })}::jsonb
+          )
+          RETURNING id
+        `;
+        const refundRecordRows = normalizeRows(refundRecord);
+        const refundRecordId = refundRecordRows[0]?.id;
+        
+        // Update payments.refunded_cents to keep it in sync (denormalized for performance)
         await sql`
           UPDATE payments 
           SET refunded_cents = ${newTotalRefundedOnThisPayment}, updated_at = NOW()
-          WHERE id = ${existingRefund.id}
+          WHERE id = ${paymentRecord.id}
         `;
 
         // Update booking status to refunded (but do NOT cancel the booking)
@@ -1086,7 +1203,8 @@ export async function POST(
         await sql`
           INSERT INTO booking_events (booking_id, type, data)
           VALUES (${bookingInternalId}, ${'refund'}, ${JSON.stringify({ 
-            refundId: refund.id, 
+            refundId: refund.id,
+            refundRecordId: refundRecordId,
             amount_cents: actualRefundCents, 
             requested_amount_cents: requestedRefundCents,
             reason: refundReason,
@@ -1095,8 +1213,7 @@ export async function POST(
             total_refunded_cents: newTotalRefundedAcrossAll,
             total_payment_cents: totalCents,
             already_refunded_before: alreadyRefundedTotal,
-            refunded_on_this_payment: newTotalRefundedOnThisPayment,
-            payment_record_id: existingRefund.id,
+            payment_record_id: paymentRecord.id,
           })}::jsonb)
         `;
 
@@ -1134,8 +1251,9 @@ export async function POST(
           try {
             // Generate cancellation email (refund is similar to cancellation)
             const bookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
+            const { EST_TIMEZONE: EST_TZ2 } = await import('@/lib/timezone');
             const bookingTime = bookingDate.toLocaleTimeString('en-US', {
-              timeZone: 'America/New_York',
+              timeZone: EST_TZ2,
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,

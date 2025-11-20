@@ -7,6 +7,7 @@ import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
 import { computeFiveDayWindow } from '@/lib/scheduling/suggestions';
+import { EST_TIMEZONE, getCurrentTimeEST, isPastDateEST, parseESTDateTime } from '@/lib/timezone';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const [collapseTimes, setCollapseTimes] = useState<boolean>(false);
 
   // Always use EST for bookings (business is in Florida)
-  const userTimezone = 'America/New_York';
+  const userTimezone = EST_TIMEZONE;
 
   // Do not prefetch availability. Fetch only after user selects date+time and searches.
 
@@ -81,10 +82,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   }, [service?.slug, reloadToken]);
 
   // Helper to get current time in EST
-  const getCurrentTimeEST = (): { hour: number; minute: number; date: Date } => {
-    const now = new Date();
+  const getCurrentTimeESTLocal = (): { hour: number; minute: number; date: Date } => {
+    const now = getCurrentTimeEST();
     const estFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -103,14 +104,14 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
   // Check if current time is past 6:45 PM EST
   const isPastLastTimeToday = (): boolean => {
-    const { hour, minute } = getCurrentTimeEST();
+    const { hour, minute } = getCurrentTimeESTLocal();
     return hour > 18 || (hour === 18 && minute >= 45);
   };
 
   // Seed default requested date to today (or tomorrow if past 6:45 PM EST) when modal opens
   useEffect(() => {
     if (!isOpen) return;
-    const { date } = getCurrentTimeEST();
+    const { date } = getCurrentTimeESTLocal();
     let targetDate = date;
     
     // If past 6:45 PM EST, advance to tomorrow
@@ -132,8 +133,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   // Generate every 15-minute time from 09:00 to 19:00 for the requested date
   const timeOptionsForDay = useMemo(() => {
     if (!requestedDate) return [] as Date[];
-    const start = new Date(`${requestedDate}T09:00:00`);
-    const end = new Date(`${requestedDate}T19:00:00`);
+    const start = parseESTDateTime(requestedDate, '09:00');
+    const end = parseESTDateTime(requestedDate, '19:00');
     const result: Date[] = [];
     const cursor = new Date(start);
     while (cursor.getTime() <= end.getTime()) {
@@ -146,14 +147,15 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   // Default requested time to the first valid option (future if today), else 09:00
   useEffect(() => {
     if (!requestedDate) return;
-    const now = new Date();
+    const now = getCurrentTimeEST();
+    const today = parseESTDateTime(requestedDate, '00:00');
     const isToday =
-      now.getFullYear() === new Date(requestedDate).getFullYear() &&
-      now.getMonth() === new Date(requestedDate).getMonth() &&
-      now.getDate() === new Date(requestedDate).getDate();
+      now.getFullYear() === today.getFullYear() &&
+      now.getMonth() === today.getMonth() &&
+      now.getDate() === today.getDate();
     let firstValid: Date | null = null;
     if (isToday) {
-      firstValid = timeOptionsForDay.find((d) => d.getTime() >= now.getTime()) || null;
+      firstValid = timeOptionsForDay.find((d) => !isPastDateEST(d)) || null;
     } else {
       firstValid = timeOptionsForDay[0] || null;
     }
@@ -175,8 +177,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       setDaySlots([]);
       return;
     }
-    const dayStart = new Date(`${requestedDate}T00:00:00`);
-    const dayEnd = new Date(`${requestedDate}T23:59:59`);
+    const dayStart = parseESTDateTime(requestedDate, '00:00');
+    const dayEnd = parseESTDateTime(requestedDate, '23:59');
     const dayAvail = slots.filter((s) => {
       const sStart = new Date(s.start);
       return sStart >= dayStart && sStart <= dayEnd;
@@ -191,9 +193,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       return;
     }
     const [hh, mm] = requestedTime.split(':').map((v) => Number(v));
-    const chosen = new Date(`${requestedDate}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`);
-    const now = new Date();
-    if (chosen.getTime() < now.getTime()) {
+    const chosen = parseESTDateTime(requestedDate, `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+    if (isPastDateEST(chosen)) {
       setTimeValidationError('Please select a time in the future.');
     } else {
       setTimeValidationError(null);
@@ -207,13 +208,13 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
     // Group by day for display - always use EST
     const dateFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     });
     const timeFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       hour: 'numeric',
       minute: '2-digit',
     });
@@ -222,7 +223,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     const getHourInEST = (date: Date): number => {
       return parseInt(
         new Intl.DateTimeFormat('en-US', {
-          timeZone: 'America/New_York',
+          timeZone: EST_TIMEZONE,
           hour: '2-digit',
           hour12: false,
         }).format(date)
@@ -232,7 +233,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     // Helper to get date string in EST (YYYY-MM-DD)
     const getDateKeyInEST = (date: Date): string => {
       const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'America/New_York',
+        timeZone: EST_TIMEZONE,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -318,7 +319,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     if (!requestedDate) return [];
     const keys = computeFiveDayWindow(requestedDate);
     const fmtDay = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -361,7 +362,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     try {
       // Build a window covering the chosen day ± two working days (Mon–Fri).
       const [hour, minute] = requestedTime.split(':').map((v) => Number(v));
-      const chosen = new Date(`${requestedDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
+      const chosen = parseESTDateTime(requestedDate, `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
 
       // Exclude only Saturdays (day 6). Sundays (day 0) are work days.
       const isWorkingDay = (d: Date) => {
@@ -427,8 +428,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       setAvailabilityStatus('success');
       // Derive daySlots for the requestedDate from the window results
       if (requestedDate) {
-        const dayStart = new Date(`${requestedDate}T00:00:00`);
-        const dayEnd = new Date(`${requestedDate}T23:59:59`);
+        const dayStart = parseESTDateTime(requestedDate, '00:00');
+        const dayEnd = parseESTDateTime(requestedDate, '23:59');
         const dayAvail = (json?.availability ?? []).filter((s) => {
           const sStart = new Date(s.start);
           return sStart >= dayStart && sStart <= dayEnd;
@@ -580,8 +581,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                             onChange={(e) => {
                               setRequestedDate(e.target.value);
                               // If user selects today and it's past 6:45 PM EST, auto-advance to tomorrow
-                              const selectedDate = new Date(e.target.value + 'T00:00:00');
-                              const today = getCurrentTimeEST().date;
+                              const selectedDate = parseESTDateTime(e.target.value, '00:00');
+                              const today = getCurrentTimeESTLocal().date;
                               const isToday = 
                                 selectedDate.getFullYear() === today.getFullYear() &&
                                 selectedDate.getMonth() === today.getMonth() &&

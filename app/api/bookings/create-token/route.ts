@@ -268,10 +268,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { EST_TIMEZONE } = await import('@/lib/timezone');
     const slotDetails = {
       startTime: selectedSlot.startTime,
       eventTypeId: selectedSlot.eventTypeId,
-      timezone: selectedSlot.timezone || 'America/New_York',
+      timezone: EST_TIMEZONE,
       duration: typeof selectedSlot.duration === 'number' ? selectedSlot.duration : null,
       label: selectedSlot.label || null,
     };

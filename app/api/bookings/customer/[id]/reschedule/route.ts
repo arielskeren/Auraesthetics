@@ -36,8 +36,9 @@ export async function POST(
 
     const sql = getSqlClient();
 
-    // Parse new date/time
-    const newDateTime = new Date(`${newDate}T${newTime}`);
+    // Parse new date/time as EST
+    const { parseESTDateTime, isPastDateEST } = await import('@/lib/timezone');
+    const newDateTime = parseESTDateTime(newDate, newTime);
     if (isNaN(newDateTime.getTime())) {
       return NextResponse.json(
         { error: 'Invalid date or time format' },
@@ -45,8 +46,8 @@ export async function POST(
       );
     }
 
-    // Validate date is in the future
-    if (newDateTime <= new Date()) {
+    // Validate date is in the future (in EST context)
+    if (isPastDateEST(newDateTime)) {
       return NextResponse.json(
         { error: 'New date and time must be in the future' },
         { status: 400 }
@@ -84,9 +85,9 @@ export async function POST(
 
     // Check if booking is within 72 hours (cannot reschedule within 72 hours)
     if (bookingData.booking_date) {
+      const { hoursUntilEST } = await import('@/lib/timezone');
       const bookingDateTime = new Date(bookingData.booking_date);
-      const now = new Date();
-      const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const hoursUntilBooking = hoursUntilEST(bookingDateTime);
       
       if (hoursUntilBooking <= 72) {
         return NextResponse.json(
@@ -218,14 +219,16 @@ export async function POST(
           // Format dates and times
           const oldBookingDate = bookingData.booking_date ? new Date(bookingData.booking_date) : new Date();
           const oldBookingTime = oldBookingDate.toLocaleTimeString('en-US', {
-            timeZone: 'America/New_York',
+            const { EST_TIMEZONE } = await import('@/lib/timezone');
+            timeZone: EST_TIMEZONE,
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
           });
 
           const newBookingTime = newDateTime.toLocaleTimeString('en-US', {
-            timeZone: 'America/New_York',
+            const { EST_TIMEZONE } = await import('@/lib/timezone');
+            timeZone: EST_TIMEZONE,
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,

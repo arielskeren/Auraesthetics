@@ -2,7 +2,7 @@
 
 import { X, XCircle, DollarSign, History, User, Calendar, Mail, Phone, Clock as ClockIcon, RefreshCw, Loader2, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { formatInEST } from '@/lib/timezone';
+import { formatInEST, parseESTDateTime, isPastDateEST, EST_TIMEZONE } from '@/lib/timezone';
 
 interface Booking {
   id: string;
@@ -272,8 +272,8 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   // Generate time options (9 AM to 7 PM, 15-minute intervals)
   const timeOptions = useMemo(() => {
     if (!rescheduleDate) return [];
-    const start = new Date(`${rescheduleDate}T09:00:00`);
-    const end = new Date(`${rescheduleDate}T19:00:00`);
+    const start = parseESTDateTime(rescheduleDate, '09:00');
+    const end = parseESTDateTime(rescheduleDate, '19:00');
     const result: Date[] = [];
     const cursor = new Date(start);
     while (cursor.getTime() <= end.getTime()) {
@@ -333,11 +333,8 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
   }, [calendarMonth]);
 
   const isPastDate = (date: Date): boolean => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const checkDate = new Date(date);
-    checkDate.setHours(0, 0, 0, 0);
-    return checkDate < today;
+    // Check if date is in the past in EST context
+    return isPastDateEST(date);
   };
 
   const isSaturday = (date: Date): boolean => {
@@ -446,7 +443,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     try {
       // Build a window covering the chosen day ± two working days
       const [hour, minute] = rescheduleTime.split(':').map((v) => Number(v));
-      const chosen = new Date(`${rescheduleDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
+      const chosen = parseESTDateTime(rescheduleDate, `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
 
       const isWorkingDay = (d: Date) => {
         const day = d.getDay();
@@ -511,7 +508,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     if (availabilitySlots.length === 0) return [];
 
     const dateFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -519,7 +516,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
 
     const getDateKeyInEST = (date: Date): string => {
       const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'America/New_York',
+        timeZone: EST_TIMEZONE,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -717,7 +714,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
     try {
       const date = new Date(dateString);
       const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
+        timeZone: EST_TIMEZONE,
         month: '2-digit',
         day: '2-digit',
       });
@@ -761,7 +758,7 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
       
       // Format in EST timezone
       return new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
+        timeZone: EST_TIMEZONE,
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
@@ -1419,13 +1416,13 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                                         hour: 'numeric',
                                         minute: '2-digit',
                                         hour12: true,
-                                        timeZone: 'America/New_York',
+                                        timeZone: EST_TIMEZONE,
                                       }).format(startDate);
                                       const endLabel = new Intl.DateTimeFormat('en-US', {
                                         hour: 'numeric',
                                         minute: '2-digit',
                                         hour12: true,
-                                        timeZone: 'America/New_York',
+                                        timeZone: EST_TIMEZONE,
                                       }).format(endDate);
                                       
                                       return (

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Clock, User, Mail, Phone, MapPin, X, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import Section from '../_components/Section';
 import Button from '../_components/Button';
-import { formatInEST } from '@/lib/timezone';
+import { formatInEST, hoursUntilEST, EST_TIMEZONE } from '@/lib/timezone';
 
 interface Booking {
   id: string;
@@ -246,7 +246,7 @@ export default function ManageBookingClient() {
         slug: serviceSlug,
         from: windowStart.toISOString(),
         to: windowEnd.toISOString(),
-        timezone: 'America/New_York',
+        timezone: EST_TIMEZONE,
       });
 
       const response = await fetch(`/api/availability?${params.toString()}`);
@@ -317,7 +317,7 @@ export default function ManageBookingClient() {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
     });
   };
 
@@ -326,20 +326,20 @@ export default function ManageBookingClient() {
     if (availabilitySlots.length === 0) return [];
 
     const dateFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     });
     const timeFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
       hour: 'numeric',
       minute: '2-digit',
     });
 
     const getDateKeyInEST = (date: Date): string => {
       const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'America/New_York',
+        timeZone: EST_TIMEZONE,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -421,16 +421,15 @@ export default function ManageBookingClient() {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/New_York',
+      timeZone: EST_TIMEZONE,
     });
   };
 
-  // Check if booking is within 72 hours (3 days)
+  // Check if booking is within 72 hours (3 days) in EST context
   const isWithin72Hours = (bookingDate: string | null | undefined): boolean => {
     if (!bookingDate) return false;
     const bookingDateTime = new Date(bookingDate);
-    const now = new Date();
-    const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const hoursUntilBooking = hoursUntilEST(bookingDateTime);
     return hoursUntilBooking <= 72;
   };
 
@@ -764,7 +763,7 @@ export default function ManageBookingClient() {
                             hour: 'numeric',
                             minute: '2-digit',
                             hour12: true,
-                            timeZone: 'America/New_York',
+                            timeZone: EST_TIMEZONE,
                           })} EST
                         </p>
                       )}
@@ -955,13 +954,13 @@ export default function ManageBookingClient() {
                                               hour: 'numeric',
                                               minute: '2-digit',
                                               hour12: true,
-                                              timeZone: 'America/New_York',
+                                              timeZone: EST_TIMEZONE,
                                             });
                                             const endLabel = formatInEST(endDate, {
                                               hour: 'numeric',
                                               minute: '2-digit',
                                               hour12: true,
-                                              timeZone: 'America/New_York',
+                                              timeZone: EST_TIMEZONE,
                                             });
                                             
                                             return (

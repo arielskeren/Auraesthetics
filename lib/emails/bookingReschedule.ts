@@ -44,7 +44,9 @@ export function generateBookingRescheduleEmail(params: {
   const finalBookUrl = bookUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
   const finalCancelUrl = cancelUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
 
+  const { EST_TIMEZONE } = await import('../timezone');
   const formattedOldDate = oldBookingDate.toLocaleDateString('en-US', {
+    timeZone: EST_TIMEZONE,
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -52,6 +54,7 @@ export function generateBookingRescheduleEmail(params: {
   });
 
   const formattedNewDate = newBookingDate.toLocaleDateString('en-US', {
+    timeZone: EST_TIMEZONE,
     weekday: 'long',
     year: 'numeric',
     month: 'long',

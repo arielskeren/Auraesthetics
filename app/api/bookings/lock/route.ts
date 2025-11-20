@@ -3,6 +3,8 @@ import { getSqlClient } from '@/app/_utils/db';
 import { createPendingBooking } from '@/lib/hapioClient';
 import { getHapioServiceConfig } from '@/lib/hapioServiceCatalog';
 import { getServiceBySlug } from '@/lib/serviceCatalog';
+import { formatDateForHapio } from '@/lib/hapioDateUtils';
+import { EST_TIMEZONE } from '@/lib/timezone';
 
 type LockRequestBody = {
   serviceSlug?: string;
@@ -33,65 +35,6 @@ function parseIso(value: string): Date | null {
   return parsed;
 }
 
-// Format date for Hapio API: Y-m-d\\TH:i:sP (no milliseconds, with offset)
-function formatDateForHapio(date: Date, timeZone: string = 'UTC'): string {
-  try {
-    const fmt = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-    const parts = fmt.formatToParts(date);
-    const get = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((p) => p.type === type)?.value ?? '';
-    const year = get('year');
-    const month = get('month');
-    const day = get('day');
-    const hour = get('hour');
-    const minute = get('minute');
-    const second = get('second');
-
-    // Derive numeric offset by comparing local-zone wall time vs UTC
-    const utc = {
-      y: date.getUTCFullYear(),
-      m: date.getUTCMonth(),
-      d: date.getUTCDate(),
-      hh: date.getUTCHours(),
-      mm: date.getUTCMinutes(),
-      ss: date.getUTCSeconds(),
-    };
-    const pseudoUtc = new Date(Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second)
-    ));
-    const diffMs = pseudoUtc.getTime() - Date.UTC(utc.y, utc.m, utc.d, utc.hh, utc.mm, utc.ss);
-    const offsetMinutes = Math.round(diffMs / 60000);
-    const sign = offsetMinutes >= 0 ? '+' : '-';
-    const abs = Math.abs(offsetMinutes);
-    const offH = String(Math.floor(abs / 60)).padStart(2, '0');
-    const offM = String(abs % 60).padStart(2, '0');
-    const offset = `${sign}${offH}:${offM}`;
-
-    return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
-  } catch {
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    const hh = String(date.getUTCHours()).padStart(2, '0');
-    const mm = String(date.getUTCMinutes()).padStart(2, '0');
-    const ss = String(date.getUTCSeconds()).padStart(2, '0');
-    return `${y}-${m}-${d}T${hh}:${mm}:${ss}+00:00`;
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -178,13 +121,13 @@ export async function POST(request: NextRequest) {
     const hapioBooking = await createPendingBooking({
       serviceId: hapioServiceId,
       locationId: hapioLocationId,
-      startsAt: formatDateForHapio(startDate, body.timezone ?? 'America/New_York'),
-      endsAt: formatDateForHapio(endDate, body.timezone ?? 'America/New_York'),
+      startsAt: formatDateForHapio(startDate),
+      endsAt: formatDateForHapio(endDate),
       resourceId: resourceId ?? serviceConfig?.resourceId,
       metadata: {
         source: 'website',
         serviceSlug: serviceSlug ?? null,
-        timezone: body.timezone ?? null,
+        timezone: EST_TIMEZONE,
         customer: body.customer ?? null,
         lockedAt: new Date().toISOString(),
       },
@@ -201,7 +144,7 @@ export async function POST(request: NextRequest) {
     const metadataPayload = {
       ...body.metadata,
       serviceSlug: serviceSlug ?? null,
-      timezone: body.timezone ?? null,
+      timezone: EST_TIMEZONE,
       slot: {
         start,
         end,
@@ -227,7 +170,7 @@ export async function POST(request: NextRequest) {
         ${normalizedCustomer.name},
         ${normalizedCustomer.email},
         ${normalizedCustomer.phone},
-        ${formatDateForHapio(startDate, body.timezone ?? 'America/New_York')},
+        ${formatDateForHapio(startDate)},
         ${'pending'},
         ${JSON.stringify(metadataPayload)}::jsonb
       )

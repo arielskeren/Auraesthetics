@@ -98,7 +98,9 @@ export function generateBookingConfirmationEmail(params: {
   const finalCancelUrl = cancelUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
   const finalRescheduleUrl = rescheduleUrl || (bookingId ? `${baseUrl}?id=${encodeURIComponent(bookingId)}` : baseUrl);
 
+  const { EST_TIMEZONE } = await import('../timezone');
   const formattedDate = bookingDate.toLocaleDateString('en-US', {
+    timeZone: EST_TIMEZONE,
     weekday: 'long',
     year: 'numeric',
     month: 'long',

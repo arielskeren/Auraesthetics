@@ -43,7 +43,9 @@ export function generateBookingCancellationEmail(params: {
     bookUrl = 'https://www.theauraesthetics.com/book',
   } = params;
 
+  const { EST_TIMEZONE } = await import('../timezone');
   const formattedDate = bookingDate.toLocaleDateString('en-US', {
+    timeZone: EST_TIMEZONE,
     weekday: 'long',
     year: 'numeric',
     month: 'long',

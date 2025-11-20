@@ -1,6 +1,8 @@
 import { createOutlookEvent, deleteOutlookEvent, updateOutlookEvent } from './outlookClient';
 import { getServiceBySlug } from './serviceCatalog';
 import { getSqlClient } from '@/app/_utils/db';
+import { formatDateForHapio } from './hapioDateUtils';
+import { EST_TIMEZONE } from './timezone';
 
 // Helper function to fetch complete booking data for Outlook sync
 async function fetchBookingDataForOutlook(bookingId: string | number): Promise<BookingForOutlook | null> {
@@ -62,7 +64,7 @@ async function fetchBookingDataForOutlook(bookingId: string | number): Promise<B
     
     // Ensure timezone is in metadata
     if (!metadata.timezone) {
-      metadata.timezone = 'America/New_York';
+      metadata.timezone = EST_TIMEZONE;
     }
     
     // Fetch refund information
@@ -182,52 +184,13 @@ function computeFallbackEnd(startIso: string, serviceId: string | null): string 
 
 /**
  * Convert a UTC ISO date string to EST ISO date string for Outlook
- * Outlook requires dates in the target timezone format
- * This function takes a UTC date and formats it as if it were in EST
+ * Outlook requires dates in the target timezone format (same as Hapio)
+ * This function reuses formatDateForHapio which already formats dates in EST
  */
 function convertToESTISO(dateString: string): string {
   const date = new Date(dateString);
-  
-  // Use Intl.DateTimeFormat to get EST time components
-  const estFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  
-  const parts = estFormatter.formatToParts(date);
-  const estYear = parts.find(p => p.type === 'year')?.value;
-  const estMonth = parts.find(p => p.type === 'month')?.value;
-  const estDay = parts.find(p => p.type === 'day')?.value;
-  const estHour = parts.find(p => p.type === 'hour')?.value;
-  const estMinute = parts.find(p => p.type === 'minute')?.value;
-  const estSecond = parts.find(p => p.type === 'second')?.value;
-  
-  // Determine if date is in EDT (March-November) or EST by checking the offset
-  // Create a date in EST timezone and compare with UTC to determine offset
-  const estDateStr = `${estYear}-${estMonth}-${estDay}T${estHour}:${estMinute}:${estSecond}`;
-  const testDate = new Date(`${estDateStr}Z`); // Parse as UTC
-  const estDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-  
-  // Calculate offset: EST is UTC-5, EDT is UTC-4
-  // Use a more reliable method: check what the offset would be for this date in EST
-  const jan1 = new Date(date.getFullYear(), 0, 1);
-  const jul1 = new Date(date.getFullYear(), 6, 1);
-  const janOffset = -jan1.getTimezoneOffset() / 60; // Hours from UTC
-  const julOffset = -jul1.getTimezoneOffset() / 60;
-  
-  // EST is typically UTC-5, EDT is UTC-4
-  // DST runs from second Sunday in March to first Sunday in November
-  const isDST = date.getMonth() >= 2 && date.getMonth() <= 10; // Rough check
-  const estOffset = isDST ? '-04:00' : '-05:00';
-  
-  return `${estYear}-${estMonth}-${estDay}T${estHour}:${estMinute}:${estSecond}${estOffset}`;
+  // Reuse formatDateForHapio since it formats in EST with correct offset (same format as Outlook needs)
+  return formatDateForHapio(date);
 }
 
 function extractSlotInfo(booking: BookingForOutlook): SlotInfo | null {
@@ -248,7 +211,7 @@ function extractSlotInfo(booking: BookingForOutlook): SlotInfo | null {
   const startEST = convertToESTISO(start);
   const endEST = convertToESTISO(end);
 
-  const timeZone = 'America/New_York';
+  const timeZone = EST_TIMEZONE;
   return { start: startEST, end: endEST, timeZone };
 }
 
@@ -331,7 +294,7 @@ function buildBody(booking: BookingForOutlook): string {
     if (booking.refund_date) {
       const refundDate = new Date(booking.refund_date);
       const formattedRefundDate = refundDate.toLocaleDateString('en-US', {
-        timeZone: 'America/New_York',
+        timeZone: EST_TIMEZONE,
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -385,7 +348,7 @@ function buildBody(booking: BookingForOutlook): string {
       changeEvents.forEach((event) => {
         const changeDate = new Date(event.created_at);
         const formattedChangeDate = changeDate.toLocaleDateString('en-US', {
-          timeZone: 'America/New_York',
+          timeZone: EST_TIMEZONE,
           year: 'numeric',
           month: 'long',
           day: 'numeric',
