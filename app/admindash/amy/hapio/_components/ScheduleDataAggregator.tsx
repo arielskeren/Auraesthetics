@@ -2,6 +2,9 @@
 
 /**
  * Utility hook to fetch, merge, and calculate effective schedules
+ * 
+ * NOTE: This function should be called from a component that has access to HapioDataContext.
+ * Pass the context methods as parameters to use cached data.
  */
 
 export interface EffectiveScheduleSlot {
@@ -21,7 +24,12 @@ export interface UseScheduleDataOptions {
 export async function fetchScheduleData(
   resourceId: string,
   from: Date,
-  to: Date
+  to: Date,
+  contextMethods?: {
+    getRecurringSchedules: (resourceId: string) => Promise<any[]>;
+    getRecurringScheduleBlocks: (resourceId: string, recurringScheduleId?: string) => Promise<any[]>;
+    getScheduleBlocks: (resourceId: string, from: string, to: string) => Promise<any[]>;
+  }
 ): Promise<{
   recurringSchedules: any[];
   recurringScheduleBlocks: any[];
@@ -32,6 +40,22 @@ export async function fetchScheduleData(
   const fromFormatted = formatDateForHapioUTC(from);
   const toFormatted = formatDateForHapioUTC(to);
 
+  // Use context methods if provided (cached), otherwise fall back to direct fetch
+  if (contextMethods) {
+    const [recurringSchedules, recurringScheduleBlocks, scheduleBlocks] = await Promise.all([
+      contextMethods.getRecurringSchedules(resourceId),
+      contextMethods.getRecurringScheduleBlocks(resourceId),
+      contextMethods.getScheduleBlocks(resourceId, fromFormatted, toFormatted),
+    ]);
+
+    return {
+      recurringSchedules,
+      recurringScheduleBlocks,
+      scheduleBlocks,
+    };
+  }
+
+  // Fallback to direct fetch (for backwards compatibility, but should use context)
   const [recurringSchedulesRes, recurringBlocksRes, scheduleBlocksRes] = await Promise.all([
     fetch(`/api/admin/hapio/resources/${resourceId}/recurring-schedules?per_page=100`),
     fetch(`/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?per_page=100`),

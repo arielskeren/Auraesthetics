@@ -16,7 +16,7 @@ export default function ServiceSelectionModal({
   onClose,
   onSave,
 }: ServiceSelectionModalProps) {
-  const { loadServices } = useHapioData();
+  const { getFullServices } = useHapioData();
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -25,7 +25,7 @@ export default function ServiceSelectionModal({
   );
 
   useEffect(() => {
-    loadServices();
+    // Use context to get full services (cached)
     loadFullServices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -35,19 +35,13 @@ export default function ServiceSelectionModal({
       setLoading(true);
       setError(null);
 
-      // Load full service objects (context only has id/name map)
-      const response = await fetch('/api/admin/hapio/services?per_page=100');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load services');
-      }
-
-      const data = await response.json();
-      setServices(data.data || []);
+      // Use context method which caches full service objects
+      const fullServices = await getFullServices();
+      setServices(fullServices);
 
       // If no services were previously selected, select all by default
-      if (selectedIds.size === 0 && data.data?.length > 0) {
-        setSelectedIds(new Set(data.data.map((s: any) => s.id)));
+      if (selectedIds.size === 0 && fullServices.length > 0) {
+        setSelectedIds(new Set(fullServices.map((s: any) => s.id)));
       }
     } catch (err: any) {
       setError(err);

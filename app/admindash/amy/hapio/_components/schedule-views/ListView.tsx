@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchScheduleData, calculateEffectiveSchedule, EffectiveScheduleSlot } from '../ScheduleDataAggregator';
 import LoadingState from '../LoadingState';
 import ErrorDisplay from '../ErrorDisplay';
+import { useHapioData } from '../../_contexts/HapioDataContext';
 
 interface ListViewProps {
   resourceId: string;
@@ -13,6 +14,7 @@ interface ListViewProps {
 }
 
 export default function ListView({ resourceId, currentDate, onDateChange }: ListViewProps) {
+  const { getRecurringSchedules, getRecurringScheduleBlocks, getScheduleBlocks } = useHapioData();
   const [slots, setSlots] = useState<EffectiveScheduleSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -34,7 +36,11 @@ export default function ListView({ resourceId, currentDate, onDateChange }: List
       to.setHours(23, 59, 59, 999);
 
       const { recurringSchedules, recurringScheduleBlocks, scheduleBlocks } =
-        await fetchScheduleData(resourceId, from, to);
+        await fetchScheduleData(resourceId, from, to, {
+          getRecurringSchedules,
+          getRecurringScheduleBlocks,
+          getScheduleBlocks,
+        });
 
       const effectiveSlots = calculateEffectiveSchedule(
         from,

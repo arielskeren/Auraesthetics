@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchScheduleData, calculateEffectiveSchedule, EffectiveScheduleSlot } from '../ScheduleDataAggregator';
 import LoadingState from '../LoadingState';
 import ErrorDisplay from '../ErrorDisplay';
+import { useHapioData } from '../../_contexts/HapioDataContext';
 
 interface DayViewProps {
   resourceId: string;
@@ -13,6 +14,7 @@ interface DayViewProps {
 }
 
 export default function DayView({ resourceId, currentDate, onDateChange }: DayViewProps) {
+  const { getRecurringSchedules, getRecurringScheduleBlocks, getScheduleBlocks } = useHapioData();
   const [slots, setSlots] = useState<EffectiveScheduleSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -33,7 +35,11 @@ export default function DayView({ resourceId, currentDate, onDateChange }: DayVi
       to.setHours(23, 59, 59, 999);
 
       const { recurringSchedules, recurringScheduleBlocks, scheduleBlocks } =
-        await fetchScheduleData(resourceId, from, to);
+        await fetchScheduleData(resourceId, from, to, {
+          getRecurringSchedules,
+          getRecurringScheduleBlocks,
+          getScheduleBlocks,
+        });
 
       const effectiveSlots = calculateEffectiveSchedule(
         from,

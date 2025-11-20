@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchScheduleData, calculateEffectiveSchedule, EffectiveScheduleSlot } from '../ScheduleDataAggregator';
 import LoadingState from '../LoadingState';
 import ErrorDisplay from '../ErrorDisplay';
+import { useHapioData } from '../../_contexts/HapioDataContext';
 
 interface WeekViewProps {
   resourceId: string;
@@ -13,6 +14,7 @@ interface WeekViewProps {
 }
 
 export default function WeekView({ resourceId, currentDate, onDateChange }: WeekViewProps) {
+  const { getRecurringSchedules, getRecurringScheduleBlocks, getScheduleBlocks } = useHapioData();
   const [slots, setSlots] = useState<EffectiveScheduleSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -38,7 +40,11 @@ export default function WeekView({ resourceId, currentDate, onDateChange }: Week
       weekEnd.setHours(23, 59, 59, 999);
 
       const { recurringSchedules, recurringScheduleBlocks, scheduleBlocks } =
-        await fetchScheduleData(resourceId, weekStart, weekEnd);
+        await fetchScheduleData(resourceId, weekStart, weekEnd, {
+          getRecurringSchedules,
+          getRecurringScheduleBlocks,
+          getScheduleBlocks,
+        });
 
       const effectiveSlots = calculateEffectiveSchedule(
         weekStart,

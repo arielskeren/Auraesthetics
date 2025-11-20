@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 
 interface HapioDataContextType {
   // Services
@@ -8,6 +8,7 @@ interface HapioDataContextType {
   loadServices: () => Promise<void>;
   isLoadingServices: boolean;
   getService: (serviceId: string) => Promise<any | null>;
+  getFullServices: () => Promise<any[]>; // Get full service objects (with all fields)
   
   // Resources
   resources: Record<string, { id: string; name: string }>;
@@ -32,6 +33,10 @@ interface HapioDataContextType {
   
   // Availability (cached by resource and month)
   getAvailability: (resourceId: string, from: string, to: string) => Promise<Record<string, Array<{ start: string; end: string }>>>;
+  getAvailabilityFull: (resourceId: string, from: string, to: string) => Promise<{
+    availabilityByDate: Record<string, Array<{ start: string; end: string }>>;
+    recurringBlocksByDate: Record<string, Array<{ start: string; end: string; isAllDay: boolean }>>;
+  }>;
   isLoadingAvailability: boolean;
   
   // Schedule blocks (cached by resource and date range)
@@ -59,6 +64,7 @@ const inFlightRequests = new Map<string, Promise<any>>();
 // Simple in-memory cache
 const cache = {
   services: null as Record<string, { id: string; name: string }> | null,
+  fullServices: null as { data: any[]; timestamp: number } | null, // Full service objects list
   resources: null as Record<string, { id: string; name: string }> | null,
   locations: null as Array<{ id: string; name: string }> | null,
   bookings: new Map<string, { data: any[]; timestamp: number }>(),
@@ -87,6 +93,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingScheduleBlocks, setIsLoadingScheduleBlocks] = useState(false);
   const [isLoadingRecurringSchedules, setIsLoadingRecurringSchedules] = useState(false);
   const [isLoadingRecurringScheduleBlocks, setIsLoadingRecurringScheduleBlocks] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Deduplicated fetch helper
   const deduplicatedFetch = useCallback(async <T,>(
@@ -109,7 +116,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadServices = useCallback(async () => {
-    // Check cache first
+    // Check cache first - if we have cached data, use it immediately
     if (cache.services && Object.keys(cache.services).length > 0) {
       setServices(cache.services);
       return;
@@ -124,10 +131,13 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
         }
         const data = await response.json();
         const servicesMap: Record<string, { id: string; name: string }> = {};
-        (data.data || []).forEach((service: any) => {
+        const fullServicesList = data.data || [];
+        fullServicesList.forEach((service: any) => {
           servicesMap[service.id] = { id: service.id, name: service.name || 'Unknown Service' };
         });
         cache.services = servicesMap;
+        // Also cache full services list
+        cache.fullServices = { data: fullServicesList, timestamp: Date.now() };
         setServices(servicesMap);
         return servicesMap;
       });
@@ -138,8 +148,32 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [deduplicatedFetch]);
 
-  const loadResources = useCallback(async () => {
+  const getFullServices = useCallback(async (): Promise<any[]> => {
     // Check cache first
+    if (cache.fullServices && Date.now() - cache.fullServices.timestamp < CACHE_TTL_STATIC) {
+      return cache.fullServices.data;
+    }
+
+    try {
+      return await deduplicatedFetch('full-services', async () => {
+        const response = await fetch('/api/admin/hapio/services?per_page=100');
+        if (!response.ok) {
+          throw new Error('Failed to load full services');
+        }
+        const data = await response.json();
+        const fullServicesList = data.data || [];
+        cache.fullServices = { data: fullServicesList, timestamp: Date.now() };
+        return fullServicesList;
+      });
+    } catch (err) {
+      console.error('[HapioDataContext] Error loading full services:', err);
+      return [];
+    }
+  }, [deduplicatedFetch]);
+
+
+  const loadResources = useCallback(async () => {
+    // Check cache first - if we have cached data, use it immediately
     if (cache.resources && Object.keys(cache.resources).length > 0) {
       setResources(cache.resources);
       return;
@@ -169,7 +203,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
   }, [deduplicatedFetch]);
 
   const loadLocations = useCallback(async () => {
-    // Check cache first
+    // Check cache first - if we have cached data, use it immediately
     if (cache.locations && cache.locations.length > 0) {
       setLocations(cache.locations);
       return;
@@ -241,17 +275,23 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [deduplicatedFetch]);
 
-  const getAvailability = useCallback(async (
+  const getAvailabilityFull = useCallback(async (
     resourceId: string,
     from: string,
     to: string
-  ): Promise<Record<string, Array<{ start: string; end: string }>>> => {
-    const cacheKey = `availability:${resourceId}:${from}:${to}`;
+  ): Promise<{
+    availabilityByDate: Record<string, Array<{ start: string; end: string }>>;
+    recurringBlocksByDate: Record<string, Array<{ start: string; end: string; isAllDay: boolean }>>;
+  }> => {
+    const cacheKey = `availability-full:${resourceId}:${from}:${to}`;
     
-    // Check cache
+    // Check cache - use availability cache but store full response
     const cached = cache.availability.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_DYNAMIC) {
-      return cached.data;
+      // If cached data has full response, return it
+      if ((cached.data as any).availabilityByDate && (cached.data as any).recurringBlocksByDate) {
+        return cached.data as any;
+      }
     }
 
     setIsLoadingAvailability(true);
@@ -264,18 +304,31 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Failed to load availability');
         }
         const data = await response.json();
-        const availabilityData = data.availabilityByDate || {};
+        const fullResponse = {
+          availabilityByDate: data.availabilityByDate || {},
+          recurringBlocksByDate: data.recurringBlocksByDate || {},
+        };
         
-        cache.availability.set(cacheKey, { data: availabilityData, timestamp: Date.now() });
-        return availabilityData;
+        // Cache the full response
+        cache.availability.set(cacheKey, { data: fullResponse, timestamp: Date.now() });
+        return fullResponse;
       });
     } catch (err) {
       console.error('[HapioDataContext] Error loading availability:', err);
-      return {};
+      return { availabilityByDate: {}, recurringBlocksByDate: {} };
     } finally {
       setIsLoadingAvailability(false);
     }
   }, [deduplicatedFetch]);
+
+  const getAvailability = useCallback(async (
+    resourceId: string,
+    from: string,
+    to: string
+  ): Promise<Record<string, Array<{ start: string; end: string }>>> => {
+    const fullData = await getAvailabilityFull(resourceId, from, to);
+    return fullData.availabilityByDate || {};
+  }, [getAvailabilityFull]);
 
   const getService = useCallback(async (serviceId: string): Promise<any | null> => {
     // Check if in services map first
@@ -469,6 +522,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
 
   const clearCache = useCallback(() => {
     cache.services = null;
+    cache.fullServices = null;
     cache.resources = null;
     cache.locations = null;
     cache.bookings.clear();
@@ -493,11 +547,25 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
     ]);
   }, [clearCache, loadServices, loadResources, loadLocations]);
 
+  // Auto-load services, resources, and locations ONCE when provider mounts
+  useEffect(() => {
+    if (!hasInitialized) {
+      setHasInitialized(true);
+      // Load all static data once on mount - these will be deduplicated if called multiple times
+      // Don't await - let them load in parallel
+      loadServices().catch(err => console.error('[HapioDataContext] Error auto-loading services:', err));
+      loadResources().catch(err => console.error('[HapioDataContext] Error auto-loading resources:', err));
+      loadLocations().catch(err => console.error('[HapioDataContext] Error auto-loading locations:', err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasInitialized]);
+
   const value: HapioDataContextType = {
     services,
     loadServices,
     isLoadingServices,
     getService,
+    getFullServices,
     resources,
     loadResources,
     isLoadingResources,
@@ -509,6 +577,7 @@ export function HapioDataProvider({ children }: { children: React.ReactNode }) {
     getBookings,
     isLoadingBookings,
     getAvailability,
+    getAvailabilityFull,
     isLoadingAvailability,
     getScheduleBlocks,
     isLoadingScheduleBlocks,

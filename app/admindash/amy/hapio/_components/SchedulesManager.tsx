@@ -20,10 +20,8 @@ export default function SchedulesManager() {
   const [error, setError] = useState<any>(null);
   const [showDeveloperInfo, setShowDeveloperInfo] = useState(false);
 
-  useEffect(() => {
-    loadResources();
-    loadLocations();
-  }, [loadResources, loadLocations]);
+  // Don't call loadResources/loadLocations - they're auto-loaded by context
+  // Just wait for the data to be available
 
   // Set first resource and location from context data
   useEffect(() => {

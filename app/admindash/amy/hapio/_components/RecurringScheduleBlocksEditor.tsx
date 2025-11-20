@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit2 } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import RecurringScheduleBlockEditModal from './RecurringScheduleBlockEditModal';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface RecurringScheduleBlocksEditorProps {
   resourceId: string;
@@ -39,6 +40,7 @@ export default function RecurringScheduleBlocksEditor({
   resourceId,
   locationId,
 }: RecurringScheduleBlocksEditorProps) {
+  const { getRecurringScheduleBlocks } = useHapioData();
   const [existingBlocks, setExistingBlocks] = useState<ExistingBlock[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -53,45 +55,37 @@ export default function RecurringScheduleBlocksEditor({
   const loadBlocksList = async () => {
     try {
       setLoadingList(true);
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?list_all=true&per_page=100`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const blocksList = (data.data || []) as ExistingBlock[];
-        
-        // Sort by weekday (Sunday=0, Monday=1, etc.), then by start time
-        blocksList.sort((a, b) => {
-          // Convert weekday to number for sorting
-          const getWeekdayNumber = (weekday: string | number | null | undefined): number => {
-            if (weekday === null || weekday === undefined) return 7; // Put nulls at end
-            if (typeof weekday === 'number') return weekday;
-            // Convert string to number
-            const dayMap: Record<string, number> = {
-              'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-              'thursday': 4, 'friday': 5, 'saturday': 6
-            };
-            return dayMap[weekday.toLowerCase()] ?? 7;
+      const blocksList = (await getRecurringScheduleBlocks(resourceId)) as ExistingBlock[];
+      
+      // Sort by weekday (Sunday=0, Monday=1, etc.), then by start time
+      blocksList.sort((a, b) => {
+        // Convert weekday to number for sorting
+        const getWeekdayNumber = (weekday: string | number | null | undefined): number => {
+          if (weekday === null || weekday === undefined) return 7; // Put nulls at end
+          if (typeof weekday === 'number') return weekday;
+          // Convert string to number
+          const dayMap: Record<string, number> = {
+            'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+            'thursday': 4, 'friday': 5, 'saturday': 6
           };
-          
-          const aWeekdayNum = getWeekdayNumber(a.weekday);
-          const bWeekdayNum = getWeekdayNumber(b.weekday);
-          
-          if (aWeekdayNum !== bWeekdayNum) {
-            return aWeekdayNum - bWeekdayNum;
-          }
-          
-          // If same weekday, sort by start time
-          const aStart = a.start_time || '00:00';
-          const bStart = b.start_time || '00:00';
-          return aStart.localeCompare(bStart);
-        });
+          return dayMap[weekday.toLowerCase()] ?? 7;
+        };
         
-        setExistingBlocks(blocksList);
-        console.log('[RecurringScheduleBlocksEditor] Loaded blocks list:', blocksList);
-      } else if (response.status === 404) {
-        setExistingBlocks([]);
-      }
+        const aWeekdayNum = getWeekdayNumber(a.weekday);
+        const bWeekdayNum = getWeekdayNumber(b.weekday);
+        
+        if (aWeekdayNum !== bWeekdayNum) {
+          return aWeekdayNum - bWeekdayNum;
+        }
+        
+        // If same weekday, sort by start time
+        const aStart = a.start_time || '00:00';
+        const bStart = b.start_time || '00:00';
+        return aStart.localeCompare(bStart);
+      });
+      
+      setExistingBlocks(blocksList);
+      console.log('[RecurringScheduleBlocksEditor] Loaded blocks list:', blocksList);
     } catch (err) {
       console.warn('[RecurringScheduleBlocksEditor] Error loading blocks list:', err);
       setExistingBlocks([]);

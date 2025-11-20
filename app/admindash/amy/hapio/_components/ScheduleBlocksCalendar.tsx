@@ -23,7 +23,7 @@ export default function ScheduleBlocksCalendar({
   resourceId,
   locationId,
 }: ScheduleBlocksCalendarProps) {
-  const { getScheduleBlocks, getAvailability } = useHapioData();
+  const { getScheduleBlocks, getAvailabilityFull } = useHapioData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [availability, setAvailability] = useState<Record<string, Array<{ start: string; end: string }>>>({});
@@ -98,25 +98,10 @@ export default function ScheduleBlocksCalendar({
       const from = formatDateForHapioUTC(fromDate);
       const to = formatDateForHapioUTC(toDate);
 
-      // Note: getAvailability returns availabilityByDate format
-      // We still need to fetch the full response for recurringBlocksByDate
-      // This is a limitation - we may need to extend the context later
-      const availabilityData = await getAvailability(resourceId, from, to);
-      setAvailability(availabilityData);
-      
-      // For now, we'll fetch the full response to get recurringBlocksByDate
-      // This can be optimized later by extending the context
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setRecurringBlocks(data.recurringBlocksByDate || {});
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.warn('[ScheduleBlocksCalendar] Availability API error:', response.status, errorData);
-      }
-      // Silently fail if availability can't be loaded - it's not critical
+      // Use getAvailabilityFull to get both availabilityByDate and recurringBlocksByDate in one call
+      const availabilityData = await getAvailabilityFull(resourceId, from, to);
+      setAvailability(availabilityData.availabilityByDate || {});
+      setRecurringBlocks(availabilityData.recurringBlocksByDate || {});
     } catch (err: any) {
       // Silently fail - availability is optional
       console.warn('[ScheduleBlocksCalendar] Failed to load availability:', err);

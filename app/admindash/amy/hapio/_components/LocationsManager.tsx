@@ -9,6 +9,7 @@ import LocationEditModal from './LocationEditModal';
 import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function LocationsManager() {
+  const { locations: contextLocations } = useHapioData();
   const [locations, setLocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -28,6 +29,22 @@ export default function LocationsManager() {
       setLoading(true);
       setError(null);
 
+      // For page 1, use context data if available (no API call needed)
+      if (page === 1 && contextLocations.length > 0) {
+        const paginatedLocations = contextLocations.slice(0, perPage);
+        setLocations(paginatedLocations);
+        // Create mock pagination for first page
+        setPagination({
+          current_page: 1,
+          per_page: perPage,
+          total: contextLocations.length,
+          last_page: Math.ceil(contextLocations.length / perPage),
+        });
+        setLoading(false);
+        return;
+      }
+
+      // For page > 1, fetch from API
       const params = new URLSearchParams();
       params.append('page', String(page));
       params.append('per_page', String(perPage));

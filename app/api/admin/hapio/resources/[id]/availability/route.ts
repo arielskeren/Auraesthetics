@@ -4,6 +4,9 @@ import { formatDateForHapioUTC } from '@/lib/hapioDateUtils';
 import { getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
 import crypto from 'crypto';
 
+// Request deduplication for availability endpoint
+const inflightAvailabilityRequests = new Map<string, Promise<any>>();
+
 type CacheEntry<T> = { expiresAt: number; value: T };
 const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const schedulesCache = new Map<string, CacheEntry<any>>();
@@ -80,19 +83,29 @@ export async function GET(
     const toDate = new Date(to);
     toDate.setHours(23, 59, 59, 999);
 
-    // Fetch recurring schedules
+    // Fetch recurring schedules with deduplication
     const schedulesKey = `schedules|${params.id}`;
-    let recurringSchedulesResponse =
-      cacheGet(schedulesCache, schedulesKey) ||
-      (await listRecurringSchedules('resource', params.id, {
-        per_page: 100,
-      }).catch((err) => {
-        console.error('[Availability API] Failed to fetch recurring schedules:', err);
-        return { data: [], meta: { total: 0 } };
-      }));
-    // Cache schedules list
-    if (!cacheGet(schedulesCache, schedulesKey)) {
-      cacheSet(schedulesCache, schedulesKey, recurringSchedulesResponse, ttlMs);
+    let recurringSchedulesResponse = cacheGet(schedulesCache, schedulesKey);
+    
+    if (!recurringSchedulesResponse) {
+      // Check if request is in flight
+      if (inflightAvailabilityRequests.has(schedulesKey)) {
+        recurringSchedulesResponse = await inflightAvailabilityRequests.get(schedulesKey)!;
+      } else {
+        // Create new request
+        const requestPromise = listRecurringSchedules('resource', params.id, {
+          per_page: 100,
+        }).catch((err) => {
+          console.error('[Availability API] Failed to fetch recurring schedules:', err);
+          return { data: [], meta: { total: 0 } };
+        }).finally(() => {
+          inflightAvailabilityRequests.delete(schedulesKey);
+        });
+        
+        inflightAvailabilityRequests.set(schedulesKey, requestPromise);
+        recurringSchedulesResponse = await requestPromise;
+        cacheSet(schedulesCache, schedulesKey, recurringSchedulesResponse, ttlMs);
+      }
     }
 
     console.log('[Availability API] Recurring schedules:', {
@@ -128,17 +141,28 @@ export async function GET(
         if (scheduleEnd && scheduleEnd < fromDate) continue;
         if (scheduleStart && scheduleStart > toDate) continue;
 
-        // Fetch blocks for this schedule (these define working hours/availability)
+        // Fetch blocks for this schedule (these define working hours/availability) with deduplication
         try {
           const blocksKey = `blocks|${params.id}|${schedule.id}`;
-          const blocksResponse =
-            cacheGet(scheduleBlocksCache, blocksKey) ||
-            (await listRecurringScheduleBlocks('resource', params.id, {
-              recurring_schedule_id: schedule.id,
-              per_page: 100,
-            }).catch(() => ({ data: [], meta: { total: 0 } })));
-          if (!cacheGet(scheduleBlocksCache, blocksKey)) {
-            cacheSet(scheduleBlocksCache, blocksKey, blocksResponse, ttlMs);
+          let blocksResponse = cacheGet(scheduleBlocksCache, blocksKey);
+          
+          if (!blocksResponse) {
+            // Check if request is in flight
+            if (inflightAvailabilityRequests.has(blocksKey)) {
+              blocksResponse = await inflightAvailabilityRequests.get(blocksKey)!;
+            } else {
+              // Create new request
+              const requestPromise = listRecurringScheduleBlocks('resource', params.id, {
+                recurring_schedule_id: schedule.id,
+                per_page: 100,
+              }).catch(() => ({ data: [], meta: { total: 0 } })).finally(() => {
+                inflightAvailabilityRequests.delete(blocksKey);
+              });
+              
+              inflightAvailabilityRequests.set(blocksKey, requestPromise);
+              blocksResponse = await requestPromise;
+              cacheSet(scheduleBlocksCache, blocksKey, blocksResponse, ttlMs);
+            }
           }
 
           if (blocksResponse.data && Array.isArray(blocksResponse.data)) {
@@ -225,14 +249,25 @@ export async function GET(
 
         try {
           const blocksKey = `blocks|${params.id}|${schedule.id}`;
-          const blocksResponse =
-            cacheGet(scheduleBlocksCache, blocksKey) ||
-            (await listRecurringScheduleBlocks('resource', params.id, {
-              recurring_schedule_id: schedule.id,
-              per_page: 100,
-            }).catch(() => ({ data: [], meta: { total: 0 } })));
-          if (!cacheGet(scheduleBlocksCache, blocksKey)) {
-            cacheSet(scheduleBlocksCache, blocksKey, blocksResponse, ttlMs);
+          let blocksResponse = cacheGet(scheduleBlocksCache, blocksKey);
+          
+          if (!blocksResponse) {
+            // Check if request is in flight
+            if (inflightAvailabilityRequests.has(blocksKey)) {
+              blocksResponse = await inflightAvailabilityRequests.get(blocksKey)!;
+            } else {
+              // Create new request
+              const requestPromise = listRecurringScheduleBlocks('resource', params.id, {
+                recurring_schedule_id: schedule.id,
+                per_page: 100,
+              }).catch(() => ({ data: [], meta: { total: 0 } })).finally(() => {
+                inflightAvailabilityRequests.delete(blocksKey);
+              });
+              
+              inflightAvailabilityRequests.set(blocksKey, requestPromise);
+              blocksResponse = await requestPromise;
+              cacheSet(scheduleBlocksCache, blocksKey, blocksResponse, ttlMs);
+            }
           }
 
           if (blocksResponse.data && Array.isArray(blocksResponse.data)) {

@@ -46,7 +46,7 @@ export default function RecurringScheduleEditModal({
   onClose,
   onSave,
 }: RecurringScheduleEditModalProps) {
-  const { loadServices, getRecurringSchedules, getRecurringScheduleBlocks } = useHapioData();
+  const { services, getRecurringSchedules, getRecurringScheduleBlocks } = useHapioData();
   const [schedules, setSchedules] = useState<DaySchedule[]>(
     DAYS.map((day) => ({
       dayOfWeek: day.value,
@@ -87,28 +87,21 @@ export default function RecurringScheduleEditModal({
 
   const loadAllServices = async () => {
     try {
-      // Load services from context first (will use cache if available)
-      await loadServices();
+      // Services are auto-loaded by context, use the services map to get IDs
+      const serviceIds = Object.keys(services);
+      setAllServiceIds(serviceIds);
       
-      // Fetch full service list to get IDs
-      const response = await fetch('/api/admin/hapio/services?per_page=100');
-      if (response.ok) {
-        const data = await response.json();
-        const serviceIds = (data.data || []).map((s: any) => s.id);
-        setAllServiceIds(serviceIds);
-        
-        // If this is a new schedule, populate all time ranges with all services
-        if (!scheduleId) {
-          setSchedules((prev) =>
-            prev.map((day) => ({
-              ...day,
-              timeRanges: day.timeRanges.map((range) => ({
-                ...range,
-                serviceIds: serviceIds.length > 0 ? [...serviceIds] : [],
-              })),
-            }))
-          );
-        }
+      // If this is a new schedule, populate all time ranges with all services
+      if (!scheduleId) {
+        setSchedules((prev) =>
+          prev.map((day) => ({
+            ...day,
+            timeRanges: day.timeRanges.map((range) => ({
+              ...range,
+              serviceIds: serviceIds.length > 0 ? [...serviceIds] : [],
+            })),
+          }))
+        );
       }
     } catch (err) {
       console.warn('[RecurringScheduleEditModal] Error loading services:', err);
@@ -119,12 +112,11 @@ export default function RecurringScheduleEditModal({
     if (!scheduleId) return;
     
     try {
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/recurring-schedules/${scheduleId}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const schedule = data.schedule || data;
+      // Use context to get recurring schedules (cached) instead of direct fetch
+      const schedules = await getRecurringSchedules(resourceId);
+      const schedule = schedules.find((s: any) => s.id === scheduleId);
+      
+      if (schedule) {
         
         if (schedule.start_date) {
           setStartDate(schedule.start_date.split('T')[0]);
@@ -432,80 +424,83 @@ export default function RecurringScheduleEditModal({
       }
 
       // Delete existing blocks if editing, then create new ones
+      // OPTIMIZATION: Delete in parallel instead of sequentially
       if (scheduleId) {
         try {
-          const existingBlocksResponse = await fetch(
-            `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?recurring_schedule_id=${recurringScheduleId}&per_page=100`
-          );
-          if (existingBlocksResponse.ok) {
-            const existingBlocks = await existingBlocksResponse.json();
-            for (const block of existingBlocks.data || []) {
-              await fetch(
+          const existingBlocks = await getRecurringScheduleBlocks(resourceId, recurringScheduleId);
+          // Delete all existing blocks in parallel
+          await Promise.all(
+            existingBlocks.map((block: any) =>
+              fetch(
                 `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks/${block.id}?recurring_schedule_id=${recurringScheduleId}`,
                 { method: 'DELETE' }
-              );
-            }
-          }
+              ).catch(err => {
+                console.warn(`[RecurringScheduleEditModal] Error deleting block ${block.id}:`, err);
+                return null; // Continue even if one fails
+              })
+            )
+          );
         } catch (deleteErr) {
           console.warn('[RecurringScheduleEditModal] Error deleting existing blocks:', deleteErr);
         }
       }
 
       // Create recurring schedule blocks for each enabled day and time range
+      // OPTIMIZATION: Create in parallel instead of sequentially
+      const formatTime = (time: string): string => {
+        if (time.includes(':')) {
+          const parts = time.split(':');
+          return parts.length === 2 ? `${time}:00` : time;
+        }
+        return time;
+      };
+
+      // Build all block payloads first
+      const blockPayloads: Array<{ payload: any; dayLabel: string }> = [];
       for (const daySchedule of enabledSchedules) {
-        // Convert time from HH:mm to HH:mm:ss format (Hapio requires H:i:s)
-        const formatTime = (time: string): string => {
-          if (time.includes(':')) {
-            const parts = time.split(':');
-            return parts.length === 2 ? `${time}:00` : time;
-          }
-          return time;
-        };
-        
-        // Hapio expects weekday as a string enum: "monday", "tuesday", etc.
         const hapioWeekday = getHapioWeekdayString(daySchedule.dayOfWeek);
         
-        // Create a block for each time range
         for (const timeRange of daySchedule.timeRanges) {
-          // Ensure serviceIds is always an array (default to all services if empty)
           const finalServiceIds = timeRange.serviceIds.length > 0 
             ? timeRange.serviceIds 
             : (allServiceIds.length > 0 ? allServiceIds : []);
           
-          const blockPayload = {
-            recurring_schedule_id: recurringScheduleId,
-            weekday: hapioWeekday, // String format: "monday", "tuesday", etc.
-            start_time: formatTime(timeRange.startTime), // Convert HH:mm to HH:mm:ss
-            end_time: formatTime(timeRange.endTime), // Convert HH:mm to HH:mm:ss
-            metadata: {
-              service_ids: finalServiceIds,
+          blockPayloads.push({
+            payload: {
+              recurring_schedule_id: recurringScheduleId,
+              weekday: hapioWeekday,
+              start_time: formatTime(timeRange.startTime),
+              end_time: formatTime(timeRange.endTime),
+              metadata: {
+                service_ids: finalServiceIds,
+              },
             },
-          };
-          
-          console.log('[RecurringScheduleEditModal] Creating block:', {
-            day: DAYS[daySchedule.dayOfWeek].label,
-            dayOfWeek: daySchedule.dayOfWeek,
-            hapioWeekdayString: hapioWeekday,
-            serviceIds: finalServiceIds,
-            serviceCount: finalServiceIds.length,
-            payload: blockPayload,
+            dayLabel: DAYS[daySchedule.dayOfWeek].label,
           });
+        }
+      }
 
+      // Create all blocks in parallel
+      const createResults = await Promise.all(
+        blockPayloads.map(async ({ payload, dayLabel }) => {
           const blockResponse = await fetch(
             `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(blockPayload),
+              body: JSON.stringify(payload),
             }
           );
 
           if (!blockResponse.ok) {
             const errorData = await blockResponse.json();
-            throw new Error(errorData.error || `Failed to create schedule for ${DAYS[daySchedule.dayOfWeek].label}`);
+            throw new Error(errorData.error || `Failed to create schedule for ${dayLabel}`);
           }
-        }
-      }
+          return blockResponse.json();
+        })
+      );
+
+      console.log('[RecurringScheduleEditModal] Created', createResults.length, 'blocks in parallel');
 
       setSuccess(true);
       setTimeout(() => {

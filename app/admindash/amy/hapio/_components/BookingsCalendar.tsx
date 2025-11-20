@@ -62,40 +62,58 @@ export default function BookingsCalendar() {
   const [locationId, setLocationId] = useState<string | null>(null);
   const [allScheduleBlocks, setAllScheduleBlocks] = useState<Array<{ starts_at: string; ends_at: string; metadata?: Record<string, unknown> | null }>>([]);
 
-  // Load initial data once
-  useEffect(() => {
-    loadServices();
-    loadResources();
-    loadLocations();
-  }, [loadServices, loadResources, loadLocations]);
+  // Don't call loadServices/loadResources/loadLocations - they're auto-loaded by context
+  // Just wait for the data to be available
 
-  // Set first location when locations are loaded
+  // Set first location and resource when data is loaded (only once, using ref to prevent re-triggers)
+  const hasSetIdsRef = useRef(false);
   useEffect(() => {
-    if (locations.length > 0 && !locationId) {
-      setLocationId(locations[0].id);
+    // Only set IDs once when data becomes available
+    if (!hasSetIdsRef.current && locations.length > 0 && Object.keys(resources).length > 0) {
+      if (!locationId) {
+        setLocationId(locations[0].id);
+      }
+      if (!resourceId) {
+        const firstResourceId = Object.keys(resources)[0];
+        setResourceId(firstResourceId);
+      }
+      hasSetIdsRef.current = true;
     }
-  }, [locations, locationId]);
-
-  // Set first resource when resources are loaded
-  useEffect(() => {
-    if (Object.keys(resources).length > 0 && !resourceId) {
-      const firstResourceId = Object.keys(resources)[0];
-      setResourceId(firstResourceId);
-    }
-  }, [resources, resourceId]);
+  }, [locations, resources, locationId, resourceId]);
 
   // Load bookings, availability, and schedule blocks when resource/location/date changes
+  // Use a ref to prevent duplicate calls - only load once per unique combination
+  const hasLoadedRef = useRef<string>('');
+  const isLoadingRef = useRef(false);
+  
   useEffect(() => {
-    if (resourceId && locationId) {
-      loadBookings();
-      loadAvailability();
-      loadScheduleBlocksForMonth();
+    // Only proceed if we have both resourceId and locationId, and we're not already loading
+    if (resourceId && locationId && !isLoadingRef.current) {
+      const loadKey = `${resourceId}-${locationId}-${currentDate.getMonth()}-${currentDate.getFullYear()}`;
+      // Only load if this is a new combination
+      if (hasLoadedRef.current !== loadKey) {
+        hasLoadedRef.current = loadKey;
+        isLoadingRef.current = true;
+        
+        // Call all three in parallel - context will handle deduplication
+        Promise.all([
+          loadBookings(),
+          loadAvailability(),
+          loadScheduleBlocksForMonth(),
+        ]).catch(err => {
+          console.error('[BookingsCalendar] Error loading data:', err);
+        }).finally(() => {
+          isLoadingRef.current = false;
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId, locationId, currentDate]);
 
 
   const loadBookings = async () => {
+    if (!resourceId || !locationId) return;
+    
     try {
       setLoading(true);
       setError(null);
@@ -113,8 +131,8 @@ export default function BookingsCalendar() {
       const activeBookings = await getBookings({
         from,
         to,
-        resourceId: resourceId || undefined,
-        locationId: locationId || undefined,
+        resourceId: resourceId,
+        locationId: locationId,
       });
       setBookings(activeBookings);
     } catch (err: any) {
@@ -125,7 +143,7 @@ export default function BookingsCalendar() {
   };
 
   const loadAvailability = async () => {
-    if (!resourceId) return;
+    if (!resourceId || !locationId) return;
 
     try {
       const year = currentDate.getFullYear();
@@ -146,7 +164,7 @@ export default function BookingsCalendar() {
   };
 
   const loadScheduleBlocksForMonth = async () => {
-    if (!resourceId) return;
+    if (!resourceId || !locationId) return;
 
     try {
       const year = currentDate.getFullYear();

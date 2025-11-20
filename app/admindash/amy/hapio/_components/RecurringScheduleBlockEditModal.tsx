@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Save, Clock, Calendar } from 'lucide-react';
 import ErrorDisplay from './ErrorDisplay';
 import { getHapioWeekdayString, getWeekdayFromHapioString } from '@/lib/hapioWeekdayUtils';
+import { useHapioData } from '../_contexts/HapioDataContext';
 
 interface RecurringScheduleBlockEditModalProps {
   resourceId: string;
@@ -36,6 +37,7 @@ export default function RecurringScheduleBlockEditModal({
   onClose,
   onSave,
 }: RecurringScheduleBlockEditModalProps) {
+  const { getRecurringSchedules, getRecurringScheduleBlocks } = useHapioData();
   const [recurringScheduleId, setRecurringScheduleId] = useState<string>('');
   const [availableSchedules, setAvailableSchedules] = useState<RecurringSchedule[]>([]);
   const [weekday, setWeekday] = useState<number>(1); // Monday by default
@@ -57,17 +59,11 @@ export default function RecurringScheduleBlockEditModal({
   const loadAvailableSchedules = async () => {
     try {
       setLoadingSchedules(true);
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/recurring-schedules?per_page=100`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const schedules = (data.data || []) as RecurringSchedule[];
-        setAvailableSchedules(schedules);
-        // Auto-select first schedule if available and not editing
-        if (!blockId && schedules.length > 0 && !recurringScheduleId) {
-          setRecurringScheduleId(schedules[0].id);
-        }
+      const schedules = (await getRecurringSchedules(resourceId)) as RecurringSchedule[];
+      setAvailableSchedules(schedules);
+      // Auto-select first schedule if available and not editing
+      if (!blockId && schedules.length > 0 && !recurringScheduleId) {
+        setRecurringScheduleId(schedules[0].id);
       }
     } catch (err) {
       console.warn('[RecurringScheduleBlockEditModal] Failed to load schedules:', err);
@@ -80,40 +76,34 @@ export default function RecurringScheduleBlockEditModal({
     if (!blockId) return;
     
     try {
-      // First, get all blocks to find the one we're editing
-      const response = await fetch(
-        `/api/admin/hapio/resources/${resourceId}/recurring-schedule-blocks?list_all=true&per_page=100`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        const blocks = data.data || [];
-        const block = blocks.find((b: any) => b.id === blockId);
+      // Get all blocks to find the one we're editing (using context)
+      const blocks = await getRecurringScheduleBlocks(resourceId);
+      const block = blocks.find((b: any) => b.id === blockId);
+      
+      if (block) {
+        setRecurringScheduleId(block.recurring_schedule_id);
         
-        if (block) {
-          setRecurringScheduleId(block.recurring_schedule_id);
-          
-          // Convert weekday from Hapio format to number
-          if (block.weekday !== null && block.weekday !== undefined) {
-            const dayOfWeek = getWeekdayFromHapioString(block.weekday);
-            setWeekday(dayOfWeek);
-          }
-          
-          // Format time from HH:mm:ss to HH:mm for input
-          if (block.start_time) {
-            const time = block.start_time.split(':').slice(0, 2).join(':');
-            setStartTime(time);
-          }
-          if (block.end_time) {
-            const time = block.end_time.split(':').slice(0, 2).join(':');
-            setEndTime(time);
-          }
-          
-          // Check if it's all day
-          const startTimeStr = block.start_time || '00:00';
-          const endTimeStr = block.end_time || '23:59';
-          const isAllDayBlock = startTimeStr.startsWith('00:00') && endTimeStr.startsWith('23:59');
-          setIsAllDay(isAllDayBlock);
+        // Convert weekday from Hapio format to number
+        if (block.weekday !== null && block.weekday !== undefined) {
+          const dayOfWeek = getWeekdayFromHapioString(block.weekday);
+          setWeekday(dayOfWeek);
         }
+        
+        // Format time from HH:mm:ss to HH:mm for input
+        if (block.start_time) {
+          const time = block.start_time.split(':').slice(0, 2).join(':');
+          setStartTime(time);
+        }
+        if (block.end_time) {
+          const time = block.end_time.split(':').slice(0, 2).join(':');
+          setEndTime(time);
+        }
+        
+        // Check if it's all day
+        const startTimeStr = block.start_time || '00:00';
+        const endTimeStr = block.end_time || '23:59';
+        const isAllDayBlock = startTimeStr.startsWith('00:00') && endTimeStr.startsWith('23:59');
+        setIsAllDay(isAllDayBlock);
       }
     } catch (err) {
       console.warn('[RecurringScheduleBlockEditModal] Failed to load block:', err);

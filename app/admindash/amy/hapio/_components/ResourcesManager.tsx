@@ -11,7 +11,7 @@ import IdDisplay from './IdDisplay';
 import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function ResourcesManager() {
-  const { locations, loadLocations } = useHapioData();
+  const { resources: contextResources, locations } = useHapioData();
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -24,8 +24,9 @@ export default function ResourcesManager() {
   const [selectedResourceForSchedule, setSelectedResourceForSchedule] = useState<any>(null);
 
   useEffect(() => {
+    // Don't call loadLocations - it's auto-loaded by context
+    // Only load resources for pagination
     loadResources();
-    loadLocations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
@@ -34,6 +35,23 @@ export default function ResourcesManager() {
       setLoading(true);
       setError(null);
 
+      // For page 1, use context data if available (no API call needed)
+      if (page === 1 && Object.keys(contextResources).length > 0) {
+        const resourcesArray = Object.values(contextResources);
+        const paginatedResources = resourcesArray.slice(0, perPage);
+        setResources(paginatedResources);
+        // Create mock pagination for first page
+        setPagination({
+          current_page: 1,
+          per_page: perPage,
+          total: resourcesArray.length,
+          last_page: Math.ceil(resourcesArray.length / perPage),
+        });
+        setLoading(false);
+        return;
+      }
+
+      // For page > 1, fetch from API
       const params = new URLSearchParams();
       params.append('page', String(page));
       params.append('per_page', String(perPage));

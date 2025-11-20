@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchScheduleData, calculateEffectiveSchedule, EffectiveScheduleSlot } from '../ScheduleDataAggregator';
 import LoadingState from '../LoadingState';
 import ErrorDisplay from '../ErrorDisplay';
+import { useHapioData } from '../../_contexts/HapioDataContext';
 
 interface MonthViewProps {
   resourceId: string;
@@ -13,6 +14,7 @@ interface MonthViewProps {
 }
 
 export default function MonthView({ resourceId, currentDate, onDateChange }: MonthViewProps) {
+  const { getRecurringSchedules, getRecurringScheduleBlocks, getScheduleBlocks } = useHapioData();
   const [slots, setSlots] = useState<EffectiveScheduleSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
@@ -34,8 +36,13 @@ export default function MonthView({ resourceId, currentDate, onDateChange }: Mon
       const to = new Date(year, month + 1, 0);
       to.setHours(23, 59, 59, 999);
 
+      // Use context methods (cached) instead of direct fetch
       const { recurringSchedules, recurringScheduleBlocks, scheduleBlocks } =
-        await fetchScheduleData(resourceId, from, to);
+        await fetchScheduleData(resourceId, from, to, {
+          getRecurringSchedules,
+          getRecurringScheduleBlocks,
+          getScheduleBlocks,
+        });
 
       const effectiveSlots = calculateEffectiveSchedule(
         from,

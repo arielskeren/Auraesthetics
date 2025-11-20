@@ -12,7 +12,7 @@ import IdDisplay from './IdDisplay';
 import { useHapioData } from '../_contexts/HapioDataContext';
 
 export default function ServicesManager() {
-  const { loadServices: loadHapioServicesFromContext, isLoadingServices, refreshData } = useHapioData();
+  const { loadServices: loadHapioServicesFromContext, isLoadingServices, refreshData, getFullServices } = useHapioData();
   const [allServices, setAllServices] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -335,9 +335,6 @@ export default function ServicesManager() {
       setLoadingHapio(true);
       setError(null);
       
-      // Load Hapio services from context (will use cache if available)
-      await loadHapioServicesFromContext();
-      
       // Load Neon DB services to check links
       const neonResponse = await fetch('/api/admin/services?per_page=1000');
       if (!neonResponse.ok) {
@@ -354,14 +351,9 @@ export default function ServicesManager() {
         }
       });
 
-      // Fetch full Hapio services list (context only has id/name map)
-      const hapioResponse = await fetch('/api/admin/hapio/services?per_page=100');
-      if (!hapioResponse.ok) {
-        throw new Error('Failed to load Hapio services');
-      }
-      const hapioData = await hapioResponse.json();
-
-      setHapioServices(hapioData.data || []);
+      // Use context to get full Hapio services list (cached) - this will also ensure services are loaded
+      const fullServices = await getFullServices();
+      setHapioServices(fullServices);
       setLinkedHapioIds(linkedIds);
       setSelectedHapioServices(new Set()); // Reset selection
       setViewingHapioServices(true);
