@@ -366,76 +366,105 @@ export default function ClientsManager() {
   // Create unified client list with both Neon and Brevo data
   const unifiedClients = useMemo(() => {
     const clientsMap = new Map<string, UnifiedClient>();
+    const brevoByIdMap = new Map<string, any>(); // Map Brevo contacts by ID for matching
+
+    // First, index all Brevo contacts by ID
+    brevoContacts.forEach((brevo) => {
+      if (brevo.id) {
+        brevoByIdMap.set(String(brevo.id), brevo);
+      }
+    });
 
     // Add all Neon customers
     neonCustomers.forEach((neon) => {
       if (neon.email) {
         const emailLower = neon.email.toLowerCase();
+        const brevoIdStr = neon.brevo_contact_id ? String(neon.brevo_contact_id) : null;
+        const brevoContact = brevoIdStr ? brevoByIdMap.get(brevoIdStr) : null;
+        
         clientsMap.set(emailLower, {
           email: neon.email,
           firstName: neon.first_name || '',
           lastName: neon.last_name || '',
           phone: neon.phone || null,
           neonId: neon.id,
-          brevoId: neon.brevo_contact_id || null,
+          brevoId: brevoIdStr,
           marketingOptIn: neon.marketing_opt_in || false,
           usedWelcomeOffer: neon.used_welcome_offer || false,
           inNeon: true,
-          inBrevo: !!neon.brevo_contact_id,
+          inBrevo: !!brevoContact, // Only true if Brevo contact actually exists
           hasMismatch: false,
           neonData: neon,
+          brevoData: brevoContact || undefined,
         });
-      }
-    });
-
-    // Add/merge Brevo contacts
-    brevoContacts.forEach((brevo) => {
-      if (brevo.email) {
-        const emailLower = brevo.email.toLowerCase();
-        const existing = clientsMap.get(emailLower);
         
-        if (existing) {
-          // Merge with existing Neon record
-          existing.brevoId = brevo.id;
-          existing.inBrevo = true;
-          existing.brevoData = brevo;
-          
-          // Check for mismatches (display Neon data, but highlight if different)
-          // Normalize names for comparison
-          const neonFirstName = (existing.firstName || '').trim().toLowerCase();
-          const neonLastName = (existing.lastName || '').trim().toLowerCase();
-          const brevoFirstName = (brevo.firstName || '').trim().toLowerCase();
-          const brevoLastName = (brevo.lastName || '').trim().toLowerCase();
+        // If we found a Brevo contact, check for mismatches
+        if (brevoContact) {
+          const client = clientsMap.get(emailLower)!;
+          const neonFirstName = (client.firstName || '').trim().toLowerCase();
+          const neonLastName = (client.lastName || '').trim().toLowerCase();
+          const brevoFirstName = (brevoContact.firstName || '').trim().toLowerCase();
+          const brevoLastName = (brevoContact.lastName || '').trim().toLowerCase();
           
           const nameMatch = 
             neonFirstName === brevoFirstName &&
             neonLastName === brevoLastName;
           
-          // Normalize phone numbers for comparison (remove all non-digits)
-          const neonPhone = (existing.phone || '').replace(/\D/g, '');
-          const brevoPhone = (brevo.phone || '').replace(/\D/g, '');
+          const neonPhone = (client.phone || '').replace(/\D/g, '');
+          const brevoPhone = (brevoContact.phone || '').replace(/\D/g, '');
           const phoneMatch = neonPhone === brevoPhone || (!neonPhone && !brevoPhone);
           
-          // Check marketing opt-in mismatch
-          const marketingMatch = existing.marketingOptIn === !brevo.emailBlacklisted;
+          const marketingMatch = client.marketingOptIn === !brevoContact.emailBlacklisted;
           
-          existing.hasMismatch = !nameMatch || !phoneMatch || !marketingMatch;
+          client.hasMismatch = !nameMatch || !phoneMatch || !marketingMatch;
+        }
+      }
+    });
+
+    // Add/merge Brevo contacts that weren't matched by brevo_contact_id
+    brevoContacts.forEach((brevo) => {
+      if (brevo.email) {
+        const emailLower = brevo.email.toLowerCase();
+        const brevoIdStr = String(brevo.id);
+        const existing = clientsMap.get(emailLower);
+        
+        if (existing) {
+          // Already matched - just ensure brevoId and brevoData are set
+          if (!existing.brevoId || existing.brevoId !== brevoIdStr) {
+            existing.brevoId = brevoIdStr;
+            existing.inBrevo = true;
+            existing.brevoData = brevo;
+          }
         } else {
-          // Brevo-only contact
-          clientsMap.set(emailLower, {
-            email: brevo.email,
-            firstName: brevo.firstName || '',
-            lastName: brevo.lastName || '',
-            phone: brevo.phone || null,
-            neonId: null,
-            brevoId: brevo.id,
-            marketingOptIn: !brevo.emailBlacklisted,
-            usedWelcomeOffer: brevo.usedWelcomeOffer || false,
-            inNeon: false,
-            inBrevo: true,
-            hasMismatch: false,
-            brevoData: brevo,
+          // Check if this Brevo contact matches a Neon customer by brevo_contact_id
+          let matchedByBrevoId = false;
+          Array.from(clientsMap.values()).forEach((client) => {
+            if (client.brevoId === brevoIdStr && client.inNeon && !matchedByBrevoId) {
+              // Found a match by brevo_contact_id
+              client.brevoId = brevoIdStr;
+              client.inBrevo = true;
+              client.brevoData = brevo;
+              matchedByBrevoId = true;
+            }
           });
+          
+          if (!matchedByBrevoId) {
+            // Brevo-only contact
+            clientsMap.set(emailLower, {
+              email: brevo.email,
+              firstName: brevo.firstName || '',
+              lastName: brevo.lastName || '',
+              phone: brevo.phone || null,
+              neonId: null,
+              brevoId: brevoIdStr,
+              marketingOptIn: !brevo.emailBlacklisted,
+              usedWelcomeOffer: brevo.usedWelcomeOffer || false,
+              inNeon: false,
+              inBrevo: true,
+              hasMismatch: false,
+              brevoData: brevo,
+            });
+          }
         }
       }
     });
