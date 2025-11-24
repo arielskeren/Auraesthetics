@@ -94,8 +94,19 @@ export default function ClientsManager() {
       const neonData = await neonResponse.json();
       const brevoData = await brevoResponse.json();
 
-      setNeonCustomers(neonData.customers || []);
-      setBrevoContacts(brevoData.contacts || []);
+      const neonCustomersList = neonData.customers || [];
+      const brevoContactsList = brevoData.contacts || [];
+      
+      // Debug logging
+      console.log('[ClientsManager] Loaded data:', {
+        neonCount: neonCustomersList.length,
+        brevoCount: brevoContactsList.length,
+        neonEmails: neonCustomersList.map((c: any) => c.email),
+        brevoEmails: brevoContactsList.map((c: any) => c.email),
+      });
+
+      setNeonCustomers(neonCustomersList);
+      setBrevoContacts(brevoContactsList);
     } catch (err: any) {
       setError(err);
     } finally {
@@ -441,15 +452,29 @@ export default function ClientsManager() {
       }
     });
 
-    // Add all Neon customers
+    // Add all Neon customers (only if they have a valid email)
     neonCustomers.forEach((neon) => {
-      if (neon.email) {
-        const emailLower = neon.email.toLowerCase();
+      // Only include customers with valid, non-empty emails
+      if (neon.email && typeof neon.email === 'string' && neon.email.trim().length > 0) {
+        const emailLower = neon.email.toLowerCase().trim();
+        // Skip if email is invalid format
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+          console.warn('[ClientsManager] Skipping Neon customer with invalid email:', neon.email, neon.id);
+          return;
+        }
+        
         const brevoIdStr = neon.brevo_contact_id ? String(neon.brevo_contact_id) : null;
         const brevoContact = brevoIdStr ? brevoByIdMap.get(brevoIdStr) : null;
         
+        // Check if this email already exists in the map (duplicate prevention)
+        if (clientsMap.has(emailLower)) {
+          console.warn('[ClientsManager] Duplicate email found in Neon customers:', emailLower, 'IDs:', clientsMap.get(emailLower)?.neonId, neon.id);
+          // Keep the first one, skip duplicates
+          return;
+        }
+        
         clientsMap.set(emailLower, {
-          email: neon.email,
+          email: neon.email.trim(),
           firstName: neon.first_name || '',
           lastName: neon.last_name || '',
           phone: neon.phone || null,
@@ -489,8 +514,15 @@ export default function ClientsManager() {
 
     // Add/merge Brevo contacts that weren't matched by brevo_contact_id
     brevoContacts.forEach((brevo) => {
-      if (brevo.email) {
-        const emailLower = brevo.email.toLowerCase();
+      // Only include contacts with valid, non-empty emails
+      if (brevo.email && typeof brevo.email === 'string' && brevo.email.trim().length > 0) {
+        const emailLower = brevo.email.toLowerCase().trim();
+        // Skip if email is invalid format
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+          console.warn('[ClientsManager] Skipping Brevo contact with invalid email:', brevo.email, brevo.id);
+          return;
+        }
+        
         const brevoIdStr = String(brevo.id);
         const existing = clientsMap.get(emailLower);
         
@@ -517,7 +549,7 @@ export default function ClientsManager() {
           if (!matchedByBrevoId) {
             // Brevo-only contact
             clientsMap.set(emailLower, {
-              email: brevo.email,
+              email: brevo.email.trim(), // Trim for consistency with Neon emails
               firstName: brevo.firstName || '',
               lastName: brevo.lastName || '',
               phone: brevo.phone || null,
@@ -535,10 +567,21 @@ export default function ClientsManager() {
       }
     });
 
-    return Array.from(clientsMap.values()).sort((a, b) => {
+    const unifiedList = Array.from(clientsMap.values()).sort((a, b) => {
       // Sort by email
       return a.email.localeCompare(b.email);
     });
+    
+    // Debug logging
+    console.log('[ClientsManager] Unified clients:', {
+      total: unifiedList.length,
+      inNeonOnly: unifiedList.filter(c => c.inNeon && !c.inBrevo).length,
+      inBrevoOnly: unifiedList.filter(c => !c.inNeon && c.inBrevo).length,
+      inBoth: unifiedList.filter(c => c.inNeon && c.inBrevo).length,
+      emails: unifiedList.map(c => c.email),
+    });
+    
+    return unifiedList;
   }, [neonCustomers, brevoContacts]);
 
   // Filter by view mode

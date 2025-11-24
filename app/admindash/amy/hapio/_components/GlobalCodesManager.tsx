@@ -70,6 +70,9 @@ export default function GlobalCodesManager() {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clear state aggressively before loading to prevent stale data
+      setCodes([]);
 
       const timestamp = Date.now();
       const response = await fetch(`/api/admin/global-discount-codes?t=${timestamp}`, {
@@ -119,7 +122,11 @@ export default function GlobalCodesManager() {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || 'Failed to create global discount code');
+        const errorMsg = data.details 
+          ? `${data.error || 'Failed to create global discount code'}: ${data.details}`
+          : data.error || 'Failed to create global discount code';
+        console.error('[GlobalCodesManager] Create error:', data);
+        alert(errorMsg);
         return;
       }
 
@@ -128,6 +135,7 @@ export default function GlobalCodesManager() {
       setCreateForm({ code: '', discountType: 'percent', discountValue: '', discountCap: '', maxUses: '', expiresInDays: '', isActive: true });
       await loadCodes();
     } catch (err: any) {
+      console.error('[GlobalCodesManager] Create exception:', err);
       alert(err.message || 'Failed to create global discount code');
     }
   };

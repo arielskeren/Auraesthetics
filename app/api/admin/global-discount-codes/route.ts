@@ -178,12 +178,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create Stripe coupon
+    // Note: For one-time payments (not subscriptions), duration must be 'once'
+    // The max_redemptions limit is set on the promotion code, not the coupon
     const couponName = `Global: ${codeUpper}`;
     let coupon;
     if (discountType === 'percent') {
       const couponParams: any = {
         name: couponName,
-        duration: 'once', // Each customer can use it once
+        duration: 'once', // Required for one-time payments (not subscriptions)
         percent_off: Math.round(discountValue),
         metadata: {
           global_code: codeUpper,
@@ -193,30 +195,32 @@ export async function POST(request: NextRequest) {
       if (discountCap) {
         couponParams.metadata.discount_cap = String(discountCap);
       }
-      if (maxUses && maxUses > 0) {
-        couponParams.max_redemptions = maxUses;
-      }
+      // Note: max_redemptions is set on the promotion code, not the coupon
       coupon = await stripe.coupons.create(couponParams);
     } else {
       coupon = await stripe.coupons.create({
         name: couponName,
-        duration: 'once',
+        duration: 'once', // Required for one-time payments (not subscriptions)
         amount_off: Math.round(discountValue * 100),
         currency: 'usd',
         metadata: {
           global_code: codeUpper,
           discount_type: discountType,
         },
-        ...(maxUses && maxUses > 0 ? { max_redemptions: maxUses } : {}),
       });
     }
 
     // Create promotion code for the coupon
-    const promotionCode = await stripe.promotionCodes.create({
+    // Set max_redemptions on the promotion code to limit total uses across all customers
+    const promotionCodeParams: any = {
       coupon: coupon.id as string,
       code: codeUpper,
       active: isActive,
-    } as any);
+    };
+    if (maxUses && maxUses > 0) {
+      promotionCodeParams.max_redemptions = maxUses;
+    }
+    const promotionCode = await stripe.promotionCodes.create(promotionCodeParams as any);
 
     // Insert into database
     await sql`

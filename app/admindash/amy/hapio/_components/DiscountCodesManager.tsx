@@ -82,6 +82,10 @@ export default function DiscountCodesManager() {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clear state aggressively before loading to prevent stale data
+      setCodes([]);
+      setUsageDetails({});
 
       // Add timestamp to prevent caching
       const timestamp = Date.now();
@@ -128,6 +132,7 @@ export default function DiscountCodesManager() {
       setError(err);
       // Still set codes to empty array so UI doesn't break
       setCodes([]);
+      setUsageDetails({});
     } finally {
       setLoading(false);
     }
@@ -334,7 +339,6 @@ export default function DiscountCodesManager() {
       }
 
       console.log('[Delete Discount Code] Success, refreshing list...');
-      alert('Discount code deleted successfully!');
       setShowDeleteModal(false);
       const deletedCodeId = selectedCode.id;
       setSelectedCode(null);
@@ -343,11 +347,17 @@ export default function DiscountCodesManager() {
       setUsageDetails({});
       setCodes([]);
       
-      // Small delay to ensure database transaction is committed
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Reload and verify the deleted code is gone
-      await loadCodes();
+      // Small delay to ensure database transaction is committed, then reload
+      await new Promise<void>((resolve, reject) => {
+        setTimeout(async () => {
+          try {
+            await loadCodes();
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        }, 200);
+      });
       
       // Double-check: if the code still appears, filter it out
       setCodes(prevCodes => {
@@ -357,6 +367,8 @@ export default function DiscountCodesManager() {
         }
         return filtered;
       });
+      
+      alert('Discount code deleted successfully!');
     } catch (err: any) {
       console.error('[Delete Discount Code] Error:', err);
       alert(err.message || 'Failed to delete discount code');
