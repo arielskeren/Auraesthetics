@@ -46,7 +46,7 @@ export async function PATCH(
     const customerId = params.id;
     const body = await request.json();
 
-    const { first_name, last_name, phone, email, marketing_opt_in, syncToBrevo } = body;
+    const { first_name, last_name, phone, email, marketing_opt_in, brevo_contact_id, syncToBrevo } = body;
 
     // Validate email if provided
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -142,7 +142,7 @@ export async function PATCH(
 
     // Build update query - only update fields that are provided
     if (first_name === undefined && last_name === undefined && phone === undefined && 
-        (email === undefined || email === existing.email) && marketing_opt_in === undefined) {
+        (email === undefined || email === existing.email) && marketing_opt_in === undefined && brevo_contact_id === undefined) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
@@ -153,6 +153,7 @@ export async function PATCH(
     const finalPhone = phone !== undefined ? phone : existing.phone || null;
     const finalEmail = email !== undefined && email !== existing.email ? email : existing.email;
     const finalMarketingOptIn = marketing_opt_in !== undefined ? marketing_opt_in : existing.marketing_opt_in;
+    const finalBrevoContactId = brevo_contact_id !== undefined ? brevo_contact_id : existing.brevo_contact_id;
 
     console.log(`[Admin Customers API] Updating customer ${customerId}:`, {
       email: { from: existing.email, to: finalEmail },
@@ -170,6 +171,7 @@ export async function PATCH(
         phone = ${finalPhone},
         email = ${finalEmail},
         marketing_opt_in = ${finalMarketingOptIn},
+        brevo_contact_id = ${finalBrevoContactId || null},
         updated_at = NOW()
       WHERE id = ${customerId}
     `;
@@ -200,10 +202,11 @@ export async function PATCH(
       updated_at: verified.updated_at,
     });
 
-    // CRITICAL: Always sync to Brevo after Neon update (if marketing opt-in is true)
+    // CRITICAL: Always sync to Brevo after Neon update if brevo_contact_id exists
     // This ensures Brevo stays in sync with Neon (source of truth)
     // syncCustomerToBrevo will fetch the LATEST data from Neon, so it will use the updated values
-    const shouldSync = marketing_opt_in !== false && (marketing_opt_in || existing.marketing_opt_in);
+    // We sync regardless of marketing_opt_in status (we'll set emailBlacklisted accordingly)
+    const shouldSync = finalBrevoContactId || existing.brevo_contact_id;
     if (shouldSync) {
       try {
         // CRITICAL: syncCustomerToBrevo fetches customer data from Neon AFTER the update above
@@ -241,35 +244,9 @@ export async function PATCH(
         // Brevo sync failure is non-critical - customer is already updated in Neon
         console.error('[Admin Customers API] Brevo sync failed:', e);
       }
-    } else if (marketing_opt_in === false && existing.marketing_opt_in) {
-      // Marketing opt-in was turned off - remove from Brevo list (but keep contact)
-      // Note: We don't delete the contact, just remove from list
-      try {
-        const customerResult = await sql`
-          SELECT brevo_contact_id FROM customers WHERE id = ${customerId} LIMIT 1
-        `;
-        const customer = Array.isArray(customerResult) ? customerResult[0] : (customerResult as any)?.rows?.[0];
-        if (customer?.brevo_contact_id) {
-          const apiKey = process.env.BREVO_API_KEY;
-          if (apiKey) {
-            // Remove from list but keep contact
-            const listId = process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined;
-            if (listId) {
-              await fetch(`https://api.brevo.com/v3/contacts/lists/${listId}/contacts/remove`, {
-                method: 'POST',
-                headers: {
-                  'api-key': apiKey,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ emails: [existing.email] }),
-              });
-            }
-          }
-        }
-      } catch (e) {
-        console.error('[Admin Customers API] Failed to remove from Brevo list:', e);
-      }
     }
+    // Note: We no longer remove from Brevo list when marketing_opt_in is false
+    // Instead, we sync and set emailBlacklisted = true, which prevents emails but keeps the contact
 
     // Fetch updated customer (use verified data from above if available, otherwise fetch fresh)
     const updatedResult = await sql`

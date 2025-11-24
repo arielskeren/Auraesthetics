@@ -197,9 +197,11 @@ export async function syncCustomerToBrevo(params: {
       || customer.marketing_opt_in === 'true'
       || customer.marketing_opt_in === 1;
     
-    // Only sync if marketing opt-in is true
-    if (!marketingOptIn) {
-      console.warn(`[syncCustomerToBrevo] Skipping sync for customer ${customerId} (${customer.email}): marketing_opt_in is ${JSON.stringify(customer.marketing_opt_in)} (expected true). Raw value type: ${typeof customer.marketing_opt_in}`);
+    // Always sync if brevo_contact_id exists (regardless of marketing_opt_in)
+    // We'll set emailBlacklisted based on marketing_opt_in to control email sending
+    if (!customer.brevo_contact_id) {
+      // Only skip if no brevo_contact_id (can't sync without link)
+      console.warn(`[syncCustomerToBrevo] Skipping sync for customer ${customerId} (${customer.email}): no brevo_contact_id`);
       return { success: false };
     }
     
