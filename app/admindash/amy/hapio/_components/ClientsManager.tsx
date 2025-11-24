@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Search, Edit, Trash2, X } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 import LoadingState from './LoadingState';
-import ErrorDisplay from './ErrorDisplay';
 
 interface Customer {
   id: string;
@@ -12,7 +11,6 @@ interface Customer {
   last_name: string | null;
   phone: string | null;
   marketing_opt_in: boolean;
-  brevo_contact_id: string | null;
   used_welcome_offer?: boolean;
   created_at: string;
   updated_at: string;
@@ -33,17 +31,8 @@ export default function ClientsManager() {
       setLoading(true);
       setError(null);
       
-      // Clear state before loading
-      setCustomers([]);
-
-      // Add cache-busting timestamp
-      const timestamp = Date.now();
-      const response = await fetch(`/api/admin/customers?limit=1000&_t=${timestamp}`, {
+      const response = await fetch(`/api/admin/customers?limit=1000`, {
         cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
       });
 
       if (!response.ok) {
@@ -51,15 +40,8 @@ export default function ClientsManager() {
       }
 
       const data = await response.json();
-      console.log('[ClientsManager] API response:', {
-        customersCount: data.customers?.length || 0,
-        customers: data.customers,
-        count: data.count,
-        total: data.total,
-      });
       setCustomers(data.customers || []);
     } catch (err: any) {
-      console.error('[ClientsManager] Error loading customers:', err);
       setError(err);
     } finally {
       setLoading(false);
@@ -67,13 +49,6 @@ export default function ClientsManager() {
   };
 
   // Filter customers by search query
-  console.log('[ClientsManager] Render:', {
-    customersCount: customers.length,
-    searchQuery,
-    loading,
-    error: error?.message,
-  });
-  
   const filteredCustomers = customers.filter((customer) => {
     if (!searchQuery.trim()) return true;
     

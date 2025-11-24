@@ -21,14 +21,6 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const search = searchParams.get('search') || '';
     
-    // Log for debugging phantom clients
-    console.log('[Customers API] Request received:', {
-      limit,
-      offset,
-      search,
-      timestamp: new Date().toISOString(),
-      url: request.url,
-    });
 
     // Build query based on search
     const searchLower = search ? `%${search.toLowerCase()}%` : null;
@@ -61,7 +53,6 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
-                brevo_contact_id,
                 used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -85,7 +76,6 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
-                brevo_contact_id,
                 FALSE as used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -110,7 +100,6 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
-                brevo_contact_id,
                 used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -129,7 +118,6 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
-                brevo_contact_id,
                 FALSE as used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -159,15 +147,6 @@ export async function GET(request: NextRequest) {
 
     const customers = normalizeRows(customersResult);
     const total = normalizeRows(countResult)[0]?.total || 0;
-    
-    // Log for debugging
-    console.log('[Customers API] Returning customers:', {
-      count: customers.length,
-      total: Number(total),
-      customerIds: customers.map((c: any) => c.id),
-      customerEmails: customers.map((c: any) => c.email),
-      timestamp: new Date().toISOString(),
-    });
 
     return NextResponse.json({
       customers,
