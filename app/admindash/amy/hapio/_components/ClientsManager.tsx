@@ -118,6 +118,12 @@ export default function ClientsManager() {
         neonEmails,
         brevoIds,
         brevoEmails,
+        neonCustomersWithBrevoId: neonCustomersList.map((c: any) => ({
+          id: c.id,
+          email: c.email,
+          brevo_contact_id: c.brevo_contact_id,
+        })),
+        brevoContactIds: brevoIds,
         timestamp: new Date().toISOString(),
         cacheBustingTimestamp: timestamp,
       });
@@ -504,6 +510,16 @@ export default function ClientsManager() {
         
         const brevoIdStr = neon.brevo_contact_id ? String(neon.brevo_contact_id) : null;
         const brevoContact = brevoIdStr ? brevoByIdMap.get(brevoIdStr) : null;
+
+        if (brevoIdStr) {
+          console.log('[ClientsManager] Neon customer with brevo_contact_id:', {
+            neonId: neon.id,
+            email: neon.email,
+            brevo_contact_id: brevoIdStr,
+            brevoContactExists: !!brevoContact,
+            brevoContactEmail: brevoContact?.email,
+          });
+        }
         
         // Check if this email already exists in the map (duplicate prevention)
         if (clientsMap.has(emailLower)) {
