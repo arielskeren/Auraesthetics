@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
+                brevo_contact_id,
                 used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
+                brevo_contact_id,
                 FALSE as used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -100,6 +102,7 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
+                brevo_contact_id,
                 used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -118,6 +121,7 @@ export async function GET(request: NextRequest) {
                 last_name,
                 phone,
                 marketing_opt_in,
+                brevo_contact_id,
                 FALSE as used_welcome_offer,
                 stripe_customer_id,
                 last_seen_at,
@@ -159,6 +163,74 @@ export async function GET(request: NextRequest) {
     console.error('[Customers API] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/admin/customers - Create a new customer
+export async function POST(request: NextRequest) {
+  try {
+    const sql = getSqlClient();
+    const body = await request.json();
+    
+    const { email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id } = body;
+
+    // Validate required fields
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { error: 'Valid email address is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if email already exists
+    const existingCheck = await sql`
+      SELECT id FROM customers WHERE email = ${email} LIMIT 1
+    `;
+    const existing = normalizeRows(existingCheck);
+    if (existing.length > 0) {
+      return NextResponse.json(
+        { error: 'Customer with this email already exists' },
+        { status: 400 }
+      );
+    }
+
+    // Insert new customer
+    const result = await sql`
+      INSERT INTO customers (
+        email,
+        first_name,
+        last_name,
+        phone,
+        marketing_opt_in,
+        brevo_contact_id,
+        created_at,
+        updated_at
+      ) VALUES (
+        ${email},
+        ${first_name || null},
+        ${last_name || null},
+        ${phone || null},
+        ${marketing_opt_in || false},
+        ${brevo_contact_id || null},
+        NOW(),
+        NOW()
+      )
+      RETURNING id, email, first_name, last_name, phone, marketing_opt_in, brevo_contact_id, created_at, updated_at
+    `;
+
+    const newCustomer = normalizeRows(result)[0];
+
+    return NextResponse.json({
+      success: true,
+      customer: newCustomer,
+      message: 'Customer created successfully',
+    });
+  } catch (error: any) {
+    console.error('[Customers API] Error creating customer:', error);
+    return NextResponse.json(
+      { error: 'Failed to create customer', details: error.message },
       { status: 500 }
     );
   }
