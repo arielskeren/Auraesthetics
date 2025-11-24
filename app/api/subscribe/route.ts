@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, getClientIp } from '@/app/_utils/rateLimit';
 
-// Generate unique welcome offer code
-function generateWelcomeCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding 0, O, 1, I for clarity
-  let code = 'welcome15';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
 // Rate limiter: 5 requests per minute per IP (prevent Brevo spam)
 const limiter = rateLimit({ windowMs: 60 * 1000, maxRequests: 5 });
 
@@ -130,9 +120,8 @@ export async function POST(request: NextRequest) {
       attributes.PHYSICAL_ADDRESS = address.trim();
     }
 
-    // Check if contact already exists and preserve SIGNUP_SOURCE/WELCOME_CODE
+    // Check if contact already exists and preserve SIGNUP_SOURCE
     let existingSIGNUP_SOURCE = null;
-    let existingWELCOME_CODE = null;
     
     try {
       const existingContact = await fetch(`https://api.brevo.com/v3/contacts/${email}`, {
@@ -148,10 +137,6 @@ export async function POST(request: NextRequest) {
         if (existingData.attributes?.SIGNUP_SOURCE) {
           existingSIGNUP_SOURCE = existingData.attributes.SIGNUP_SOURCE;
         }
-        
-        if (existingData.attributes?.WELCOME_CODE) {
-          existingWELCOME_CODE = existingData.attributes.WELCOME_CODE;
-        }
       }
     } catch (error) {
       // Contact may be new, continue
@@ -163,16 +148,6 @@ export async function POST(request: NextRequest) {
         attributes.SIGNUP_SOURCE = existingSIGNUP_SOURCE;
       } else {
         attributes.SIGNUP_SOURCE = signupSource.trim();
-      }
-    }
-
-    // Generate and add welcome offer code only if it doesn't already exist
-    if (signupSource === 'welcome-offer') {
-      if (existingWELCOME_CODE) {
-        attributes.WELCOME_CODE = existingWELCOME_CODE;
-      } else {
-        const welcomeCode = generateWelcomeCode();
-        attributes.WELCOME_CODE = welcomeCode;
       }
     }
 

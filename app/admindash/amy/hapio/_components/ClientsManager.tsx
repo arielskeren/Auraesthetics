@@ -58,11 +58,30 @@ export default function ClientsManager() {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clear state aggressively before loading to prevent stale data
+      setNeonCustomers([]);
+      setBrevoContacts([]);
 
-      // Load both Neon and Brevo data simultaneously
+      // Add cache-busting timestamp
+      const timestamp = Date.now();
+
+      // Load both Neon and Brevo data simultaneously with cache-busting
       const [neonResponse, brevoResponse] = await Promise.all([
-        fetch('/api/admin/customers?limit=1000'),
-        fetch('/api/admin/brevo/clients?limit=1000'),
+        fetch(`/api/admin/customers?limit=1000&_t=${timestamp}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        }),
+        fetch(`/api/admin/brevo/clients?limit=1000&_t=${timestamp}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        }),
       ]);
 
       if (!neonResponse.ok) {
@@ -86,7 +105,14 @@ export default function ClientsManager() {
 
   const loadSyncStatus = async () => {
     try {
-      const response = await fetch('/api/admin/customers/sync-all');
+      const timestamp = Date.now();
+      const response = await fetch(`/api/admin/customers/sync-all?_t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setSyncStatus(data);
@@ -337,14 +363,40 @@ export default function ClientsManager() {
         // Delete from Neon (will also delete from Brevo if linked)
         response = await fetch(`/api/admin/customers/${client.neonId}`, {
           method: 'DELETE',
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
         });
       } else if (client.inBrevo && client.brevoId) {
         // Delete from Brevo (will also delete from Neon if linked)
         response = await fetch(`/api/admin/brevo/clients/${client.brevoId}`, {
           method: 'DELETE',
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
         });
       } else {
         throw new Error('Cannot delete: client has no ID');
+      }
+
+      if (response.status === 404) {
+        // If the client is not found on the server, remove it from local state immediately
+        const emailLower = client.email.toLowerCase();
+        setNeonCustomers(prev => prev.filter(c => {
+          const cEmailLower = (c.email || '').toLowerCase();
+          return c.id !== client.neonId && cEmailLower !== emailLower;
+        }));
+        setBrevoContacts(prev => prev.filter(c => {
+          const cEmailLower = (c.email || '').toLowerCase();
+          return c.id !== client.brevoId && cEmailLower !== emailLower;
+        }));
+        alert('This client no longer exists and has been removed from the list.');
+        setDeleting(null);
+        return;
       }
 
       if (!response.ok) {
@@ -352,8 +404,22 @@ export default function ClientsManager() {
         throw new Error(errorData.error || 'Failed to delete client');
       }
 
-      // Reload data
-      await loadData();
+      // Clear state aggressively before reloading to ensure no stale data
+      setNeonCustomers([]);
+      setBrevoContacts([]);
+      
+      // Add a small delay to ensure database transaction commits before reloading
+      await new Promise<void>((resolve, reject) => {
+        setTimeout(async () => {
+          try {
+            await loadData();
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        }, 100);
+      });
+      
       alert('Client deleted successfully');
     } catch (err: any) {
       setError(err);
