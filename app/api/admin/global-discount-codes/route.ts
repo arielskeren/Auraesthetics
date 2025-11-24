@@ -229,13 +229,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Build promotion code parameters explicitly
-    const promotionCodeParams: Stripe.PromotionCodeCreateParams = {
+    // Note: Using type assertion because Stripe TypeScript types may not include 'coupon'
+    // but the API definitely accepts it according to Stripe documentation
+    const promotionCodeParams = {
       coupon: couponId, // Explicitly use string
       code: codeUpper,
       active: isActive,
-    };
+    } as Stripe.PromotionCodeCreateParams;
     if (maxUses && maxUses > 0) {
-      promotionCodeParams.max_redemptions = maxUses;
+      (promotionCodeParams as any).max_redemptions = maxUses;
     }
     
     let promotionCode: Stripe.PromotionCode;
