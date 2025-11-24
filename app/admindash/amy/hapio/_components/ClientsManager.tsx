@@ -51,8 +51,15 @@ export default function ClientsManager() {
       }
 
       const data = await response.json();
+      console.log('[ClientsManager] API response:', {
+        customersCount: data.customers?.length || 0,
+        customers: data.customers,
+        count: data.count,
+        total: data.total,
+      });
       setCustomers(data.customers || []);
     } catch (err: any) {
+      console.error('[ClientsManager] Error loading customers:', err);
       setError(err);
     } finally {
       setLoading(false);
@@ -60,6 +67,13 @@ export default function ClientsManager() {
   };
 
   // Filter customers by search query
+  console.log('[ClientsManager] Render:', {
+    customersCount: customers.length,
+    searchQuery,
+    loading,
+    error: error?.message,
+  });
+  
   const filteredCustomers = customers.filter((customer) => {
     if (!searchQuery.trim()) return true;
     
@@ -109,7 +123,9 @@ export default function ClientsManager() {
         <div>
           <h2 className="text-lg md:text-xl font-semibold text-charcoal">Clients</h2>
           <p className="text-xs md:text-sm text-warm-gray mt-1">
-            Showing {filteredCustomers.length} of {customers.length} clients
+            {customers.length === 0 
+              ? 'No clients found' 
+              : `Showing ${filteredCustomers.length} of ${customers.length} clients`}
           </p>
         </div>
         <button
