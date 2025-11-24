@@ -20,6 +20,15 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const search = searchParams.get('search') || '';
+    
+    // Log for debugging phantom clients
+    console.log('[Customers API] Request received:', {
+      limit,
+      offset,
+      search,
+      timestamp: new Date().toISOString(),
+      url: request.url,
+    });
 
     // Build query based on search
     const searchLower = search ? `%${search.toLowerCase()}%` : null;
@@ -150,6 +159,15 @@ export async function GET(request: NextRequest) {
 
     const customers = normalizeRows(customersResult);
     const total = normalizeRows(countResult)[0]?.total || 0;
+    
+    // Log for debugging phantom clients
+    console.log('[Customers API] Returning customers:', {
+      count: customers.length,
+      total: Number(total),
+      customerIds: customers.map((c: any) => c.id),
+      customerEmails: customers.map((c: any) => c.email),
+      timestamp: new Date().toISOString(),
+    });
 
     return NextResponse.json({
       customers,

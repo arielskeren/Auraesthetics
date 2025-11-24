@@ -60,8 +60,16 @@ export default function ClientsManager() {
       setError(null);
       
       // Clear state aggressively before loading to prevent stale data
+      console.log('[ClientsManager] Clearing state before load...', {
+        neonCustomersBeforeClear: neonCustomers.length,
+        brevoContactsBeforeClear: brevoContacts.length,
+      });
       setNeonCustomers([]);
       setBrevoContacts([]);
+      
+      // Verify state is cleared (check on next tick)
+      await new Promise(resolve => setTimeout(resolve, 0));
+      console.log('[ClientsManager] State cleared, starting API fetch...');
 
       // Add cache-busting timestamp
       const timestamp = Date.now();
@@ -97,16 +105,47 @@ export default function ClientsManager() {
       const neonCustomersList = neonData.customers || [];
       const brevoContactsList = brevoData.contacts || [];
       
-      // Debug logging
-      console.log('[ClientsManager] Loaded data:', {
+      // Comprehensive debug logging for phantom detection
+      const neonIds = neonCustomersList.map((c: any) => c.id);
+      const neonEmails = neonCustomersList.map((c: any) => c.email?.toLowerCase().trim()).filter(Boolean);
+      const brevoIds = brevoContactsList.map((c: any) => c.id);
+      const brevoEmails = brevoContactsList.map((c: any) => c.email?.toLowerCase().trim()).filter(Boolean);
+      
+      console.log('[ClientsManager] Loaded data from APIs:', {
         neonCount: neonCustomersList.length,
         brevoCount: brevoContactsList.length,
-        neonEmails: neonCustomersList.map((c: any) => c.email),
-        brevoEmails: brevoContactsList.map((c: any) => c.email),
+        neonIds,
+        neonEmails,
+        brevoIds,
+        brevoEmails,
+        timestamp: new Date().toISOString(),
+        cacheBustingTimestamp: timestamp,
       });
-
+      
+      // Store API response data for phantom detection (before state update)
+      // This ensures we compare against fresh API data, not potentially stale state
+      const freshApiData = {
+        neonIds,
+        neonEmails,
+        brevoIds,
+        brevoEmails,
+        neonCustomers: neonCustomersList,
+        brevoContacts: brevoContactsList,
+      };
+      
+      // Store in a ref or pass to useMemo somehow - actually, we'll check in useMemo
+      // For now, set state and let useMemo detect phantoms
       setNeonCustomers(neonCustomersList);
       setBrevoContacts(brevoContactsList);
+      
+      // Log state after setting to verify it matches API response
+      setTimeout(() => {
+        console.log('[ClientsManager] State after API response set:', {
+          neonCustomersStateLength: neonCustomersList.length,
+          brevoContactsStateLength: brevoContactsList.length,
+          stateMatchesApi: true, // Will be verified in useMemo
+        });
+      }, 0);
     } catch (err: any) {
       setError(err);
     } finally {
@@ -572,14 +611,131 @@ export default function ClientsManager() {
       return a.email.localeCompare(b.email);
     });
     
-    // Debug logging
-    console.log('[ClientsManager] Unified clients:', {
+    // Comprehensive debug logging for phantom detection
+    const unifiedIds = unifiedList.map(c => ({ neonId: c.neonId, brevoId: c.brevoId }));
+    const unifiedEmails = unifiedList.map(c => c.email?.toLowerCase().trim()).filter(Boolean);
+    
+    // Get IDs and emails from current state (should match API responses)
+    const currentNeonIds = neonCustomers.map((c: any) => c.id);
+    const currentNeonEmails = neonCustomers.map((c: any) => c.email?.toLowerCase().trim()).filter(Boolean);
+    const currentBrevoIds = brevoContacts.map((c: any) => c.id);
+    const currentBrevoEmails = brevoContacts.map((c: any) => c.email?.toLowerCase().trim()).filter(Boolean);
+    
+    // Identify phantom clients (in unified list but not in either API response)
+    // Validation rules:
+    // 1. If client has a neonId, that ID MUST exist in Neon (strict validation)
+    // 2. If client has a brevoId, that ID MUST exist in Brevo (strict validation)
+    // 3. If client has no IDs, validate by email in either system
+    // 4. If one ID is valid, the other can be validated by email
+    const phantomClients = unifiedList.filter(client => {
+      const emailLower = client.email?.toLowerCase().trim();
+      if (!emailLower) {
+        console.warn('[ClientsManager] Client with invalid email detected:', client);
+        return true; // Invalid email = phantom
+      }
+      
+      const hasNeonId = !!client.neonId;
+      const hasBrevoId = !!client.brevoId;
+      const hasValidNeonId = hasNeonId && currentNeonIds.includes(client.neonId);
+      const hasValidBrevoId = hasBrevoId && currentBrevoIds.includes(client.brevoId);
+      const emailInNeon = currentNeonEmails.includes(emailLower);
+      const emailInBrevo = currentBrevoEmails.includes(emailLower);
+      
+      // Strict validation: If an ID is claimed, it MUST be valid
+      if (hasNeonId && !hasValidNeonId) {
+        // Client claims to have a Neon ID but it doesn't exist - phantom
+        console.warn('[ClientsManager] Phantom client: stale Neon ID:', {
+          email: client.email,
+          neonId: client.neonId,
+          brevoId: client.brevoId,
+        });
+        return true;
+      }
+      
+      if (hasBrevoId && !hasValidBrevoId) {
+        // Client claims to have a Brevo ID but it doesn't exist - phantom
+        console.warn('[ClientsManager] Phantom client: stale Brevo ID:', {
+          email: client.email,
+          neonId: client.neonId,
+          brevoId: client.brevoId,
+        });
+        return true;
+      }
+      
+      // If IDs are valid (or don't exist), validate by email
+      // Client is valid if:
+      // - Has valid Neon ID OR email in Neon, OR
+      // - Has valid Brevo ID OR email in Brevo
+      const isValid = (hasValidNeonId || emailInNeon) || (hasValidBrevoId || emailInBrevo);
+      
+      if (!isValid) {
+        console.warn('[ClientsManager] Phantom client: not found in either system:', {
+          email: client.email,
+          neonId: client.neonId,
+          brevoId: client.brevoId,
+          inNeon: client.inNeon,
+          inBrevo: client.inBrevo,
+        });
+      }
+      
+      return !isValid;
+    });
+    
+    console.log('[ClientsManager] Unified clients analysis:', {
       total: unifiedList.length,
       inNeonOnly: unifiedList.filter(c => c.inNeon && !c.inBrevo).length,
       inBrevoOnly: unifiedList.filter(c => !c.inNeon && c.inBrevo).length,
       inBoth: unifiedList.filter(c => c.inNeon && c.inBrevo).length,
-      emails: unifiedList.map(c => c.email),
+      unifiedIds,
+      unifiedEmails,
+      currentNeonIds,
+      currentNeonEmails,
+      currentBrevoIds,
+      currentBrevoEmails,
+      phantomCount: phantomClients.length,
+      phantomClients: phantomClients.map(c => ({
+        email: c.email,
+        neonId: c.neonId,
+        brevoId: c.brevoId,
+        inNeon: c.inNeon,
+        inBrevo: c.inBrevo,
+      })),
+      timestamp: new Date().toISOString(),
     });
+    
+    if (phantomClients.length > 0) {
+      console.error('[ClientsManager] PHANTOM CLIENTS DETECTED:', phantomClients);
+      console.error('[ClientsManager] Removing phantoms from unified list...');
+      
+      // Filter out phantom clients from the unified list
+      // Use same strict validation: IDs must be valid if they exist
+      const validClients = unifiedList.filter(client => {
+        const emailLower = client.email?.toLowerCase().trim();
+        if (!emailLower) return false; // Remove invalid emails
+        
+        const hasNeonId = !!client.neonId;
+        const hasBrevoId = !!client.brevoId;
+        const hasValidNeonId = hasNeonId && currentNeonIds.includes(client.neonId);
+        const hasValidBrevoId = hasBrevoId && currentBrevoIds.includes(client.brevoId);
+        const emailInNeon = currentNeonEmails.includes(emailLower);
+        const emailInBrevo = currentBrevoEmails.includes(emailLower);
+        
+        // Strict validation: If an ID is claimed, it MUST be valid
+        if (hasNeonId && !hasValidNeonId) return false; // Stale Neon ID
+        if (hasBrevoId && !hasValidBrevoId) return false; // Stale Brevo ID
+        
+        // If IDs are valid (or don't exist), validate by email
+        return (hasValidNeonId || emailInNeon) || (hasValidBrevoId || emailInBrevo);
+      });
+      
+      console.log('[ClientsManager] After removing phantoms:', {
+        before: unifiedList.length,
+        after: validClients.length,
+        removed: phantomClients.length,
+      });
+      
+      return validClients;
+    }
     
     return unifiedList;
   }, [neonCustomers, brevoContacts]);

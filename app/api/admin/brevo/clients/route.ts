@@ -17,6 +17,15 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const search = searchParams.get('search') || '';
+    
+    // Log for debugging phantom clients
+    console.log('[Brevo Clients API] Request received:', {
+      limit,
+      offset,
+      search,
+      timestamp: new Date().toISOString(),
+      url: request.url,
+    });
 
     // Build query parameters for Brevo API
     const params = new URLSearchParams({
@@ -28,11 +37,17 @@ export async function GET(request: NextRequest) {
       params.append('query', search);
     }
 
+    // Add cache-busting to Brevo API call
+    params.append('_t', String(Date.now()));
+    
     const response = await fetch(`${BREVO_API_BASE}/contacts?${params.toString()}`, {
       headers: {
         'api-key': apiKey,
         'Accept': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -61,6 +76,15 @@ export async function GET(request: NextRequest) {
       updatedAt: contact.modifiedAt,
       attributes: contact.attributes || {},
     }));
+    
+    // Log for debugging phantom clients
+    console.log('[Brevo Clients API] Returning contacts:', {
+      count: contacts.length,
+      total: data.count || contacts.length,
+      contactIds: contacts.map((c: any) => c.id),
+      contactEmails: contacts.map((c: any) => c.email),
+      timestamp: new Date().toISOString(),
+    });
 
     return NextResponse.json({
       contacts,
