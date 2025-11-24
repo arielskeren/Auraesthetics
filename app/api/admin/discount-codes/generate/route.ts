@@ -210,9 +210,17 @@ export async function POST(request: NextRequest) {
         });
       }
       
-      stripeCouponId = coupon.id;
+      stripeCouponId = String(coupon.id).trim();
+      if (!stripeCouponId || stripeCouponId.length === 0) {
+        throw new Error('Invalid coupon ID returned from Stripe');
+      }
+      console.log('[Generate Discount Code] Stripe coupon created successfully:', stripeCouponId);
     } catch (stripeError: any) {
-      console.error('[Generate Discount Code] Stripe coupon creation failed:', stripeError);
+      console.error('[Generate Discount Code] Stripe coupon creation failed:', {
+        error: stripeError.message,
+        code: stripeError.code,
+        type: stripeError.type,
+      });
       return NextResponse.json(
         { error: 'Failed to create Stripe coupon', details: stripeError.message },
         { status: 500 }
@@ -220,18 +228,51 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert into database (only after Stripe succeeds to avoid orphaned records)
-    const insertResult = await sql`
-      INSERT INTO one_time_discount_codes (
-        customer_id, code, discount_type, discount_value, discount_cap,
-        expires_at, stripe_coupon_id, created_by
-      )
-      VALUES (
-        ${finalCustomerId}, ${code}, ${discountType}, ${discountValue}, 
-        ${discountCap || null}, ${expiresAt}, ${stripeCouponId}, 'admin'
-      )
-      RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
-    `;
-    const inserted = normalizeRows(insertResult)[0];
+    // Wrap in try-catch to handle DB failures and clean up Stripe resources
+    let inserted: any;
+    try {
+      const insertResult = await sql`
+        INSERT INTO one_time_discount_codes (
+          customer_id, code, discount_type, discount_value, discount_cap,
+          expires_at, stripe_coupon_id, created_by
+        )
+        VALUES (
+          ${finalCustomerId}, ${code}, ${discountType}, ${discountValue}, 
+          ${discountCap || null}, ${expiresAt}, ${stripeCouponId}, 'admin'
+        )
+        RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
+      `;
+      inserted = normalizeRows(insertResult)[0];
+      
+      if (!inserted || !inserted.id) {
+        throw new Error('Database insert returned invalid result');
+      }
+      console.log('[Generate Discount Code] Successfully inserted into one_time_discount_codes table:', inserted.id);
+    } catch (dbError: any) {
+      console.error('[Generate Discount Code] Database insert failed:', {
+        error: dbError.message,
+        code: code,
+        stripeCouponId: stripeCouponId,
+      });
+      
+      // If DB insert fails, clean up Stripe coupon to avoid orphaned resources
+      if (stripeCouponId) {
+        try {
+          await stripe.coupons.del(stripeCouponId);
+          console.log('[Generate Discount Code] Cleaned up orphaned Stripe coupon:', stripeCouponId);
+        } catch (cleanupError) {
+          console.error('[Generate Discount Code] Failed to clean up Stripe coupon after DB failure:', cleanupError);
+        }
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'Failed to save discount code to database', 
+          details: dbError.message,
+        },
+        { status: 500 }
+      );
+    }
 
     // Send email to customer
     try {

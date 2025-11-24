@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import { stripe } from '@/lib/stripeClient';
+import Stripe from 'stripe';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -212,44 +213,134 @@ export async function POST(request: NextRequest) {
 
     // Create promotion code for the coupon
     // Set max_redemptions on the promotion code to limit total uses across all customers
-    const promotionCodeParams: any = {
-      coupon: coupon.id as string,
+    // CRITICAL: Ensure coupon.id is a string and properly formatted
+    const couponId = String(coupon.id).trim();
+    if (!couponId || couponId.length === 0) {
+      // Clean up coupon if ID is invalid
+      try {
+        await stripe.coupons.del(coupon.id);
+      } catch (delError) {
+        console.error('[Create Global Discount Code] Failed to clean up coupon with invalid ID:', delError);
+      }
+      return NextResponse.json(
+        { error: 'Invalid coupon ID from Stripe' },
+        { status: 500 }
+      );
+    }
+
+    // Build promotion code parameters explicitly
+    const promotionCodeParams: Stripe.PromotionCodeCreateParams = {
+      coupon: couponId, // Explicitly use string
       code: codeUpper,
       active: isActive,
     };
     if (maxUses && maxUses > 0) {
       promotionCodeParams.max_redemptions = maxUses;
     }
-    const promotionCode = await stripe.promotionCodes.create(promotionCodeParams as any);
+    
+    let promotionCode: Stripe.PromotionCode;
+    try {
+      console.log('[Create Global Discount Code] Creating promotion code with params:', {
+        coupon: couponId,
+        code: codeUpper,
+        active: isActive,
+        max_redemptions: maxUses || undefined,
+      });
+      promotionCode = await stripe.promotionCodes.create(promotionCodeParams);
+      console.log('[Create Global Discount Code] Promotion code created successfully:', promotionCode.id);
+    } catch (promoError: any) {
+      console.error('[Create Global Discount Code] Promotion code creation failed:', {
+        error: promoError.message,
+        code: promoError.code,
+        param: promoError.param,
+        type: promoError.type,
+        couponId: couponId,
+      });
+      
+      // If promotion code creation fails, delete the coupon we just created to avoid orphaned resources
+      try {
+        await stripe.coupons.del(couponId);
+        console.log('[Create Global Discount Code] Cleaned up orphaned coupon:', couponId);
+      } catch (delError) {
+        console.error('[Create Global Discount Code] Failed to clean up coupon after promotion code error:', delError);
+      }
+      
+      // Return detailed error
+      return NextResponse.json(
+        { 
+          error: 'Failed to create promotion code', 
+          details: promoError.message || 'Unknown error',
+          stripeError: promoError.code || promoError.type,
+        },
+        { status: 500 }
+      );
+    }
 
-    // Insert into database
-    await sql`
-      INSERT INTO discount_codes (
-        code,
-        discount_type,
-        discount_value,
-        discount_cap,
-        stripe_coupon_id,
-        stripe_promotion_code_id,
-        is_active,
-        max_uses,
-        expires_at,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${codeUpper},
-        ${discountType},
-        ${discountValue},
-        ${discountCap || null},
-        ${coupon.id},
-        ${promotionCode.id},
-        ${isActive},
-        ${maxUses || null},
-        ${expiresAt},
-        NOW(),
-        NOW()
-      )
-    `;
+    // Verify promotion code was created successfully
+    if (!promotionCode || !promotionCode.id) {
+      // Clean up both coupon and promotion code if they exist
+      try {
+        await stripe.promotionCodes.update(promotionCode.id, { active: false });
+        await stripe.coupons.del(couponId);
+      } catch (cleanupError) {
+        console.error('[Create Global Discount Code] Failed to clean up after invalid promotion code:', cleanupError);
+      }
+      return NextResponse.json(
+        { error: 'Promotion code creation returned invalid result' },
+        { status: 500 }
+      );
+    }
+
+    // Insert into database - wrap in try-catch to handle DB failures
+    try {
+      await sql`
+        INSERT INTO discount_codes (
+          code,
+          discount_type,
+          discount_value,
+          discount_cap,
+          stripe_coupon_id,
+          stripe_promotion_code_id,
+          is_active,
+          max_uses,
+          expires_at,
+          created_at,
+          updated_at
+        ) VALUES (
+          ${codeUpper},
+          ${discountType},
+          ${discountValue},
+          ${discountCap || null},
+          ${couponId},
+          ${promotionCode.id},
+          ${isActive},
+          ${maxUses || null},
+          ${expiresAt},
+          NOW(),
+          NOW()
+        )
+      `;
+      console.log('[Create Global Discount Code] Successfully inserted into database:', codeUpper);
+    } catch (dbError: any) {
+      console.error('[Create Global Discount Code] Database insert failed:', dbError);
+      
+      // If DB insert fails, clean up Stripe resources to avoid orphaned records
+      try {
+        await stripe.promotionCodes.update(promotionCode.id, { active: false });
+        await stripe.coupons.del(couponId);
+        console.log('[Create Global Discount Code] Cleaned up Stripe resources after DB failure');
+      } catch (cleanupError) {
+        console.error('[Create Global Discount Code] Failed to clean up Stripe resources after DB failure:', cleanupError);
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'Failed to save discount code to database', 
+          details: dbError.message,
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ 
       success: true,

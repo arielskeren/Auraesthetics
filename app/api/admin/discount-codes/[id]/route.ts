@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
 import { stripe } from '@/lib/stripeClient';
+import Stripe from 'stripe';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -99,15 +100,15 @@ export async function PATCH(
     if (existingCode.stripe_coupon_id && 
         (existingCode.discount_type !== discountType || 
          Number(existingCode.discount_value) !== discountValue)) {
+      const oldCouponId = existingCode.stripe_coupon_id;
+      let newCouponId: string | null = null;
+      
       try {
-        // Delete old coupon
-        await stripe.coupons.del(existingCode.stripe_coupon_id);
-        
-        // Create new coupon
+        // Create new coupon FIRST (before deleting old one to avoid orphaned state)
         const couponName = `One-time: ${existingCode.code}`;
-        let coupon;
+        let coupon: Stripe.Coupon;
         if (discountType === 'percent') {
-          const couponParams: any = {
+          const couponParams: Stripe.CouponCreateParams = {
             name: couponName,
             duration: 'once',
             percent_off: Math.round(discountValue),
@@ -117,7 +118,10 @@ export async function PATCH(
             },
           };
           if (discountCap) {
-            couponParams.metadata.discount_cap = String(discountCap);
+            couponParams.metadata = {
+              ...couponParams.metadata,
+              discount_cap: String(discountCap),
+            };
           }
           coupon = await stripe.coupons.create(couponParams);
         } else {
@@ -132,7 +136,12 @@ export async function PATCH(
             },
           });
         }
-
+        
+        newCouponId = String(coupon.id).trim();
+        if (!newCouponId || newCouponId.length === 0) {
+          throw new Error('Invalid coupon ID returned from Stripe');
+        }
+        
         // Update database with new coupon ID
         await sql`
           UPDATE one_time_discount_codes
@@ -141,12 +150,36 @@ export async function PATCH(
             discount_value = ${discountValue},
             discount_cap = ${discountCap || null},
             expires_at = ${newExpiresAt},
-            stripe_coupon_id = ${coupon.id},
+            stripe_coupon_id = ${newCouponId},
             updated_at = NOW()
           WHERE id = ${codeId}
         `;
+        
+        // Only delete old coupon after DB update succeeds
+        try {
+          await stripe.coupons.del(oldCouponId);
+          console.log('[Update Discount Code] Successfully replaced old coupon:', oldCouponId);
+        } catch (delError: any) {
+          // Log but don't fail - old coupon might already be deleted
+          console.warn('[Update Discount Code] Failed to delete old coupon (non-critical):', delError.message);
+        }
       } catch (stripeError: any) {
-        console.error('[Update Discount Code] Stripe coupon update failed:', stripeError);
+        console.error('[Update Discount Code] Stripe coupon update failed:', {
+          error: stripeError.message,
+          code: stripeError.code,
+          type: stripeError.type,
+        });
+        
+        // If new coupon was created but DB update failed, clean it up
+        if (newCouponId) {
+          try {
+            await stripe.coupons.del(newCouponId);
+            console.log('[Update Discount Code] Cleaned up orphaned new coupon:', newCouponId);
+          } catch (cleanupError) {
+            console.error('[Update Discount Code] Failed to clean up orphaned coupon:', cleanupError);
+          }
+        }
+        
         return NextResponse.json(
           { error: 'Failed to update Stripe coupon', details: stripeError.message },
           { status: 500 }

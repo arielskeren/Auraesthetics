@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build query based on whether discount_cap column exists
+    // IMPORTANT: Only fetch from one_time_discount_codes table, NOT discount_codes table
     let codesResult;
     if (hasDiscountCapColumn) {
       codesResult = await sql`
@@ -85,6 +86,7 @@ export async function GET(request: NextRequest) {
           TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
         FROM one_time_discount_codes otc
         LEFT JOIN customers c ON otc.customer_id = c.id
+        WHERE otc.stripe_coupon_id IS NOT NULL
         ORDER BY otc.created_at DESC
       `;
     } else {
@@ -106,17 +108,37 @@ export async function GET(request: NextRequest) {
           TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
         FROM one_time_discount_codes otc
         LEFT JOIN customers c ON otc.customer_id = c.id
+        WHERE otc.stripe_coupon_id IS NOT NULL
         ORDER BY otc.created_at DESC
       `;
     }
     const codes = normalizeRows(codesResult);
+    
+    // Filter out codes without stripe_coupon_id (basic validation)
+    // These are likely phantom codes that were created but Stripe coupon creation failed
+    const validCodesList = codes.filter((code: any) => {
+      if (!code.stripe_coupon_id || code.stripe_coupon_id.trim() === '') {
+        console.warn(`[Discount Codes API] Found code without Stripe coupon ID (phantom code): ${code.code} (ID: ${code.id})`);
+        return false;
+      }
+      return true;
+    });
+    
+    // Log if we filtered out any codes
+    const filteredCount = codes.length - validCodesList.length;
+    if (filteredCount > 0) {
+      console.warn(`[Discount Codes API] Filtered out ${filteredCount} phantom codes (missing stripe_coupon_id) out of ${codes.length} total codes`);
+    }
+    
+    // Note: We don't validate against Stripe API here to avoid blocking the request
+    // A background job could be added to clean up orphaned Stripe coupons
     
     // Log for debugging
     console.log(`[Discount Codes API] Found ${codes.length} discount codes`);
 
     // For used codes, fetch booking usage details
     const codesWithUsage = await Promise.all(
-      codes.map(async (code) => {
+      validCodesList.map(async (code) => {
         if (!code.used || !code.used_at) {
           return code;
         }
