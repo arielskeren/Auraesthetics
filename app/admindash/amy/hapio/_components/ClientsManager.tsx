@@ -406,10 +406,11 @@ export default function ClientsManager() {
         setSaveStatus('saved');
         setToast('Client saved successfully!');
         
-        // Reset to idle after 2 seconds
+        // Close modal after a brief delay to show "Saved!" state
         setTimeout(() => {
           setSaveStatus('idle');
-        }, 2000);
+          closeModal();
+        }, 1500);
       } else {
         // Create new customer
         const response = await fetch('/api/admin/customers', {
@@ -436,10 +437,11 @@ export default function ClientsManager() {
         setSaveStatus('saved');
         setToast('Client created successfully!');
         
-        // Reset to idle after 2 seconds
+        // Close modal after a brief delay to show "Saved!" state
         setTimeout(() => {
           setSaveStatus('idle');
-        }, 2000);
+          closeModal();
+        }, 1500);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to save customer');

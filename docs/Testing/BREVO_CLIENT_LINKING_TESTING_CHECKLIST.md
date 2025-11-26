@@ -8,14 +8,14 @@ This checklist covers all features related to Brevo contact linking, conflict re
 ## 1. Basic Client Management
 
 ### ✅ Add New Client
-- [ ] Click "Add Client" button
-- [ ] Fill in required fields (email, first name, last name)
-- [ ] Verify form validation works (email required)
-- [ ] Click "Create Client"
-- [ ] Verify toast notification appears: "Client created successfully!"
-- [ ] Verify toast auto-dismisses after 5 seconds
-- [ ] Verify modal stays open after save
-- [ ] Verify "Save Changes" button shows "Saved!" briefly, then reverts to "Save Changes"
+- [x] Click "Add Client" button
+- [x] Fill in required fields (email, first name, last name)
+- [x] Verify form validation works (email required)
+- [x] Click "Create Client"
+- [x] Verify toast notification appears: "Client created successfully!"
+- [x] Verify toast auto-dismisses after 5 seconds
+- [ ] Verify "Save Changes" button shows "Saved!" briefly (about 1.5 seconds)
+- [ ] Verify modal auto-closes after save completes
 - [ ] Verify new client appears in the table
 - [ ] Click "Close" button
 - [ ] Verify modal closes
@@ -26,9 +26,9 @@ This checklist covers all features related to Brevo contact linking, conflict re
 - [ ] Modify client information (name, email, phone)
 - [ ] Click "Save Changes"
 - [ ] Verify toast notification appears
-- [ ] Verify modal stays open
-- [ ] Verify changes are reflected in the table after refresh
-- [ ] Verify "Save Changes" button shows "Saved!" briefly
+- [ ] Verify "Save Changes" button shows "Saved!" briefly (about 1.5 seconds)
+- [ ] Verify modal auto-closes after save completes
+- [ ] Verify changes are reflected in the table
 
 ### ✅ Close Modal with Unsaved Changes
 - [ ] Open edit modal
