@@ -363,9 +363,27 @@ export default function ClientsManager() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          const errorMessage = errorData.details 
-            ? `${errorData.error || 'Failed to create Brevo record'}: ${errorData.details}`
-            : errorData.error || 'Failed to create Brevo record';
+          
+          // Build a more informative error message
+          let errorMessage = errorData.error || 'Failed to create Brevo record';
+          
+          if (errorData.details) {
+            // If it's a phone error, be more specific
+            if (errorData.isPhoneError) {
+              errorMessage = `Phone number error: ${errorData.details}`;
+              if (errorData.phoneSent) {
+                errorMessage += ` (sent: ${errorData.phoneSent})`;
+              }
+            } else {
+              errorMessage = `${errorMessage}: ${errorData.details}`;
+            }
+          }
+          
+          // Include Brevo error code if available
+          if (errorData.brevoError?.code) {
+            errorMessage += ` (Brevo code: ${errorData.brevoError.code})`;
+          }
+          
           throw new Error(errorMessage);
         }
 
@@ -399,9 +417,27 @@ export default function ClientsManager() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          const errorMessage = errorData.details 
-            ? `${errorData.error || 'Failed to create Brevo record'}: ${errorData.details}`
-            : errorData.error || 'Failed to create Brevo record';
+          
+          // Build a more informative error message
+          let errorMessage = errorData.error || 'Failed to create Brevo record';
+          
+          if (errorData.details) {
+            // If it's a phone error, be more specific
+            if (errorData.isPhoneError) {
+              errorMessage = `Phone number error: ${errorData.details}`;
+              if (errorData.phoneSent) {
+                errorMessage += ` (sent: ${errorData.phoneSent})`;
+              }
+            } else {
+              errorMessage = `${errorMessage}: ${errorData.details}`;
+            }
+          }
+          
+          // Include Brevo error code if available
+          if (errorData.brevoError?.code) {
+            errorMessage += ` (Brevo code: ${errorData.brevoError.code})`;
+          }
+          
           throw new Error(errorMessage);
         }
 

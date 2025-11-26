@@ -54,8 +54,12 @@ export async function POST(
     // Format phone number for Brevo
     // According to Brevo API: SMS field accepts: 91xxxxxxxxxx, +91xxxxxxxxxx, or 0091xxxxxxxxxx
     // For US numbers stored as 1##########, we convert to +1##########
+    // IMPORTANT: Only send phone attributes if we have a valid phone number (10+ digits)
+    // Invalid phone numbers should NOT be sent to Brevo to avoid API errors
     if (customer.phone) {
       const digitsOnly = customer.phone.trim().replace(/\D/g, '');
+      
+      // Only process if we have at least 10 digits (valid US phone number minimum)
       if (digitsOnly.length >= 10) {
         let formattedPhone: string;
         if (digitsOnly.length === 10) {
@@ -76,13 +80,28 @@ export async function POST(
           formattedPhone = `+${digitsOnly}`;
         }
         
-        // Only add phone attributes if we have a valid format
+        // Only add phone attributes if we have a valid format (E.164 format: +country code + number)
+        // Minimum length for E.164 is typically 11 characters (+1 + 10 digits for US)
         // Brevo requires SMS field for phone-only contacts, but we always have email
-        if (formattedPhone && formattedPhone.length >= 11) {
+        if (formattedPhone && formattedPhone.length >= 11 && formattedPhone.startsWith('+')) {
           attributes.PHONE = formattedPhone;
           attributes.LANDLINE_NUMBER = formattedPhone;
           attributes.SMS = formattedPhone; // Required field for phone number
+        } else {
+          // Invalid phone format - log warning but don't send to Brevo
+          console.warn('[Link Brevo API] Invalid phone format, skipping phone attributes:', {
+            original: customer.phone,
+            digitsOnly,
+            formattedPhone,
+          });
         }
+      } else {
+        // Phone number too short - log warning but don't send to Brevo
+        console.warn('[Link Brevo API] Phone number too short, skipping phone attributes:', {
+          original: customer.phone,
+          digitsOnly,
+          digitCount: digitsOnly.length,
+        });
       }
     }
 
@@ -195,12 +214,30 @@ export async function POST(
         }
       }
 
-      // Return detailed error
+      // Return detailed error with better parsing of Brevo's error response
+      // Brevo errors can have different structures: { message }, { error }, { code, message }, etc.
+      let errorMessage = 'Unknown error';
+      if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = errorData.error;
+      } else if (typeof errorText === 'string' && errorText.length < 200) {
+        errorMessage = errorText;
+      }
+      
+      // Check if error is specifically about phone number
+      const isPhoneError = errorMessage.toLowerCase().includes('phone') || 
+                          errorMessage.toLowerCase().includes('sms') ||
+                          errorMessage.toLowerCase().includes('invalid number');
+      
       return NextResponse.json(
         { 
           error: 'Failed to create Brevo contact', 
-          details: errorData.message || errorText,
+          details: errorMessage,
           brevoError: errorData,
+          isPhoneError,
+          // Include the actual phone value that was sent (if any) for debugging
+          phoneSent: attributes.SMS || attributes.PHONE || null,
         },
         { status: response.status }
       );
