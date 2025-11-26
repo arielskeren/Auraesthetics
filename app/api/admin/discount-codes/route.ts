@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         dc.used,
         dc.used_at,
         dc.expires_at,
-        COALESCE(dc.is_active, true) as is_active,
+        dc.is_active,
         dc.created_at,
         dc.created_by,
         c.email AS customer_email,
@@ -126,17 +126,18 @@ export async function GET(request: NextRequest) {
 
     codesWithUsage.forEach((code: any) => {
       const isExpired = code.expires_at && new Date(code.expires_at) <= now;
-      // Handle NULL is_active - COALESCE in query sets it to true, so check explicitly
-      const isInactive = code.is_active === false;
+      // Handle is_active: explicitly false means inactive, NULL means active (default)
+      // PostgreSQL booleans can be true/false or null, ensure we check correctly
+      const isInactive = code.is_active === false || code.is_active === 'f' || code.is_active === false;
       // Handle NULL used - treat as not used if not explicitly true
-      const isUsed = code.used === true;
+      const isUsed = code.used === true || code.used === 't' || code.used === true;
 
       if (isUsed) {
         used.push(code);
       } else if (isInactive || isExpired) {
         inactive.push(code);
       } else {
-        // Active codes: not used, not inactive, not expired
+        // Active codes: not used, not inactive (is_active is true or NULL), not expired
         active.push(code);
       }
     });
