@@ -223,7 +223,10 @@ export default function ClientsManager() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to create Brevo record');
+          const errorMessage = errorData.details 
+            ? `${errorData.error || 'Failed to create Brevo record'}: ${errorData.details}`
+            : errorData.error || 'Failed to create Brevo record';
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();

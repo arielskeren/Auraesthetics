@@ -47,6 +47,12 @@ export async function POST(
 
     const customer = customers[0];
 
+    // Normalize marketing_opt_in (handle boolean, string, null, undefined)
+    const marketingOptIn = customer.marketing_opt_in === true 
+      || customer.marketing_opt_in === 't' 
+      || customer.marketing_opt_in === 'true'
+      || customer.marketing_opt_in === 1;
+
     // Build attributes for Brevo
     const attributes: Record<string, any> = {
       FIRSTNAME: customer.first_name || '',
@@ -79,15 +85,22 @@ export async function POST(
 
     // Create Brevo contact
     const body: any = {
-      email: customer.email,
+      email: customer.email.trim(),
       attributes,
       updateEnabled: true,
-      emailBlacklisted: !customer.marketing_opt_in, // Set based on marketing_opt_in
+      emailBlacklisted: !marketingOptIn, // Set based on normalized marketing_opt_in
     };
     
     if (listId && Number.isFinite(listId)) {
       body.listIds = [listId];
     }
+
+    console.log('[Link Brevo API] Creating contact:', {
+      email: body.email,
+      hasAttributes: Object.keys(attributes).length > 0,
+      emailBlacklisted: body.emailBlacklisted,
+      hasListId: !!body.listIds,
+    });
 
     const response = await fetch(`${BREVO_API_BASE}/contacts`, {
       method: 'POST',
@@ -99,58 +112,86 @@ export async function POST(
     });
 
     if (!response.ok) {
-      // If contact already exists, fetch it by email
-      if (response.status === 400) {
-        const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
-          headers: {
-            'api-key': apiKey,
-            'Accept': 'application/json',
-          },
-        });
+      const errorText = await response.text();
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText };
+      }
 
-        if (existingResp.ok) {
-          const existing = await existingResp.json();
-          
-          // Update existing contact
-          const updateBody: any = {
-            attributes: { ...(existing.attributes || {}), ...attributes },
-            emailBlacklisted: !customer.marketing_opt_in,
-            updateEnabled: true,
-          };
-          
-          if (listId && Number.isFinite(listId)) {
-            updateBody.listIds = [listId];
-          }
+      console.error('[Link Brevo API] Brevo API error:', {
+        status: response.status,
+        error: errorData,
+      });
 
-          const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
-            method: 'PUT',
+      // If contact already exists (400 with duplicate error), fetch it by email
+      if (response.status === 400 && (
+        errorData.code === 'duplicate_parameter' || 
+        errorData.message?.toLowerCase().includes('already exist') ||
+        errorData.message?.toLowerCase().includes('duplicate')
+      )) {
+        try {
+          const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email.trim())}`, {
             headers: {
-              'Content-Type': 'application/json',
               'api-key': apiKey,
+              'Accept': 'application/json',
             },
-            body: JSON.stringify(updateBody),
           });
 
-          if (update.ok) {
-            // Link the existing contact
-            await sql`
-              UPDATE customers
-              SET brevo_contact_id = ${String(existing.id)}, updated_at = NOW()
-              WHERE id = ${customerId}
-            `;
+          if (existingResp.ok) {
+            const existing = await existingResp.json();
+            
+            // Update existing contact
+            const updateBody: any = {
+              attributes: { ...(existing.attributes || {}), ...attributes },
+              emailBlacklisted: !marketingOptIn,
+              updateEnabled: true,
+            };
+            
+            if (listId && Number.isFinite(listId)) {
+              updateBody.listIds = [listId];
+            }
 
-            return NextResponse.json({
-              success: true,
-              brevoId: existing.id,
-              message: 'Linked to existing Brevo contact',
+            const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email.trim())}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'api-key': apiKey,
+              },
+              body: JSON.stringify(updateBody),
             });
+
+            if (update.ok) {
+              // Link the existing contact
+              await sql`
+                UPDATE customers
+                SET brevo_contact_id = ${String(existing.id)}, updated_at = NOW()
+                WHERE id = ${customerId}
+              `;
+
+              return NextResponse.json({
+                success: true,
+                brevoId: existing.id,
+                message: 'Linked to existing Brevo contact',
+              });
+            } else {
+              const updateErrorText = await update.text();
+              console.error('[Link Brevo API] Failed to update existing contact:', updateErrorText);
+            }
           }
+        } catch (fetchError) {
+          console.error('[Link Brevo API] Error fetching existing contact:', fetchError);
         }
       }
 
-      const errorText = await response.text();
+      // Return detailed error
       return NextResponse.json(
-        { error: 'Failed to create Brevo contact', details: errorText },
+        { 
+          error: 'Failed to create Brevo contact', 
+          details: errorData.message || errorText,
+          brevoError: errorData,
+        },
         { status: response.status }
       );
     }
