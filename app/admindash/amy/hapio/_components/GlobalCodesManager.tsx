@@ -42,7 +42,7 @@ export default function GlobalCodesManager() {
   const [usageCustomers, setUsageCustomers] = useState<UsageCustomer[]>([]);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [activeSectionOpen, setActiveSectionOpen] = useState(true);
-  const [usedSectionOpen, setUsedSectionOpen] = useState(true);
+  // Removed usedSectionOpen - global codes only have Active and Inactive sections
   const [inactiveSectionOpen, setInactiveSectionOpen] = useState(false);
   
   // Create form state
@@ -78,8 +78,8 @@ export default function GlobalCodesManager() {
       
       // Clear state aggressively before loading to prevent stale data
       setActiveCodes([]);
-      setUsedCodes([]);
       setInactiveCodes([]);
+      setUsedCodes([]); // Keep for compatibility but won't be used
 
       const timestamp = Date.now();
       const response = await fetch(`/api/admin/global-discount-codes?t=${timestamp}`, {
@@ -95,20 +95,22 @@ export default function GlobalCodesManager() {
       }
 
       const data = await response.json();
-      // Handle new grouped response structure
-      const active = Array.isArray(data.active) ? data.active : [];
-      const used = Array.isArray(data.used) ? data.used : [];
-      const inactive = Array.isArray(data.inactive) ? data.inactive : [];
+      // Handle grouped response structure (only active and inactive for global codes)
+      const active = Array.isArray(data.activeCodes) ? data.activeCodes : 
+                     Array.isArray(data.active) ? data.active : [];
+      const inactive = Array.isArray(data.inactiveCodes) ? data.inactiveCodes : 
+                      Array.isArray(data.inactive) ? data.inactive : [];
       
       setActiveCodes(active);
-      setUsedCodes(used);
       setInactiveCodes(inactive);
+      // Global codes don't have a "used" section - they're either active or inactive
+      setUsedCodes([]);
     } catch (err: any) {
       console.error('[GlobalCodesManager] Error loading codes:', err);
       setError(err);
       setActiveCodes([]);
-      setUsedCodes([]);
       setInactiveCodes([]);
+      setUsedCodes([]); // Keep for compatibility but won't be used
     } finally {
       setLoading(false);
     }
@@ -448,87 +450,6 @@ export default function GlobalCodesManager() {
                             Delete
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Used Codes Section */}
-      <div className="bg-white border border-sand rounded-lg overflow-hidden">
-        <button
-          onClick={() => setUsedSectionOpen(!usedSectionOpen)}
-          className="w-full px-4 py-3 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center justify-between"
-        >
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">Used</span>
-            <span className="text-sm font-semibold text-charcoal">
-              Used Codes ({usedCodes.length})
-            </span>
-          </div>
-          {usedSectionOpen ? (
-            <ChevronUp className="w-4 h-4 text-charcoal" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-charcoal" />
-          )}
-        </button>
-        {usedSectionOpen && (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-blue-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Max Uses</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sand">
-                {usedCodes.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-warm-gray">
-                      No used codes found
-                    </td>
-                  </tr>
-                ) : (
-                  usedCodes.map((code) => (
-                    <tr key={code.id} className="hover:bg-blue-50/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4 text-blue-600" />
-                          <span className="font-mono font-semibold text-charcoal">{code.code}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {code.discount_type === 'percent' 
-                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
-                          : `$${code.discount_value}`}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        <div className="flex items-center gap-2">
-                          <span>{code.usage_count || 0}</span>
-                          {code.usage_count && code.usage_count > 0 && (
-                            <button
-                              onClick={() => handleViewUsage(code)}
-                              className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
-                              title="View customers who used this code"
-                            >
-                              <Eye className="w-3 h-3" />
-                              View
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {code.max_uses ? code.max_uses : 'Unlimited'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-charcoal">
-                        {formatDate(code.expires_at)}
                       </td>
                     </tr>
                   ))

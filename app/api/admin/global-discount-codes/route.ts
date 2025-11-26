@@ -58,38 +58,37 @@ export async function GET(request: NextRequest) {
     `;
     const allCodes = normalizeRows(codesResult);
 
-    // Group codes by status
+    // Group codes by status (only Active and Inactive for global codes)
     const active: any[] = [];
-    const used: any[] = [];
     const inactive: any[] = [];
 
     allCodes.forEach((code: any) => {
       const isExpired = code.expires_at && new Date(code.expires_at) <= now;
-      const isInactive = code.is_active === false;
-      const hasBeenUsed = (code.usage_count || 0) > 0;
+      const isInactive = code.is_active === false || code.is_active === 'f';
+      const usageCount = code.usage_count || 0;
+      const maxUses = code.max_uses;
+      
+      // Check if max uses has been reached
+      const maxUsesReached = maxUses !== null && maxUses !== undefined && usageCount >= maxUses;
 
-      if (isInactive || isExpired) {
+      // Inactive if: explicitly inactive, expired, or max uses reached
+      if (isInactive || isExpired || maxUsesReached) {
         inactive.push({
           ...code,
-          times_redeemed: code.usage_count || 0,
-        });
-      } else if (hasBeenUsed) {
-        used.push({
-          ...code,
-          times_redeemed: code.usage_count || 0,
+          times_redeemed: usageCount,
         });
       } else {
+        // Active: not inactive, not expired, and (no max_uses or hasn't reached max_uses)
         active.push({
           ...code,
-          times_redeemed: code.usage_count || 0,
+          times_redeemed: usageCount,
         });
       }
     });
 
     return NextResponse.json({ 
-      active,
-      used,
-      inactive,
+      activeCodes: active,
+      inactiveCodes: inactive,
     });
   } catch (error: any) {
     console.error('[Global Discount Codes API] Error:', error);
