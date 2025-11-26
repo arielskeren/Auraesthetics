@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Search, Check, X, Plus, Edit, AlertCircle, Trash2 } from 'lucide-react';
+import { RefreshCw, Search, Check, X, Plus, Edit, AlertCircle, Trash2, Calendar, DollarSign } from 'lucide-react';
 import LoadingState from './LoadingState';
 import Toast from './Toast';
 
@@ -16,6 +16,16 @@ interface Customer {
   used_welcome_offer?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+interface BookingHistory {
+  id: string;
+  booking_date: string;
+  service_name: string;
+  payment_status: string;
+  total_paid: string;
+  hapio_booking_id: string | null;
+  created_at: string;
 }
 
 interface BrevoContact {
@@ -123,6 +133,10 @@ export default function ClientsManager() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   
+  // Booking history state
+  const [bookingHistory, setBookingHistory] = useState<BookingHistory[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  
   // Pre/Post-save Brevo linking state
   const [showPreSaveBrevoModal, setShowPreSaveBrevoModal] = useState(false);
   const [showPostSaveBrevoModal, setShowPostSaveBrevoModal] = useState(false);
@@ -209,6 +223,27 @@ export default function ClientsManager() {
     }
   };
 
+  const loadBookingHistory = async (customerId: string) => {
+    try {
+      setLoadingBookings(true);
+      const response = await fetch(`/api/admin/customers/${customerId}/bookings`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load booking history');
+      }
+
+      const data = await response.json();
+      setBookingHistory(data.bookings || []);
+    } catch (err: any) {
+      console.error('Error loading booking history:', err);
+      setBookingHistory([]);
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
+
   const openEditModal = async (customer: Customer) => {
     setEditingCustomer(customer);
     const initial = {
@@ -227,6 +262,9 @@ export default function ClientsManager() {
     setSelectedBrevoId(null);
     setShowModal(true);
     
+    // Load booking history for this customer
+    await loadBookingHistory(customer.id);
+    
     // Load available Brevo contacts if no brevo_contact_id
     if (!customer.brevo_contact_id) {
       await loadAvailableBrevoContacts();
@@ -235,6 +273,7 @@ export default function ClientsManager() {
 
   const openAddModal = async () => {
     setEditingCustomer(null);
+    setBookingHistory([]);
     const initial = {
       email: '',
       first_name: '',
@@ -1373,6 +1412,81 @@ export default function ClientsManager() {
                   </label>
                 </div>
               </div>
+
+              {/* Booking History Section - Only show when editing existing customer */}
+              {editingCustomer && (
+                <div className="mt-6 pt-6 border-t border-sand">
+                  <h4 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    Booking History
+                  </h4>
+                  
+                  {loadingBookings ? (
+                    <div className="text-center py-8">
+                      <RefreshCw className="w-6 h-6 animate-spin text-warm-gray mx-auto mb-2" />
+                      <p className="text-sm text-warm-gray">Loading booking history...</p>
+                    </div>
+                  ) : bookingHistory.length === 0 ? (
+                    <div className="text-center py-8 bg-sand/20 rounded-lg">
+                      <p className="text-sm text-warm-gray">No booking history found</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-warm-gray mb-3">
+                        Showing {bookingHistory.length} {bookingHistory.length === 1 ? 'booking' : 'bookings'} (last 10 services or 12 months, whichever is greater)
+                      </p>
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {bookingHistory.map((booking) => {
+                          const bookingDate = booking.booking_date ? new Date(booking.booking_date) : null;
+                          const formattedDate = bookingDate 
+                            ? bookingDate.toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              })
+                            : 'N/A';
+                          
+                          return (
+                            <div 
+                              key={booking.id} 
+                              className="bg-sand/20 rounded-lg p-4 border border-sand/40 hover:bg-sand/30 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Calendar className="w-4 h-4 text-dark-sage" />
+                                    <span className="font-semibold text-charcoal">{formattedDate}</span>
+                                  </div>
+                                  <p className="text-sm text-charcoal font-medium mb-1">
+                                    {booking.service_name || 'Service'}
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign className="w-3 h-3 text-dark-sage" />
+                                    <span className="text-sm text-warm-gray">
+                                      ${booking.total_paid}
+                                    </span>
+                                    <span className="text-xs text-warm-gray">•</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded ${
+                                      booking.payment_status === 'paid' || booking.payment_status === 'completed'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {booking.payment_status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 mt-6">
                 <button
