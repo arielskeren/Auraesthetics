@@ -133,6 +133,7 @@ export default function ClientsManager() {
   
   // Separate state for formatted phone display
   const [formattedPhone, setFormattedPhone] = useState('');
+  const [phoneError, setPhoneError] = useState(false);
 
   useEffect(() => {
     loadCustomers();
@@ -208,6 +209,7 @@ export default function ClientsManager() {
     setFormData(initial);
     setInitialFormData(initial);
     setFormattedPhone(formatPhoneForDisplay(customer.phone));
+    setPhoneError(false);
     setPendingBrevoId(null);
     setSelectedBrevoId(null);
     setShowModal(true);
@@ -231,6 +233,7 @@ export default function ClientsManager() {
     setFormData(initial);
     setInitialFormData(initial);
     setFormattedPhone('');
+    setPhoneError(false);
     setPendingBrevoId(null);
     setSelectedBrevoId(null);
     setShowModal(true);
@@ -261,34 +264,84 @@ export default function ClientsManager() {
       brevo_contact_id: '',
     });
     setFormattedPhone('');
+    setPhoneError(false);
     setInitialFormData(null);
     setConflictResolutions({});
     setConflicts({});
   };
   
   const handlePhoneChange = (value: string) => {
-    // Update formatted display
+    // Update formatted display (allow any input while typing)
     setFormattedPhone(value);
     
-    // Normalize and store in formData
-    // Extract digits from the value (handles both formatted and raw input)
+    // Extract digits and store in formData (don't validate while typing)
     const digits = value.replace(/\D/g, '');
     
+    // Store raw digits in formData (will be normalized on blur)
+    setFormData(prev => ({ ...prev, phone: digits }));
+    
+    // Clear error while typing
+    setPhoneError(false);
+  };
+
+  const handlePhoneBlur = () => {
+    // Format and validate only when user clicks away
+    const digits = formattedPhone.replace(/\D/g, '');
+    
     // Defensive check: if digits are all the same character (like all 1's), something went wrong
-    // Reset to empty to prevent weird states
     if (digits.length > 0 && digits.split('').every(d => d === digits[0]) && digits.length > 3) {
       console.warn('Phone input detected suspicious pattern, resetting');
       setFormattedPhone('');
       setFormData(prev => ({ ...prev, phone: '' }));
+      setPhoneError(false);
       return;
     }
     
-    // Only normalize if we have digits, otherwise store empty string
-    if (digits.length > 0) {
+    // Validate: should be 10 or 11 digits (11 if starts with 1)
+    if (digits.length > 0 && digits.length !== 10 && !(digits.length === 11 && digits.startsWith('1'))) {
+      // Invalid length - mark as error but don't delete the input
+      setPhoneError(true);
+      // Still normalize and store what we have
       const normalized = normalizePhoneForStorage(digits);
       setFormData(prev => ({ ...prev, phone: normalized }));
-    } else {
+      return;
+    }
+    
+    // Valid input - format it
+    setPhoneError(false);
+    
+    if (digits.length === 10) {
+      // Exactly 10 digits - format with +1 prefix
+      let formatted = '+1 (';
+      formatted += digits.slice(0, 3);
+      formatted += ')';
+      formatted += digits.slice(3, 6);
+      formatted += '-';
+      formatted += digits.slice(6, 10);
+      setFormattedPhone(formatted);
+      const normalized = normalizePhoneForStorage(digits);
+      setFormData(prev => ({ ...prev, phone: normalized }));
+    } else if (digits.length === 11 && digits.startsWith('1')) {
+      // 11 digits starting with 1 - remove the leading 1 and format
+      const cleaned = digits.slice(1);
+      let formatted = '+1 (';
+      formatted += cleaned.slice(0, 3);
+      formatted += ')';
+      formatted += cleaned.slice(3, 6);
+      formatted += '-';
+      formatted += cleaned.slice(6, 10);
+      setFormattedPhone(formatted);
+      const normalized = normalizePhoneForStorage(cleaned);
+      setFormData(prev => ({ ...prev, phone: normalized }));
+    } else if (digits.length === 0) {
+      // Empty - clear everything
+      setFormattedPhone('');
       setFormData(prev => ({ ...prev, phone: '' }));
+    } else {
+      // Less than 10 digits - keep as is, no error (partial input is okay)
+      setFormattedPhone(digits);
+      const normalized = normalizePhoneForStorage(digits);
+      setFormData(prev => ({ ...prev, phone: normalized }));
     }
   };
 
@@ -810,70 +863,24 @@ export default function ClientsManager() {
                     type="tel"
                     value={formattedPhone}
                     onChange={(e) => {
+                      // While typing, just store the raw input (allow anything)
+                      // Don't format or validate until blur
                       const input = e.target.value;
-                      
-                      // Extract only digits from input
-                      const digits = input.replace(/\D/g, '');
-                      
-                      // Defensive check: if we somehow got all 1's (more than 3), something went wrong
-                      // This can happen if there's a bug in the formatting logic
-                      if (digits.length > 3 && digits.split('').every(d => d === '1')) {
-                        console.warn('Detected suspicious phone input (all 1s), resetting');
-                        handlePhoneChange('');
-                        return;
-                      }
-                      
-                      // Limit to 11 digits (1 + 10 digit US phone number)
-                      if (digits.length > 11) {
-                        // Truncate to 11 digits
-                        const truncated = digits.slice(0, 11);
-                        // Remove leading 1 if present (user might have typed it)
-                        const cleaned = truncated.startsWith('1') && truncated.length === 11 ? truncated.slice(1) : truncated;
-                        
-                        // Only format if we have exactly 10 digits (complete number)
-                        if (cleaned.length === 10) {
-                          let formatted = '+1 (';
-                          formatted += cleaned.slice(0, 3);
-                          formatted += ')';
-                          formatted += cleaned.slice(3, 6);
-                          formatted += '-';
-                          formatted += cleaned.slice(6, 10);
-                          handlePhoneChange(formatted);
-                        } else {
-                          // Less than 10 digits, show raw
-                          handlePhoneChange(cleaned);
-                        }
-                      } else if (digits.length === 10) {
-                        // Exactly 10 digits - format with +1 prefix
-                        let formatted = '+1 (';
-                        formatted += digits.slice(0, 3);
-                        formatted += ')';
-                        formatted += digits.slice(3, 6);
-                        formatted += '-';
-                        formatted += digits.slice(6, 10);
-                        handlePhoneChange(formatted);
-                      } else if (digits.length === 11 && digits.startsWith('1')) {
-                        // 11 digits starting with 1 - remove the leading 1 and format
-                        const cleaned = digits.slice(1);
-                        let formatted = '+1 (';
-                        formatted += cleaned.slice(0, 3);
-                        formatted += ')';
-                        formatted += cleaned.slice(3, 6);
-                        formatted += '-';
-                        formatted += cleaned.slice(6, 10);
-                        handlePhoneChange(formatted);
-                      } else if (digits.length > 0) {
-                        // For 1-9 digits, just show the digits without formatting
-                        // This allows free typing without the "+1" prefix interfering
-                        handlePhoneChange(digits);
-                      } else {
-                        // Empty input
-                        handlePhoneChange('');
-                      }
+                      handlePhoneChange(input);
                     }}
+                    onBlur={handlePhoneBlur}
                     placeholder="+1 (555) 123-4567"
-                    className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                      phoneError 
+                        ? 'border-red-500 focus:ring-red-500 bg-red-50' 
+                        : 'border-sand focus:ring-dark-sage'
+                    }`}
                   />
+                  {phoneError && (
+                    <p className="text-sm text-red-500 mt-1">
+                      Phone number must be 10 digits (or 11 digits starting with 1)
+                    </p>
+                  )}
                 </div>
 
                 {/* Brevo ID Field */}
