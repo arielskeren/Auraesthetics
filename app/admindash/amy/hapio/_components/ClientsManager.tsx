@@ -546,37 +546,52 @@ export default function ClientsManager() {
       const willSaveWithoutBrevo = !hasBrevoId;
 
       if (willSaveWithoutBrevo) {
-        // Show pre-save confirmation modal
-        const userChoice = await new Promise<'link' | 'create' | 'skip'>((resolve) => {
-          setUserBrevoChoice(null);
-          setShowPreSaveBrevoModal(true);
-          
-          // Store resolve function to be called by modal buttons
-          (window as any).__brevoChoiceResolve = resolve;
-        });
-
-        if (userChoice === 'skip') {
-          // User chose to skip - proceed with save
-          setShowPreSaveBrevoModal(false);
-        } else if (userChoice === 'create') {
-          // User wants to create - create Brevo contact first, then save
-          setShowPreSaveBrevoModal(false);
-          
+        // Check if there are available Brevo contacts to link
+        await loadAvailableBrevoContacts();
+        
+        // If no available contacts, auto-create without asking
+        if (availableBrevoContacts.length === 0) {
+          // Auto-create Brevo contact
           if (editingCustomer) {
-            // For existing customer, create and link
-            const linkResponse = await fetch(`/api/admin/customers/${editingCustomer.id}/link-brevo`, {
+            // For existing customer, create Brevo contact using form data (not DB data)
+            // This ensures we use the latest form values, not stale DB values
+            const createResponse = await fetch('/api/admin/brevo/create-contact', {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: formData.email,
+                first_name: formData.first_name || null,
+                last_name: formData.last_name || null,
+                phone: formData.phone || null,
+                marketing_opt_in: formData.marketing_opt_in,
+              }),
             });
             
-            if (linkResponse.ok) {
-              const linkData = await linkResponse.json();
-              setFormData(prev => ({ ...prev, brevo_contact_id: String(linkData.brevoId) }));
-              setPendingBrevoId(String(linkData.brevoId));
-              setSelectedBrevoId(String(linkData.brevoId));
-              await loadAvailableBrevoContacts();
-              setToast('Brevo contact created! Saving customer...');
+            if (createResponse.ok) {
+              const createData = await createResponse.json();
+              // Now link it to the customer
+              const linkResponse = await fetch(`/api/admin/customers/${editingCustomer.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  brevo_contact_id: String(createData.brevoId),
+                }),
+              });
+              
+              if (linkResponse.ok) {
+                setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
+                setPendingBrevoId(String(createData.brevoId));
+                setSelectedBrevoId(String(createData.brevoId));
+                setToast('Brevo contact created and linked! Saving customer...');
+              } else {
+                // Contact created but linking failed - still proceed
+                setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
+                setPendingBrevoId(String(createData.brevoId));
+                setSelectedBrevoId(String(createData.brevoId));
+                setToast('Brevo contact created! Saving customer...');
+              }
             } else {
-              const errorData = await linkResponse.json();
+              const errorData = await createResponse.json();
               throw new Error(errorData.error || 'Failed to create Brevo contact');
             }
           } else {
@@ -604,12 +619,94 @@ export default function ClientsManager() {
               throw new Error(errorData.error || 'Failed to create Brevo contact');
             }
           }
-        } else if (userChoice === 'link') {
-          // User wants to link - they need to select from dropdown
-          // Don't proceed with save yet - let them select
-          setShowPreSaveBrevoModal(false);
-          setToast('Please select a Brevo contact to link, then save again.');
-          return; // Exit early - don't save yet
+        } else {
+          // Show pre-save confirmation modal (only link option, no skip)
+          const userChoice = await new Promise<'link' | 'create'>((resolve) => {
+            setUserBrevoChoice(null);
+            setShowPreSaveBrevoModal(true);
+            
+            // Store resolve function to be called by modal buttons
+            (window as any).__brevoChoiceResolve = resolve;
+          });
+
+          if (userChoice === 'create') {
+            // User wants to create - create Brevo contact first, then save
+            setShowPreSaveBrevoModal(false);
+            
+            if (editingCustomer) {
+              // For existing customer, create Brevo contact using form data (not DB data)
+              // This ensures we use the latest form values, not stale DB values
+              const createResponse = await fetch('/api/admin/brevo/create-contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: formData.email,
+                  first_name: formData.first_name || null,
+                  last_name: formData.last_name || null,
+                  phone: formData.phone || null,
+                  marketing_opt_in: formData.marketing_opt_in,
+                }),
+              });
+              
+              if (createResponse.ok) {
+                const createData = await createResponse.json();
+                // Now link it to the customer
+                const linkResponse = await fetch(`/api/admin/customers/${editingCustomer.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    brevo_contact_id: String(createData.brevoId),
+                  }),
+                });
+                
+                if (linkResponse.ok) {
+                  setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
+                  setPendingBrevoId(String(createData.brevoId));
+                  setSelectedBrevoId(String(createData.brevoId));
+                  setToast('Brevo contact created and linked! Saving customer...');
+                } else {
+                  // Contact created but linking failed - still proceed
+                  setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
+                  setPendingBrevoId(String(createData.brevoId));
+                  setSelectedBrevoId(String(createData.brevoId));
+                  setToast('Brevo contact created! Saving customer...');
+                }
+              } else {
+                const errorData = await createResponse.json();
+                throw new Error(errorData.error || 'Failed to create Brevo contact');
+              }
+            } else {
+              // For new customer, create Brevo contact first
+              const createResponse = await fetch('/api/admin/brevo/create-contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: formData.email,
+                  first_name: formData.first_name || null,
+                  last_name: formData.last_name || null,
+                  phone: formData.phone || null,
+                  marketing_opt_in: formData.marketing_opt_in,
+                }),
+              });
+              
+              if (createResponse.ok) {
+                const createData = await createResponse.json();
+                setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
+                setPendingBrevoId(String(createData.brevoId));
+                setSelectedBrevoId(String(createData.brevoId));
+                setToast('Brevo contact created! Saving customer...');
+              } else {
+                const errorData = await createResponse.json();
+                throw new Error(errorData.error || 'Failed to create Brevo contact');
+              }
+            }
+          } else if (userChoice === 'link') {
+            // User wants to link - they need to select from dropdown
+            // Don't proceed with save yet - let them select
+            setShowPreSaveBrevoModal(false);
+            setToast('Please select a Brevo contact to link, then save again.');
+            return; // Exit early - don't save yet
+          }
         }
       }
 
@@ -1488,17 +1585,6 @@ export default function ClientsManager() {
                 Create New Brevo Contact
               </button>
               
-              <button
-                onClick={() => {
-                  if ((window as any).__brevoChoiceResolve) {
-                    (window as any).__brevoChoiceResolve('skip');
-                    (window as any).__brevoChoiceResolve = null;
-                  }
-                }}
-                className="w-full px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/30 transition-colors"
-              >
-                Skip (Save Without Brevo ID)
-              </button>
             </div>
           </div>
         </div>
