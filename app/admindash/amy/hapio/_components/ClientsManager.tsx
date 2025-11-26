@@ -74,23 +74,24 @@ function normalizePhoneForStorage(phone: string | null | undefined): string {
   // Remove all non-digits
   const digits = phone.replace(/\D/g, '');
   
-  // If it starts with 1 and is 11 digits, keep it
+  // If it starts with 1 and is 11 digits, keep it (already normalized)
   if (digits.startsWith('1') && digits.length === 11) {
     return digits;
   }
   
-  // If it's 10 digits, add 1 prefix
+  // If it's 10 digits, add 1 prefix (normalize to 11 digits with country code)
   if (digits.length === 10) {
     return `1${digits}`;
   }
   
-  // If it's less than 10 digits, return as-is (partial input)
+  // If it's less than 10 digits, return as-is (partial input - don't add country code yet)
   // If it's more than 11 digits, truncate to 11 (keep first 11)
   if (digits.length > 11) {
     return digits.slice(0, 11);
   }
   
-  // Otherwise return digits as-is
+  // For 11 digits that don't start with 1, or other edge cases, return as-is
+  // This handles cases where user might have typed something unexpected
   return digits;
 }
 
@@ -270,11 +271,25 @@ export default function ClientsManager() {
     setFormattedPhone(value);
     
     // Normalize and store in formData
-    // If value is just digits (partial input), normalize it
-    // If value is formatted (has +1), extract digits first
+    // Extract digits from the value (handles both formatted and raw input)
     const digits = value.replace(/\D/g, '');
-    const normalized = normalizePhoneForStorage(digits);
-    setFormData(prev => ({ ...prev, phone: normalized }));
+    
+    // Defensive check: if digits are all the same character (like all 1's), something went wrong
+    // Reset to empty to prevent weird states
+    if (digits.length > 0 && digits.split('').every(d => d === digits[0]) && digits.length > 3) {
+      console.warn('Phone input detected suspicious pattern, resetting');
+      setFormattedPhone('');
+      setFormData(prev => ({ ...prev, phone: '' }));
+      return;
+    }
+    
+    // Only normalize if we have digits, otherwise store empty string
+    if (digits.length > 0) {
+      const normalized = normalizePhoneForStorage(digits);
+      setFormData(prev => ({ ...prev, phone: normalized }));
+    } else {
+      setFormData(prev => ({ ...prev, phone: '' }));
+    }
   };
 
   const handleCreateBrevoRecord = async () => {
@@ -796,58 +811,64 @@ export default function ClientsManager() {
                     value={formattedPhone}
                     onChange={(e) => {
                       const input = e.target.value;
+                      
                       // Extract only digits from input
                       const digits = input.replace(/\D/g, '');
                       
+                      // Defensive check: if we somehow got all 1's (more than 3), something went wrong
+                      // This can happen if there's a bug in the formatting logic
+                      if (digits.length > 3 && digits.split('').every(d => d === '1')) {
+                        console.warn('Detected suspicious phone input (all 1s), resetting');
+                        handlePhoneChange('');
+                        return;
+                      }
+                      
                       // Limit to 11 digits (1 + 10 digit US phone number)
-                      if (digits.length <= 11) {
-                        // Only format if we have at least 3 digits (enough to show area code)
-                        // This prevents the "+1" from appearing too early and interfering with typing
-                        if (digits.length >= 3) {
-                          // Remove leading 1 if present (we'll add it back in formatting)
-                          const cleaned = digits.startsWith('1') && digits.length === 11 ? digits.slice(1) : digits;
-                          
-                          let formatted = '';
-                          if (cleaned.length >= 3) {
-                            formatted = '+1 (';
-                            formatted += cleaned.slice(0, 3);
-                            if (cleaned.length > 3) {
-                              formatted += ')';
-                              formatted += cleaned.slice(3, 6);
-                              if (cleaned.length > 6) {
-                                formatted += '-';
-                                formatted += cleaned.slice(6, 10);
-                              }
-                            }
-                          }
-                          handlePhoneChange(formatted);
-                        } else if (digits.length > 0) {
-                          // For 1-2 digits, just show the digits without formatting
-                          // This allows free typing without the "+1" prefix interfering
-                          handlePhoneChange(digits);
-                        } else {
-                          // Empty input
-                          handlePhoneChange('');
-                        }
-                      } else {
-                        // If more than 11 digits, truncate to 11 and format
+                      if (digits.length > 11) {
+                        // Truncate to 11 digits
                         const truncated = digits.slice(0, 11);
-                        const cleaned = truncated.startsWith('1') ? truncated.slice(1) : truncated;
-                        if (cleaned.length >= 3) {
+                        // Remove leading 1 if present (user might have typed it)
+                        const cleaned = truncated.startsWith('1') && truncated.length === 11 ? truncated.slice(1) : truncated;
+                        
+                        // Only format if we have exactly 10 digits (complete number)
+                        if (cleaned.length === 10) {
                           let formatted = '+1 (';
                           formatted += cleaned.slice(0, 3);
-                          if (cleaned.length > 3) {
-                            formatted += ')';
-                            formatted += cleaned.slice(3, 6);
-                            if (cleaned.length > 6) {
-                              formatted += '-';
-                              formatted += cleaned.slice(6, 10);
-                            }
-                          }
+                          formatted += ')';
+                          formatted += cleaned.slice(3, 6);
+                          formatted += '-';
+                          formatted += cleaned.slice(6, 10);
                           handlePhoneChange(formatted);
                         } else {
+                          // Less than 10 digits, show raw
                           handlePhoneChange(cleaned);
                         }
+                      } else if (digits.length === 10) {
+                        // Exactly 10 digits - format with +1 prefix
+                        let formatted = '+1 (';
+                        formatted += digits.slice(0, 3);
+                        formatted += ')';
+                        formatted += digits.slice(3, 6);
+                        formatted += '-';
+                        formatted += digits.slice(6, 10);
+                        handlePhoneChange(formatted);
+                      } else if (digits.length === 11 && digits.startsWith('1')) {
+                        // 11 digits starting with 1 - remove the leading 1 and format
+                        const cleaned = digits.slice(1);
+                        let formatted = '+1 (';
+                        formatted += cleaned.slice(0, 3);
+                        formatted += ')';
+                        formatted += cleaned.slice(3, 6);
+                        formatted += '-';
+                        formatted += cleaned.slice(6, 10);
+                        handlePhoneChange(formatted);
+                      } else if (digits.length > 0) {
+                        // For 1-9 digits, just show the digits without formatting
+                        // This allows free typing without the "+1" prefix interfering
+                        handlePhoneChange(digits);
+                      } else {
+                        // Empty input
+                        handlePhoneChange('');
                       }
                     }}
                     placeholder="+1 (555) 123-4567"
