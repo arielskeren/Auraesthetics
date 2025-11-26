@@ -75,6 +75,7 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
     
     if (existingResp.ok) {
       const existing = await existingResp.json();
+      const contactId = existing.id; // Get the contact ID
       const mergedAttributes = { ...(existing.attributes || {}), ...attributes };
       const updateBody: any = { attributes: mergedAttributes };
       
@@ -97,7 +98,7 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
       
       logBrevoResponse(update.status);
       
-      if (update.ok) return { success: true };
+      if (update.ok) return { id: contactId, success: true };
     }
   }
   

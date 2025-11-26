@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, getClientIp } from '@/app/_utils/rateLimit';
+import { getSqlClient } from '@/app/_utils/db';
+import { upsertBrevoContact, syncCustomerToBrevo } from '@/lib/brevoClient';
 
 // Rate limiter: 5 requests per minute per IP (prevent Brevo spam)
 const limiter = rateLimit({ windowMs: 60 * 1000, maxRequests: 5 });
+
+function normalizeRows(result: any): any[] {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).rows)) {
+    return (result as any).rows;
+  }
+  return [];
+}
 
 export async function POST(request: NextRequest) {
   // Check rate limit
@@ -65,7 +77,6 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.BREVO_API_KEY;
     const listId = process.env.BREVO_LIST_ID;
 
-
     if (!apiKey || !listId) {
       console.error('[Subscribe] Missing Brevo credentials:', {
         email: body?.email,
@@ -78,136 +89,189 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prepare contact data for Brevo
-    const contactData: any = {
-      email,
-      listIds: [Number(listId)], // Convert to number as Brevo expects
-      updateEnabled: true, // Update existing contact if email matches
-      emailBlacklisted: false,
-      smsBlacklisted: false,
-    };
-
-    // Set attributes (case-sensitive!)
-    const attributes: any = {
-      FIRSTNAME: firstName.trim(),
-      LASTNAME: lastName.trim(),
-    };
-
-    // Format and add phone to both SMS and LANDLINE_NUMBER
+    // STEP 1: Create or update customer in Neon first (source of truth)
+    const sql = getSqlClient();
+    const emailLower = email.toLowerCase().trim();
     const formattedPhone = phone.trim().replace(/\D/g, '');
-    if (formattedPhone && formattedPhone.length >= 10) {
-      // Only add phone if it's at least 10 digits (valid format)
-      const phoneNumber = formattedPhone.length === 10 
-        ? `+1${formattedPhone}` 
-        : formattedPhone.startsWith('+') 
-          ? formattedPhone 
-          : `+${formattedPhone}`;
-      
-      // Add to both SMS and LANDLINE_NUMBER attributes
-      attributes.SMS = phoneNumber;
-      attributes.LANDLINE_NUMBER = phoneNumber;
-    }
-    // Note: We're not adding phone if it's invalid to avoid Brevo errors
+    const phoneNumber = formattedPhone.length === 10 
+      ? `+1${formattedPhone}` 
+      : formattedPhone.startsWith('+') 
+        ? formattedPhone 
+        : `+${formattedPhone}`;
 
-    // Add optional BIRTHDAY field (format: YYYY-MM-DD)
-    if (birthday && birthday.trim()) {
-      // Brevo expects BIRTHDAY in YYYY-MM-DD format
-      attributes.BIRTHDAY = birthday.trim();
-    }
+    let customerId: string | null = null;
+    let existingBrevoId: string | null = null;
 
-    // Add optional PHYSICAL_ADDRESS field
-    if (address && address.trim()) {
-      attributes.PHYSICAL_ADDRESS = address.trim();
-    }
-
-    // Check if contact already exists and preserve SIGNUP_SOURCE
-    let existingSIGNUP_SOURCE = null;
-    
     try {
-      const existingContact = await fetch(`https://api.brevo.com/v3/contacts/${email}`, {
-        headers: {
-          'api-key': apiKey,
-          'Accept': 'application/json',
-        },
-      });
-      
-      if (existingContact.ok) {
-        const existingData = await existingContact.json();
-        
-        if (existingData.attributes?.SIGNUP_SOURCE) {
-          existingSIGNUP_SOURCE = existingData.attributes.SIGNUP_SOURCE;
-        }
-      }
-    } catch (error) {
-      // Contact may be new, continue
-    }
+      // Check if customer already exists
+      const existingCheck = await sql`
+        SELECT id, brevo_contact_id 
+        FROM customers 
+        WHERE LOWER(email) = ${emailLower}
+        LIMIT 1
+      `;
+      const existing = normalizeRows(existingCheck);
 
-    // Add SIGNUP_SOURCE only if it doesn't already exist
-    if (signupSource && signupSource.trim()) {
-      if (existingSIGNUP_SOURCE) {
-        attributes.SIGNUP_SOURCE = existingSIGNUP_SOURCE;
+      if (existing.length > 0) {
+        // Update existing customer
+        customerId = existing[0].id;
+        existingBrevoId = existing[0].brevo_contact_id;
+        
+        await sql`
+          UPDATE customers
+          SET 
+            first_name = ${firstName.trim()},
+            last_name = ${lastName.trim()},
+            phone = ${phoneNumber},
+            marketing_opt_in = true,
+            updated_at = NOW()
+          WHERE id = ${customerId}
+        `;
+        console.log(`[Subscribe] Updated existing customer in Neon: ${emailLower} (ID: ${customerId})`);
       } else {
-        attributes.SIGNUP_SOURCE = signupSource.trim();
-      }
-    }
-
-    contactData.attributes = attributes;
-
-    // Send to Brevo API
-    const response = await fetch('https://api.brevo.com/v3/contacts', {
-      method: 'POST',
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(contactData),
-    });
-
-    const responseText = await response.text();
-    const responseData = responseText ? JSON.parse(responseText) : {};
-
-    // Handle response
-    if (!response.ok) {
-      const errorData = responseData;
-      
-      // Handle various Brevo errors
-      if (response.status === 400) {
-        // Duplicate contact (same email)
-        if (errorData.code === 'duplicate_parameter') {
-          return NextResponse.json(
-            { message: 'Already subscribed - contact updated' },
-            { status: 200 }
-          );
-        }
-        
-        // Invalid parameter
-        if (errorData.message && errorData.message.includes('already exist')) {
-          return NextResponse.json(
-            { message: 'You are already subscribed!' },
-            { status: 200 }
-          );
+        // Create new customer
+        const insertResult = await sql`
+          INSERT INTO customers (
+            email,
+            first_name,
+            last_name,
+            phone,
+            marketing_opt_in,
+            created_at,
+            updated_at
+          ) VALUES (
+            ${emailLower},
+            ${firstName.trim()},
+            ${lastName.trim()},
+            ${phoneNumber},
+            true,
+            NOW(),
+            NOW()
+          )
+          RETURNING id
+        `;
+        const inserted = normalizeRows(insertResult);
+        if (inserted.length > 0) {
+          customerId = inserted[0].id;
+          console.log(`[Subscribe] Created new customer in Neon: ${emailLower} (ID: ${customerId})`);
+        } else {
+          throw new Error('Failed to create customer in Neon - no ID returned');
         }
       }
-
-      console.error('[Subscribe] Brevo API error:', {
-        email: body?.email,
-        status: response.status,
-        errorCode: errorData?.code,
-        errorMessage: errorData?.message,
-        errorData,
-      });
-
+    } catch (dbError: any) {
+      console.error('[Subscribe] Error creating/updating customer in Neon:', dbError);
       return NextResponse.json(
-        { error: errorData.message || 'Failed to subscribe', details: errorData },
-        { status: response.status }
+        { error: 'Failed to save customer information', details: dbError.message },
+        { status: 500 }
       );
     }
 
-    return NextResponse.json(
-      { message: 'Successfully subscribed', data: responseData },
-      { status: 200 }
-    );
+    if (!customerId) {
+      return NextResponse.json(
+        { error: 'Failed to create customer record' },
+        { status: 500 }
+      );
+    }
+
+    // STEP 2: Create/update contact in Brevo first (to get Brevo ID)
+    let brevoContactId: number | undefined = undefined;
+    
+    try {
+      // Use upsertBrevoContact to create/update in Brevo (doesn't require brevo_contact_id)
+      const brevoResult = await upsertBrevoContact({
+        email: emailLower,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phoneNumber,
+        listId: Number(listId),
+        tags: ['subscriber', signupSource || 'footer'].filter(Boolean),
+      });
+
+      if (brevoResult.success && brevoResult.id) {
+        brevoContactId = brevoResult.id;
+        console.log(`[Subscribe] Created/updated Brevo contact for ${emailLower} with ID ${brevoContactId}`);
+      } else {
+        // Try to fetch by email to get the ID
+        try {
+          const fetchResponse = await fetch(`https://api.brevo.com/v3/contacts/${emailLower}?identifierType=email_id`, {
+            headers: {
+              'api-key': apiKey,
+              'Accept': 'application/json',
+            },
+          });
+          
+          if (fetchResponse.ok) {
+            const contactData = await fetchResponse.json();
+            brevoContactId = contactData.id;
+            console.log(`[Subscribe] Fetched existing Brevo contact ID ${brevoContactId} for ${emailLower}`);
+          }
+        } catch (fetchError) {
+          console.warn('[Subscribe] Could not fetch Brevo contact ID:', fetchError);
+        }
+      }
+    } catch (brevoError: any) {
+      console.error('[Subscribe] Error creating/updating Brevo contact:', brevoError);
+      // Continue - we'll try to sync later
+    }
+
+    // STEP 3: Update Neon customer with Brevo ID (if we got one)
+    if (brevoContactId) {
+      try {
+        await sql`
+          UPDATE customers
+          SET brevo_contact_id = ${String(brevoContactId)}, updated_at = NOW()
+          WHERE id = ${customerId}
+        `;
+        console.log(`[Subscribe] Updated customer ${customerId} with Brevo ID ${brevoContactId}`);
+      } catch (updateError: any) {
+        console.error('[Subscribe] Error updating customer with Brevo ID:', updateError);
+        // Non-critical - continue
+      }
+    }
+
+    // STEP 4: Sync all customer data to Brevo (ensures all attributes are synced, including used_welcome_offer, etc.)
+    if (brevoContactId) {
+      try {
+        const syncResult = await syncCustomerToBrevo({
+          customerId,
+          sql,
+          listId: Number(listId),
+          tags: ['subscriber', signupSource || 'footer'].filter(Boolean),
+        });
+
+        if (syncResult.success) {
+          console.log(`[Subscribe] Successfully synced all customer data to Brevo for ${customerId}`);
+        } else {
+          console.warn(`[Subscribe] Customer ${customerId} synced to Brevo but some attributes may not have updated`);
+        }
+      } catch (syncError: any) {
+        console.warn('[Subscribe] Error in final sync step (non-critical):', syncError);
+        // Non-critical - customer is already in Brevo
+      }
+    }
+
+    // Return success
+    if (brevoContactId) {
+      return NextResponse.json(
+        { 
+          message: 'Successfully subscribed',
+          customerId,
+          brevoId: brevoContactId,
+        },
+        { status: 200 }
+      );
+    } else {
+      // Customer is in Neon but Brevo sync failed
+      console.error(`[Subscribe] Customer ${customerId} created in Neon but Brevo sync failed`);
+      return NextResponse.json(
+        { 
+          error: 'Customer created but failed to sync to mailing list',
+          customerId,
+          details: 'Please contact support',
+        },
+        { status: 500 }
+      );
+    }
 
   } catch (error: any) {
     console.error('[Subscribe] Error:', {
