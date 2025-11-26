@@ -125,8 +125,10 @@ export default function DiscountCodesManager() {
     } catch (err: any) {
       console.error('[DiscountCodesManager] Error loading codes:', err);
       setError(err);
-      // Still set codes to empty array so UI doesn't break
-      setCodes([]);
+      // Still set codes to empty arrays so UI doesn't break
+      setActiveCodes([]);
+      setUsedCodes([]);
+      setInactiveCodes([]);
       setUsageDetails({});
     } finally {
       setLoading(false);
@@ -530,7 +532,9 @@ export default function DiscountCodesManager() {
           <button
             onClick={async () => {
               // Hard refresh: clear everything first
-              setCodes([]);
+              setActiveCodes([]);
+              setUsedCodes([]);
+              setInactiveCodes([]);
               setUsageDetails({});
               setError(null);
               await loadCodes();
