@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import { stripe } from '@/lib/stripeClient';
-import Stripe from 'stripe';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -38,7 +36,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch all global discount codes
+    // Fetch all global discount codes with usage_count from database
     const codesResult = await sql`
       SELECT 
         id,
@@ -46,11 +44,10 @@ export async function GET(request: NextRequest) {
         COALESCE(discount_type, 'percent') as discount_type,
         discount_value,
         discount_cap,
-        stripe_coupon_id,
-        stripe_promotion_code_id,
         is_active,
         max_uses,
         expires_at,
+        usage_count,
         created_at,
         updated_at
       FROM discount_codes
@@ -59,48 +56,11 @@ export async function GET(request: NextRequest) {
     `;
     const codes = normalizeRows(codesResult);
 
-    // For each code, get usage count from Stripe
-    const codesWithUsage = await Promise.all(
-      codes.map(async (code) => {
-        let usageCount = 0;
-        let timesRedeemed = 0;
-
-        if (code.stripe_coupon_id) {
-          try {
-            const coupon = await stripe.coupons.retrieve(code.stripe_coupon_id);
-            timesRedeemed = coupon.times_redeemed || 0;
-            
-            // Also check promotion codes if they exist
-            if (coupon.id) {
-              const promotionCodes = await stripe.promotionCodes.list({
-                coupon: coupon.id,
-                limit: 100,
-              });
-              
-              // Sum up times_redeemed from all promotion codes
-              usageCount = promotionCodes.data.reduce((sum, pc) => {
-                return sum + (pc.times_redeemed || 0);
-              }, 0);
-              
-              // If no promotion codes, use coupon times_redeemed
-              if (usageCount === 0) {
-                usageCount = timesRedeemed;
-              }
-            } else {
-              usageCount = timesRedeemed;
-            }
-          } catch (e) {
-            console.error(`[Global Discount Codes] Error fetching Stripe usage for ${code.code}:`, e);
-          }
-        }
-
-        return {
-          ...code,
-          usage_count: usageCount,
-          times_redeemed: timesRedeemed,
-        };
-      })
-    );
+    // Use usage_count from database (no Stripe dependency)
+    const codesWithUsage = codes.map((code) => ({
+      ...code,
+      times_redeemed: code.usage_count || 0,
+    }));
 
     return NextResponse.json({ codes: codesWithUsage });
   } catch (error: any) {
@@ -178,126 +138,7 @@ export async function POST(request: NextRequest) {
       expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    // Create Stripe coupon
-    // Note: For one-time payments (not subscriptions), duration must be 'once'
-    // The max_redemptions limit is set on the promotion code, not the coupon
-    const couponName = `Global: ${codeUpper}`;
-    let coupon;
-    if (discountType === 'percent') {
-      const couponParams: any = {
-        name: couponName,
-        duration: 'once', // Required for one-time payments (not subscriptions)
-        percent_off: Math.round(discountValue),
-        metadata: {
-          global_code: codeUpper,
-          discount_type: discountType,
-        },
-      };
-      if (discountCap) {
-        couponParams.metadata.discount_cap = String(discountCap);
-      }
-      // Note: max_redemptions is set on the promotion code, not the coupon
-      coupon = await stripe.coupons.create(couponParams);
-    } else {
-      coupon = await stripe.coupons.create({
-        name: couponName,
-        duration: 'once', // Required for one-time payments (not subscriptions)
-        amount_off: Math.round(discountValue * 100),
-        currency: 'usd',
-        metadata: {
-          global_code: codeUpper,
-          discount_type: discountType,
-        },
-      });
-    }
-
-    // Create promotion code for the coupon
-    // Set max_redemptions on the promotion code to limit total uses across all customers
-    // CRITICAL: Ensure coupon.id is a string and properly formatted
-    const couponId = String(coupon.id).trim();
-    if (!couponId || couponId.length === 0) {
-      // Clean up coupon if ID is invalid
-      try {
-        await stripe.coupons.del(coupon.id);
-      } catch (delError) {
-        console.error('[Create Global Discount Code] Failed to clean up coupon with invalid ID:', delError);
-      }
-      return NextResponse.json(
-        { error: 'Invalid coupon ID from Stripe' },
-        { status: 500 }
-      );
-    }
-
-    // Build promotion code parameters explicitly
-    // Note: Stripe API accepts 'coupon' parameter but TypeScript types expect 'promotion'
-    // Using 'any' to bypass type checking since we know the API accepts this structure
-    const promotionCodeParams: any = {
-      coupon: couponId, // Explicitly use string
-      code: codeUpper,
-      active: isActive,
-    };
-    if (maxUses && maxUses > 0) {
-      promotionCodeParams.max_redemptions = maxUses;
-    }
-    if (expiresAt) {
-      // Convert ISO timestamp to Unix timestamp (seconds since epoch)
-      promotionCodeParams.expires_at = Math.floor(new Date(expiresAt).getTime() / 1000);
-    }
-    
-    let promotionCode: Stripe.PromotionCode;
-    try {
-      console.log('[Create Global Discount Code] Creating promotion code with params:', {
-        coupon: couponId,
-        code: codeUpper,
-        active: isActive,
-        max_redemptions: maxUses || undefined,
-      });
-      promotionCode = await stripe.promotionCodes.create(promotionCodeParams);
-      console.log('[Create Global Discount Code] Promotion code created successfully:', promotionCode.id);
-    } catch (promoError: any) {
-      console.error('[Create Global Discount Code] Promotion code creation failed:', {
-        error: promoError.message,
-        code: promoError.code,
-        param: promoError.param,
-        type: promoError.type,
-        couponId: couponId,
-      });
-      
-      // If promotion code creation fails, delete the coupon we just created to avoid orphaned resources
-      try {
-        await stripe.coupons.del(couponId);
-        console.log('[Create Global Discount Code] Cleaned up orphaned coupon:', couponId);
-      } catch (delError) {
-        console.error('[Create Global Discount Code] Failed to clean up coupon after promotion code error:', delError);
-      }
-      
-      // Return detailed error
-      return NextResponse.json(
-        { 
-          error: 'Failed to create promotion code', 
-          details: promoError.message || 'Unknown error',
-          stripeError: promoError.code || promoError.type,
-        },
-        { status: 500 }
-      );
-    }
-
-    // Verify promotion code was created successfully
-    if (!promotionCode || !promotionCode.id) {
-      // Clean up both coupon and promotion code if they exist
-      try {
-        await stripe.promotionCodes.update(promotionCode.id, { active: false });
-        await stripe.coupons.del(couponId);
-      } catch (cleanupError) {
-        console.error('[Create Global Discount Code] Failed to clean up after invalid promotion code:', cleanupError);
-      }
-      return NextResponse.json(
-        { error: 'Promotion code creation returned invalid result' },
-        { status: 500 }
-      );
-    }
-
-    // Insert into database - wrap in try-catch to handle DB failures
+    // Insert into database (no Stripe dependency - all logic handled in application)
     try {
       await sql`
         INSERT INTO discount_codes (
@@ -306,8 +147,6 @@ export async function POST(request: NextRequest) {
           discount_type,
           discount_value,
           discount_cap,
-          stripe_coupon_id,
-          stripe_promotion_code_id,
           is_active,
           max_uses,
           expires_at,
@@ -319,8 +158,6 @@ export async function POST(request: NextRequest) {
           ${discountType},
           ${discountValue},
           ${discountCap || null},
-          ${couponId},
-          ${promotionCode.id},
           ${isActive},
           ${maxUses || null},
           ${expiresAt},

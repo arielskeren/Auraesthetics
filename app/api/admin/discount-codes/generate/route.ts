@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import { stripe } from '@/lib/stripeClient';
 import { sendBrevoEmail } from '@/lib/brevoClient';
-import Stripe from 'stripe';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -142,80 +140,17 @@ export async function POST(request: NextRequest) {
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
       : null;
 
-    // Create Stripe coupon FIRST (before DB insert to avoid orphaned DB records)
-    // If Stripe fails, we don't create DB record
-    let stripeCouponId: string | null = null;
-    try {
-      const couponName = `One-time: ${code}`;
-      
-      let coupon: Stripe.Coupon;
-      if (discountType === 'percent') {
-        // For percentage discounts with a cap, we need to use max_redemptions or handle it differently
-        // Stripe doesn't natively support percentage caps, so we'll store it in metadata
-        // The cap will be enforced in the validation logic
-        const couponParams: Stripe.CouponCreateParams = {
-          name: couponName,
-          duration: 'once',
-          percent_off: Math.round(discountValue),
-          metadata: {
-            one_time_code: code,
-            customer_id: finalCustomerId || '',
-            discount_type: discountType,
-          },
-        };
-        
-        // Add discount cap to metadata if provided
-        if (discountCap !== undefined && discountCap !== null) {
-          couponParams.metadata = {
-            ...couponParams.metadata,
-            discount_cap: String(discountCap),
-          };
-        }
-        
-        coupon = await stripe.coupons.create(couponParams);
-      } else {
-        coupon = await stripe.coupons.create({
-          name: couponName,
-          duration: 'once',
-          amount_off: Math.round(discountValue * 100), // Stripe uses cents
-          currency: 'usd',
-          metadata: {
-            one_time_code: code,
-            customer_id: finalCustomerId || '',
-            discount_type: discountType,
-          },
-        });
-      }
-      
-      stripeCouponId = String(coupon.id).trim();
-      if (!stripeCouponId || stripeCouponId.length === 0) {
-        throw new Error('Invalid coupon ID returned from Stripe');
-      }
-      console.log('[Generate Discount Code] Stripe coupon created successfully:', stripeCouponId);
-    } catch (stripeError: any) {
-      console.error('[Generate Discount Code] Stripe coupon creation failed:', {
-        error: stripeError.message,
-        code: stripeError.code,
-        type: stripeError.type,
-      });
-      return NextResponse.json(
-        { error: 'Failed to create Stripe coupon', details: stripeError.message },
-        { status: 500 }
-      );
-    }
-
-    // Insert into database (only after Stripe succeeds to avoid orphaned records)
-    // Wrap in try-catch to handle DB failures and clean up Stripe resources
+    // Insert into database (no Stripe dependency - all logic handled in application)
     let inserted: any;
     try {
       const insertResult = await sql`
         INSERT INTO discount_codes (
           code, code_type, customer_id, discount_type, discount_value, discount_cap,
-          expires_at, stripe_coupon_id, used, created_by
+          expires_at, used, created_by
         )
         VALUES (
           ${code}, 'one_time', ${finalCustomerId}, ${discountType}, ${discountValue}, 
-          ${discountCap || null}, ${expiresAt}, ${stripeCouponId}, false, 'admin'
+          ${discountCap || null}, ${expiresAt}, false, 'admin'
         )
         RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
       `;
@@ -229,18 +164,7 @@ export async function POST(request: NextRequest) {
       console.error('[Generate Discount Code] Database insert failed:', {
         error: dbError.message,
         code: code,
-        stripeCouponId: stripeCouponId,
       });
-      
-      // If DB insert fails, clean up Stripe coupon to avoid orphaned resources
-      if (stripeCouponId) {
-        try {
-          await stripe.coupons.del(stripeCouponId);
-          console.log('[Generate Discount Code] Cleaned up orphaned Stripe coupon:', stripeCouponId);
-        } catch (cleanupError) {
-          console.error('[Generate Discount Code] Failed to clean up Stripe coupon after DB failure:', cleanupError);
-        }
-      }
       
       return NextResponse.json(
         { 

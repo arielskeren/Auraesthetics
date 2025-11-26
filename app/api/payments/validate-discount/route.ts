@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { getSqlClient } from '@/app/_utils/db';
 import { rateLimit, getClientIp } from '@/app/_utils/rateLimit';
 
@@ -12,14 +11,6 @@ function normalizeRows(result: any): any[] {
   }
   return [];
 }
-
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-if (!STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
-}
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-10-29.clover',
-});
 
 // Rate limiter: 20 requests per minute per IP
 const limiter = rateLimit({ windowMs: 60 * 1000, maxRequests: 20 });
@@ -203,7 +194,6 @@ export async function POST(request: NextRequest) {
     const sql = getSqlClient();
     
     let discountCode: any = null;
-    let stripeCouponId: string | null = null;
     let isOneTime = false;
 
     // First check one-time discount codes
@@ -221,7 +211,6 @@ export async function POST(request: NextRequest) {
       if (oneTimeRows.length > 0) {
         // One-time code found
         discountCode = oneTimeRows[0];
-        stripeCouponId = discountCode.stripe_coupon_id;
         isOneTime = true;
         
         // CRITICAL: If code is customer-specific, require email for validation
@@ -276,7 +265,6 @@ export async function POST(request: NextRequest) {
       }
 
       discountCode = discountRows[0];
-      stripeCouponId = discountCode.stripe_coupon_id;
       
       // Check max_uses limit (if set)
       if (discountCode.max_uses !== null && discountCode.max_uses !== undefined) {
@@ -290,102 +278,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validate coupon with Stripe
-    try {
-      if (!stripeCouponId) {
-        return NextResponse.json(
-          { error: 'Invalid discount code - no Stripe coupon ID', valid: false },
-          { status: 400 }
-        );
-      }
-      const coupon = await stripe.coupons.retrieve(stripeCouponId);
+    // Calculate discount amount from database fields (no Stripe dependency)
+    if (!discountCode) {
+      return NextResponse.json(
+        { error: 'Invalid discount code', valid: false },
+        { status: 400 }
+      );
+    }
 
-      // Check if coupon is valid
-      if (!coupon.valid) {
-        return NextResponse.json(
-          { error: 'Discount code is no longer valid', valid: false },
-          { status: 400 }
-        );
-      }
+    // Calculate discount amount
+    let discountAmount = 0;
+    let finalAmount = amount;
 
-      // Check redeem_by if set (Stripe coupon expiration)
-      if (coupon.redeem_by && typeof coupon.redeem_by === 'number') {
-        const now = Math.floor(Date.now() / 1000); // Current time in Unix seconds
-        if (now > coupon.redeem_by) {
-          return NextResponse.json(
-            { error: 'This discount code has expired', valid: false },
-            { status: 400 }
-          );
-        }
-      }
-
-      // Calculate discount amount
-      let discountAmount = 0;
-      let finalAmount = amount;
-
-      if (coupon.percent_off) {
-        // Percentage discount
-        const discount = (amount * coupon.percent_off) / 100;
-        discountAmount = discount;
-        
-        // Apply max discount if specified
-        // Check discount_cap from database (for one-time codes) or coupon metadata
-        let maxDiscount = 0;
-        if (isOneTime && discountCode?.discount_cap) {
-          // Use discount_cap from database for one-time codes
-          maxDiscount = Number(discountCode.discount_cap);
-        } else if (coupon.metadata?.discount_cap) {
-          // Check coupon metadata for discount_cap
-          maxDiscount = parseFloat(coupon.metadata.discount_cap);
-        } else if (coupon.metadata?.max_discount) {
-          // Fallback to max_discount in metadata
-          maxDiscount = parseFloat(coupon.metadata.max_discount);
-        } else if (coupon.id === 'L0DshEg5' || code.toUpperCase() === 'WELCOME15') {
-          // WELCOME15 has a $30 cap (hardcoded for legacy support)
-          maxDiscount = 30;
-        }
-        
+    if (discountCode.discount_type === 'percent') {
+      // Percentage discount
+      const discount = (amount * Number(discountCode.discount_value)) / 100;
+      discountAmount = discount;
+      
+      // Apply max discount cap if specified
+      if (discountCode.discount_cap) {
+        const maxDiscount = Number(discountCode.discount_cap);
         if (maxDiscount > 0 && discountAmount > maxDiscount) {
           discountAmount = maxDiscount;
         }
-        finalAmount = amount - discountAmount;
-      } else if (coupon.amount_off) {
-        // Fixed amount discount
-        discountAmount = coupon.amount_off / 100; // Stripe stores in cents
-        finalAmount = Math.max(0, amount - discountAmount);
       }
+      finalAmount = amount - discountAmount;
+    } else if (discountCode.discount_type === 'dollar') {
+      // Fixed amount discount
+      discountAmount = Number(discountCode.discount_value);
+      finalAmount = Math.max(0, amount - discountAmount);
+    } else {
+      return NextResponse.json(
+        { error: 'Invalid discount type', valid: false },
+        { status: 400 }
+      );
+    }
 
       // NOTE: We do NOT mark one-time codes as used here
       // Codes should only be marked as used AFTER successful payment
       // This validation is just checking if the code is valid
       // The code will be marked as used in finalizeCore when payment succeeds
       
-      // Return validation result (code is valid, but not yet used)
-      return NextResponse.json({
-        valid: true,
-        code: code.toUpperCase(),
-        discountAmount: Math.round(discountAmount * 100) / 100,
-        originalAmount: amount,
-        finalAmount: Math.round(finalAmount * 100) / 100,
-        isOneTime,
-        coupon: {
-          id: coupon.id,
-          name: coupon.name,
-          percent_off: coupon.percent_off,
-          amount_off: coupon.amount_off ? coupon.amount_off / 100 : null,
-        },
-      });
-    } catch (stripeError: any) {
-      console.error('[Discount Validation] Stripe coupon validation error:', {
-        code: codeUpper,
-        stripeError: stripeError?.message,
-        stack: stripeError?.stack,
-      });
-      return NextResponse.json(
-        { error: 'Error validating discount code', valid: false },
-        { status: 500 }
-      );
-    }
+    // Return validation result (code is valid, but not yet used)
+    return NextResponse.json({
+      valid: true,
+      code: code.toUpperCase(),
+      discountAmount: Math.round(discountAmount * 100) / 100,
+      originalAmount: amount,
+      finalAmount: Math.round(finalAmount * 100) / 100,
+      isOneTime,
+      discountType: discountCode.discount_type,
+      discountValue: discountCode.discount_value,
+      discountCap: discountCode.discount_cap || null,
+    });
   } catch (error: any) {
     console.error('[Discount Validation] Error:', {
       code: body?.code,

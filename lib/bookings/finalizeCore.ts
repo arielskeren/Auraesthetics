@@ -325,7 +325,7 @@ export async function finalizeBookingTransactional(args: {
         
         // Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
         const globalCodeResult = await sql`
-          SELECT id, max_uses, usage_count, is_active, stripe_promotion_code_id
+          SELECT id, max_uses, usage_count, is_active
           FROM discount_codes 
           WHERE code = ${codeUpper}
             AND code_type = 'global'
@@ -375,26 +375,6 @@ export async function finalizeBookingTransactional(args: {
               is_active: updatedRows[0].is_active,
             });
             
-            // Optionally cross-check with Stripe promotion code
-            if (codeRecord.stripe_promotion_code_id) {
-              try {
-                const promotionCode = await stripe.promotionCodes.retrieve(codeRecord.stripe_promotion_code_id);
-                const stripeUsage = promotionCode.times_redeemed || 0;
-                
-                if (stripeUsage !== newUsage) {
-                  console.warn('[finalizeCore] Usage count mismatch between Neon and Stripe:', {
-                    code: codeUpper,
-                    neonUsage: newUsage,
-                    stripeUsage: stripeUsage,
-                  });
-                  // Note: We keep Neon as source of truth for business logic
-                  // Stripe is used for reporting/analytics only
-                }
-              } catch (stripeError) {
-                // Non-critical - log but continue
-                console.warn('[finalizeCore] Failed to cross-check with Stripe promotion code:', stripeError);
-              }
-            }
           } else {
             console.warn('[finalizeCore] Failed to update global code usage - row may have been updated by another transaction');
           }
