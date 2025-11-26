@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Tag, X, Edit, Trash2, Users, Eye } from 'lucide-react';
+import { Plus, RefreshCw, Tag, X, Edit, Trash2, Users, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface GlobalDiscountCode {
   id: string;
@@ -29,7 +29,9 @@ interface UsageCustomer {
 }
 
 export default function GlobalCodesManager() {
-  const [codes, setCodes] = useState<GlobalDiscountCode[]>([]);
+  const [activeCodes, setActiveCodes] = useState<GlobalDiscountCode[]>([]);
+  const [usedCodes, setUsedCodes] = useState<GlobalDiscountCode[]>([]);
+  const [inactiveCodes, setInactiveCodes] = useState<GlobalDiscountCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -39,6 +41,9 @@ export default function GlobalCodesManager() {
   const [selectedCode, setSelectedCode] = useState<GlobalDiscountCode | null>(null);
   const [usageCustomers, setUsageCustomers] = useState<UsageCustomer[]>([]);
   const [loadingUsage, setLoadingUsage] = useState(false);
+  const [activeSectionOpen, setActiveSectionOpen] = useState(true);
+  const [usedSectionOpen, setUsedSectionOpen] = useState(true);
+  const [inactiveSectionOpen, setInactiveSectionOpen] = useState(false);
   
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -47,7 +52,7 @@ export default function GlobalCodesManager() {
     discountValue: '',
     discountCap: '',
     maxUses: '',
-    expiresInDays: '',
+    expiresOn: '', // Date string in YYYY-MM-DD format
     isActive: true,
   });
 
@@ -57,7 +62,7 @@ export default function GlobalCodesManager() {
     discountValue: '',
     discountCap: '',
     maxUses: '',
-    expiresInDays: '',
+    expiresOn: '', // Date string in YYYY-MM-DD format
     isActive: true,
   });
 
@@ -72,7 +77,9 @@ export default function GlobalCodesManager() {
       setError(null);
       
       // Clear state aggressively before loading to prevent stale data
-      setCodes([]);
+      setActiveCodes([]);
+      setUsedCodes([]);
+      setInactiveCodes([]);
 
       const timestamp = Date.now();
       const response = await fetch(`/api/admin/global-discount-codes?t=${timestamp}`, {
@@ -88,7 +95,14 @@ export default function GlobalCodesManager() {
       }
 
       const data = await response.json();
-      setCodes(data.codes || []);
+      // Handle new grouped response structure
+      const active = Array.isArray(data.active) ? data.active : [];
+      const used = Array.isArray(data.used) ? data.used : [];
+      const inactive = Array.isArray(data.inactive) ? data.inactive : [];
+      
+      setActiveCodes(active);
+      setUsedCodes(used);
+      setInactiveCodes(inactive);
     } catch (err: any) {
       console.error('[GlobalCodesManager] Error loading codes:', err);
       setError(err);
@@ -114,7 +128,7 @@ export default function GlobalCodesManager() {
           discountValue: parseFloat(createForm.discountValue),
           discountCap: createForm.discountType === 'percent' && createForm.discountCap ? parseFloat(createForm.discountCap) : null,
           maxUses: createForm.maxUses ? parseInt(createForm.maxUses) : null,
-          expiresInDays: createForm.expiresInDays ? parseInt(createForm.expiresInDays) : null,
+          expiresOn: createForm.expiresOn || null,
           isActive: createForm.isActive,
         }),
       });
@@ -132,7 +146,7 @@ export default function GlobalCodesManager() {
 
       alert('Global discount code created successfully!');
       setShowCreateModal(false);
-      setCreateForm({ code: '', discountType: 'percent', discountValue: '', discountCap: '', maxUses: '', expiresInDays: '', isActive: true });
+      setCreateForm({ code: '', discountType: 'percent', discountValue: '', discountCap: '', maxUses: '', expiresOn: '', isActive: true });
       await loadCodes();
     } catch (err: any) {
       console.error('[GlobalCodesManager] Create exception:', err);
@@ -141,13 +155,23 @@ export default function GlobalCodesManager() {
   };
 
   const handleEdit = (code: GlobalDiscountCode) => {
+    // Prevent editing inactive codes
+    if (code.is_active === false) {
+      alert('Inactive codes cannot be edited. They are read-only for historical records.');
+      return;
+    }
     setSelectedCode(code);
+    // Convert expires_at timestamp to YYYY-MM-DD format for date input
+    const expiresOnDate = code.expires_at 
+      ? new Date(code.expires_at).toISOString().split('T')[0]
+      : '';
+    
     setEditForm({
       discountType: code.discount_type,
       discountValue: String(code.discount_value),
       discountCap: code.discount_cap ? String(code.discount_cap) : '',
       maxUses: code.max_uses ? String(code.max_uses) : '',
-      expiresInDays: code.expires_at ? String(Math.ceil((new Date(code.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : '',
+      expiresOn: expiresOnDate,
       isActive: code.is_active,
     });
     setShowEditModal(true);
@@ -168,7 +192,7 @@ export default function GlobalCodesManager() {
           discountValue: parseFloat(editForm.discountValue),
           discountCap: editForm.discountType === 'percent' && editForm.discountCap ? parseFloat(editForm.discountCap) : null,
           maxUses: editForm.maxUses ? parseInt(editForm.maxUses) : null,
-          expiresInDays: editForm.expiresInDays ? parseInt(editForm.expiresInDays) : null,
+          expiresOn: editForm.expiresOn || null,
           isActive: editForm.isActive,
         }),
       });
@@ -192,6 +216,14 @@ export default function GlobalCodesManager() {
   const handleDelete = async () => {
     if (!selectedCode) return;
 
+    // Prevent deletion of inactive codes (they're already inactive)
+    if (selectedCode.is_active === false) {
+      alert('This code is already inactive and cannot be deleted. Inactive codes are kept for historical records.');
+      setShowDeleteModal(false);
+      setSelectedCode(null);
+      return;
+    }
+
     try {
       const response = await fetch(`/api/admin/global-discount-codes/${selectedCode.id}`, {
         method: 'DELETE',
@@ -203,7 +235,7 @@ export default function GlobalCodesManager() {
         return;
       }
 
-      alert('Global discount code deleted successfully!');
+      alert('Global discount code marked as inactive successfully!');
       setShowDeleteModal(false);
       setSelectedCode(null);
       await loadCodes();
@@ -319,153 +351,266 @@ export default function GlobalCodesManager() {
         </div>
       </div>
 
-      {/* Desktop Table */}
-      <div className="hidden md:block bg-white border border-sand rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-sage-light/30">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Max Uses</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sand">
-              {codes.length === 0 ? (
+      {/* Active Codes Section */}
+      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+        <button
+          onClick={() => setActiveSectionOpen(!activeSectionOpen)}
+          className="w-full px-4 py-3 bg-sage-light/30 hover:bg-sage-light/40 transition-colors flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-semibold">Active</span>
+            <span className="text-sm font-semibold text-charcoal">
+              Active Codes ({activeCodes.length})
+            </span>
+          </div>
+          {activeSectionOpen ? (
+            <ChevronUp className="w-4 h-4 text-charcoal" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-charcoal" />
+          )}
+        </button>
+        {activeSectionOpen && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-sage-light/20">
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-warm-gray">
-                    No global discount codes found
-                  </td>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Max Uses</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Actions</th>
                 </tr>
-              ) : (
-                codes.map((code) => (
-                  <tr key={code.id} className="hover:bg-sand/10">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-dark-sage" />
-                        <span className="font-mono font-semibold text-charcoal">{code.code}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-charcoal">
-                      {code.discount_type === 'percent' 
-                        ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
-                        : `$${code.discount_value}`}
-                    </td>
-                    <td className="px-4 py-3">
-                      {getStatusBadge(code)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-charcoal">
-                      <div className="flex items-center gap-2">
-                        <span>{code.usage_count || 0}</span>
-                        {code.usage_count && code.usage_count > 0 && (
-                          <button
-                            onClick={() => handleViewUsage(code)}
-                            className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
-                            title="View customers who used this code"
-                          >
-                            <Eye className="w-3 h-3" />
-                            View
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-charcoal">
-                      {code.max_uses ? code.max_uses : 'Unlimited'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-charcoal">
-                      {formatDate(code.expires_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEdit(code)}
-                          className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
-                          title="Edit code"
-                        >
-                          <Edit className="w-3 h-3" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedCode(code);
-                            setShowDeleteModal(true);
-                          }}
-                          className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
-                          title="Delete code"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
-                      </div>
+              </thead>
+              <tbody className="divide-y divide-sand">
+                {activeCodes.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
+                      No active codes found
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  activeCodes.map((code) => (
+                    <tr key={code.id} className="hover:bg-sand/10">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-dark-sage" />
+                          <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {code.discount_type === 'percent' 
+                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                          : `$${code.discount_value}`}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        <div className="flex items-center gap-2">
+                          <span>{code.usage_count || 0}</span>
+                          {code.usage_count && code.usage_count > 0 && (
+                            <button
+                              onClick={() => handleViewUsage(code)}
+                              className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                              title="View customers who used this code"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {code.max_uses ? code.max_uses : 'Unlimited'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {formatDate(code.expires_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEdit(code)}
+                            className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
+                            title="Edit code"
+                          >
+                            <Edit className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedCode(code);
+                              setShowDeleteModal(true);
+                            }}
+                            className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
+                            title="Delete code (marks as inactive)"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Mobile Cards */}
-      <div className="md:hidden space-y-2">
-        {codes.length === 0 ? (
-          <div className="bg-white border border-sand rounded-lg p-8 text-center text-warm-gray text-sm">
-            No global discount codes found
+      {/* Used Codes Section */}
+      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+        <button
+          onClick={() => setUsedSectionOpen(!usedSectionOpen)}
+          className="w-full px-4 py-3 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">Used</span>
+            <span className="text-sm font-semibold text-charcoal">
+              Used Codes ({usedCodes.length})
+            </span>
           </div>
-        ) : (
-          codes.map((code) => (
-            <div key={code.id} className="bg-white border border-sand rounded-lg p-3">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-dark-sage" />
-                  <span className="font-mono font-semibold text-sm text-charcoal">{code.code}</span>
-                  {getStatusBadge(code)}
-                </div>
-                <div className="text-xs text-charcoal">
-                  <div><strong>Discount:</strong> {code.discount_type === 'percent' 
-                    ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
-                    : `$${code.discount_value}`}</div>
-                  <div><strong>Usage:</strong> {code.usage_count || 0} {code.usage_count && code.usage_count > 0 && (
-                    <button
-                      onClick={() => handleViewUsage(code)}
-                      className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1 ml-1"
-                      title="View customers who used this code"
-                    >
-                      <Eye className="w-3 h-3" />
-                      View
-                    </button>
-                  )}</div>
-                  <div><strong>Max Uses:</strong> {code.max_uses ? code.max_uses : 'Unlimited'}</div>
-                  <div><strong>Expires:</strong> {formatDate(code.expires_at)}</div>
-                </div>
-                <div className="pt-2 border-t border-sand/50 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleEdit(code)}
-                    className="px-2 py-1.5 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1 min-h-[44px]"
-                    title="Edit code"
-                  >
-                    <Edit className="w-3 h-3" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedCode(code);
-                      setShowDeleteModal(true);
-                    }}
-                    className="px-2 py-1.5 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1 min-h-[44px]"
-                    title="Delete code"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
+          {usedSectionOpen ? (
+            <ChevronUp className="w-4 h-4 text-charcoal" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-charcoal" />
+          )}
+        </button>
+        {usedSectionOpen && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-blue-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Max Uses</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sand">
+                {usedCodes.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-warm-gray">
+                      No used codes found
+                    </td>
+                  </tr>
+                ) : (
+                  usedCodes.map((code) => (
+                    <tr key={code.id} className="hover:bg-blue-50/50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-blue-600" />
+                          <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {code.discount_type === 'percent' 
+                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                          : `$${code.discount_value}`}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        <div className="flex items-center gap-2">
+                          <span>{code.usage_count || 0}</span>
+                          {code.usage_count && code.usage_count > 0 && (
+                            <button
+                              onClick={() => handleViewUsage(code)}
+                              className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                              title="View customers who used this code"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {code.max_uses ? code.max_uses : 'Unlimited'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {formatDate(code.expires_at)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Inactive/Expired Codes Section */}
+      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+        <button
+          onClick={() => setInactiveSectionOpen(!inactiveSectionOpen)}
+          className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs font-semibold">Inactive</span>
+            <span className="text-sm font-semibold text-charcoal">
+              Inactive/Expired Codes ({inactiveCodes.length})
+            </span>
+          </div>
+          {inactiveSectionOpen ? (
+            <ChevronUp className="w-4 h-4 text-charcoal" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-charcoal" />
+          )}
+        </button>
+        {inactiveSectionOpen && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Usage</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sand">
+                {inactiveCodes.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
+                      No inactive/expired codes found
+                    </td>
+                  </tr>
+                ) : (
+                  inactiveCodes.map((code) => (
+                    <tr key={code.id} className="hover:bg-gray-50 opacity-75">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-gray-400" />
+                          <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {code.discount_type === 'percent' 
+                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                          : `$${code.discount_value}`}
+                      </td>
+                      <td className="px-4 py-3">
+                        {code.is_active === false ? (
+                          <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">Inactive</span>
+                        ) : (
+                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">Expired</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {code.usage_count || 0}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-charcoal">
+                        {formatDate(code.expires_at)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-warm-gray">
+                        {formatDate(code.created_at)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -585,16 +730,18 @@ export default function GlobalCodesManager() {
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal mb-2">
-                    Expires In (Days) <span className="text-warm-gray text-xs">(optional)</span>
+                    Expires On <span className="text-warm-gray text-xs">(optional)</span>
                   </label>
                   <input
-                    type="number"
-                    value={createForm.expiresInDays}
-                    onChange={(e) => setCreateForm({ ...createForm, expiresInDays: e.target.value })}
+                    type="date"
+                    value={createForm.expiresOn}
+                    onChange={(e) => setCreateForm({ ...createForm, expiresOn: e.target.value })}
                     className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                    placeholder="30 (leave empty for no expiry)"
-                    min="1"
+                    min={new Date().toISOString().split('T')[0]}
                   />
+                  <p className="text-xs text-warm-gray mt-1">
+                    Leave empty for no expiry. Selected date will be set to end of day (11:59 PM).
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -746,16 +893,18 @@ export default function GlobalCodesManager() {
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal mb-2">
-                    Expires In (Days) <span className="text-warm-gray text-xs">(optional)</span>
+                    Expires On <span className="text-warm-gray text-xs">(optional)</span>
                   </label>
                   <input
-                    type="number"
-                    value={editForm.expiresInDays}
-                    onChange={(e) => setEditForm({ ...editForm, expiresInDays: e.target.value })}
+                    type="date"
+                    value={editForm.expiresOn}
+                    onChange={(e) => setEditForm({ ...editForm, expiresOn: e.target.value })}
                     className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                    placeholder="Leave empty for no expiry"
-                    min="1"
+                    min={new Date().toISOString().split('T')[0]}
                   />
+                  <p className="text-xs text-warm-gray mt-1">
+                    Leave empty for no expiry. Selected date will be set to end of day (11:59 PM).
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">

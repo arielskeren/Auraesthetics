@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import { stripe } from '@/lib/stripeClient';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -22,13 +21,13 @@ export async function PATCH(
   try {
     const codeId = params.id;
     const body = await request.json();
-    const { discountType, discountValue, discountCap, maxUses, expiresInDays, isActive } = body;
+    const { discountType, discountValue, discountCap, maxUses, expiresOn, expiresInDays, isActive } = body;
 
     const sql = getSqlClient();
 
     // Fetch existing code
     const codeResult = await sql`
-      SELECT id, code, discount_type, discount_value, discount_cap, stripe_coupon_id, stripe_promotion_code_id, max_uses, expires_at, is_active
+      SELECT id, code, discount_type, discount_value, discount_cap, max_uses, expires_at, is_active
       FROM discount_codes
       WHERE id = ${codeId}
       LIMIT 1
@@ -40,29 +39,24 @@ export async function PATCH(
 
     const existingCode = codeRows[0];
 
-    // Calculate new expiration date
+    // Calculate new expiration date from date string or legacy days
     let newExpiresAt = existingCode.expires_at;
-    if (expiresInDays !== undefined && expiresInDays !== null) {
+    if (expiresOn !== undefined && expiresOn !== null) {
+      if (expiresOn && typeof expiresOn === 'string' && expiresOn.trim()) {
+        // New format: date string (YYYY-MM-DD) - set to end of day (23:59:59)
+        const date = new Date(expiresOn);
+        date.setHours(23, 59, 59, 999); // End of day
+        newExpiresAt = date.toISOString();
+      } else {
+        // Empty string means no expiry
+        newExpiresAt = null;
+      }
+    } else if (expiresInDays !== undefined && expiresInDays !== null) {
+      // Legacy support: days from now
       if (expiresInDays > 0) {
         newExpiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
       } else {
         newExpiresAt = null;
-      }
-    }
-
-    // Update Stripe coupon if needed
-    if (existingCode.stripe_coupon_id) {
-      try {
-        // Note: Stripe doesn't allow updating coupons, so we need to create a new one
-        // But we can update the promotion code
-        if (existingCode.stripe_promotion_code_id && isActive !== undefined) {
-          await stripe.promotionCodes.update(existingCode.stripe_promotion_code_id, {
-            active: isActive,
-          });
-        }
-      } catch (stripeError: any) {
-        console.error('[Update Global Discount Code] Stripe update failed:', stripeError);
-        // Continue with database update even if Stripe update fails
       }
     }
 
@@ -90,7 +84,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/admin/global-discount-codes/[id] - Delete global discount code
+// DELETE /api/admin/global-discount-codes/[id] - Mark global discount code as inactive (soft delete)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -101,7 +95,7 @@ export async function DELETE(
 
     // Fetch existing code
     const codeResult = await sql`
-      SELECT id, code, stripe_coupon_id, stripe_promotion_code_id
+      SELECT id, code, is_active
       FROM discount_codes
       WHERE id = ${codeId}
       LIMIT 1
@@ -113,31 +107,19 @@ export async function DELETE(
 
     const existingCode = codeRows[0];
 
-    // Delete Stripe promotion code and coupon if they exist
-    if (existingCode.stripe_promotion_code_id) {
-      try {
-        await stripe.promotionCodes.update(existingCode.stripe_promotion_code_id, {
-          active: false,
-        });
-      } catch (stripeError: any) {
-        console.warn('[Delete Global Discount Code] Stripe promotion code deactivation failed:', stripeError);
-      }
+    // Check if already inactive
+    if (existingCode.is_active === false) {
+      return NextResponse.json({ error: 'Code is already inactive' }, { status: 400 });
     }
 
-    if (existingCode.stripe_coupon_id) {
-      try {
-        await stripe.coupons.del(existingCode.stripe_coupon_id);
-      } catch (stripeError: any) {
-        console.warn('[Delete Global Discount Code] Stripe coupon deletion failed (may already be deleted):', stripeError);
-      }
-    }
-
-    // Delete from database
+    // Mark as inactive (soft delete) - keep record for history
     await sql`
-      DELETE FROM discount_codes
+      UPDATE discount_codes
+      SET is_active = false, updated_at = NOW()
       WHERE id = ${codeId}
     `;
 
+    console.log(`[Delete Global Discount Code] Successfully marked code ${existingCode.code} as inactive (ID: ${codeId})`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[Delete Global Discount Code] Error:', error);

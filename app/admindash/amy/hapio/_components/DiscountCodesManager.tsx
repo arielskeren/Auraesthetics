@@ -18,6 +18,7 @@ interface DiscountCode {
   used: boolean;
   used_at: string | null;
   expires_at: string | null;
+  is_active?: boolean;
   created_at: string;
   created_by: string | null;
   booking_id?: string | null;
@@ -38,7 +39,9 @@ type TabType = 'one-time' | 'global';
 
 export default function DiscountCodesManager() {
   const [activeTab, setActiveTab] = useState<TabType>('one-time');
-  const [codes, setCodes] = useState<DiscountCode[]>([]);
+  const [activeCodes, setActiveCodes] = useState<DiscountCode[]>([]);
+  const [usedCodes, setUsedCodes] = useState<DiscountCode[]>([]);
+  const [inactiveCodes, setInactiveCodes] = useState<DiscountCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -49,6 +52,7 @@ export default function DiscountCodesManager() {
   const [usageDetails, setUsageDetails] = useState<Record<string, UsageDetails>>({});
   const [activeSectionOpen, setActiveSectionOpen] = useState(true);
   const [usedSectionOpen, setUsedSectionOpen] = useState(true);
+  const [inactiveSectionOpen, setInactiveSectionOpen] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [loadingBooking, setLoadingBooking] = useState(false);
@@ -59,7 +63,7 @@ export default function DiscountCodesManager() {
     discountType: 'percent' as 'percent' | 'dollar',
     discountValue: '',
     discountCap: '',
-    expiresInDays: '',
+    expiresOn: '', // Date string in YYYY-MM-DD format
   });
 
   // Edit form state
@@ -67,7 +71,7 @@ export default function DiscountCodesManager() {
     discountType: 'percent' as 'percent' | 'dollar',
     discountValue: '',
     discountCap: '',
-    expiresInDays: '',
+    expiresOn: '', // Date string in YYYY-MM-DD format
   });
 
   // Extend form state
@@ -84,7 +88,9 @@ export default function DiscountCodesManager() {
       setError(null);
       
       // Clear state aggressively before loading to prevent stale data
-      setCodes([]);
+      setActiveCodes([]);
+      setUsedCodes([]);
+      setInactiveCodes([]);
       setUsageDetails({});
 
       // Add timestamp to prevent caching
@@ -103,28 +109,17 @@ export default function DiscountCodesManager() {
 
       const data = await response.json();
       
-      // Check for warning about missing table
-      if (data.warning) {
-        console.warn('[DiscountCodesManager]', data.warning);
-        setError({ message: data.warning });
-        setCodes([]);
-        setUsageDetails({});
-        return;
-      }
+      // Handle new grouped response structure
+      const active = Array.isArray(data.active) ? data.active : [];
+      const used = Array.isArray(data.used) ? data.used : [];
+      const inactive = Array.isArray(data.inactive) ? data.inactive : [];
       
-      // Log what we received for debugging
-      console.log('[DiscountCodesManager] Loaded codes:', data.codes?.length || 0, 'codes');
-      if (data.codes && data.codes.length > 0) {
-        console.log('[DiscountCodesManager] Code IDs:', data.codes.map((c: DiscountCode) => c.id));
-      }
-      
-      // Ensure we're setting a fresh array (not appending)
-      const freshCodes = Array.isArray(data.codes) ? data.codes : [];
-      setCodes(freshCodes);
+      setActiveCodes(active);
+      setUsedCodes(used);
+      setInactiveCodes(inactive);
       
       // Load usage details for used codes
-      const usedCodes = freshCodes.filter((c: DiscountCode) => c.used);
-      for (const code of usedCodes) {
+      for (const code of used) {
         await loadUsageDetails(code.id);
       }
     } catch (err: any) {
@@ -173,7 +168,7 @@ export default function DiscountCodesManager() {
           discountType: createForm.discountType,
           discountValue: parseFloat(createForm.discountValue),
           discountCap: createForm.discountType === 'percent' && createForm.discountCap ? parseFloat(createForm.discountCap) : null,
-          expiresInDays: createForm.expiresInDays ? parseInt(createForm.expiresInDays) : null,
+          expiresOn: createForm.expiresOn || null,
         }),
       });
 
@@ -186,7 +181,7 @@ export default function DiscountCodesManager() {
 
       alert('Discount code created and emailed to customer!');
       setShowCreateModal(false);
-      setCreateForm({ customerEmail: '', discountType: 'percent', discountValue: '', discountCap: '', expiresInDays: '' });
+      setCreateForm({ customerEmail: '', discountType: 'percent', discountValue: '', discountCap: '', expiresOn: '' });
       await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to create discount code');
@@ -244,12 +239,22 @@ export default function DiscountCodesManager() {
   };
 
   const handleEdit = (code: DiscountCode) => {
+    // Prevent editing inactive codes
+    if (code.is_active === false) {
+      alert('Inactive codes cannot be edited. They are read-only for historical records.');
+      return;
+    }
     setSelectedCode(code);
+    // Convert expires_at timestamp to YYYY-MM-DD format for date input
+    const expiresOnDate = code.expires_at 
+      ? new Date(code.expires_at).toISOString().split('T')[0]
+      : '';
+    
     setEditForm({
       discountType: code.discount_type,
       discountValue: String(code.discount_value),
       discountCap: code.discount_cap ? String(code.discount_cap) : '',
-      expiresInDays: code.expires_at ? String(Math.ceil((new Date(code.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : '',
+      expiresOn: expiresOnDate,
     });
     setShowEditModal(true);
   };
@@ -268,7 +273,7 @@ export default function DiscountCodesManager() {
           discountType: editForm.discountType,
           discountValue: parseFloat(editForm.discountValue),
           discountCap: editForm.discountType === 'percent' && editForm.discountCap ? parseFloat(editForm.discountCap) : null,
-          expiresInDays: editForm.expiresInDays ? parseInt(editForm.expiresInDays) : null,
+          expiresOn: editForm.expiresOn || null,
         }),
       });
 
@@ -293,7 +298,15 @@ export default function DiscountCodesManager() {
 
     // Prevent deletion of used codes
     if (selectedCode.used) {
-      alert('Used discount codes cannot be deleted from the website. Please delete them directly in Neon if needed.');
+      alert('Used discount codes cannot be deleted. They are kept for historical records.');
+      setShowDeleteModal(false);
+      setSelectedCode(null);
+      return;
+    }
+
+    // Prevent deletion of inactive codes (they're already inactive)
+    if (selectedCode.is_active === false) {
+      alert('This code is already inactive and cannot be deleted. Inactive codes are kept for historical records.');
       setShowDeleteModal(false);
       setSelectedCode(null);
       return;
@@ -316,7 +329,9 @@ export default function DiscountCodesManager() {
         // If code not found (404), it's already deleted - remove from UI
         if (response.status === 404 || data.error?.includes('not found')) {
           console.log('[Delete Discount Code] Code not found, removing from UI state');
-          setCodes(prevCodes => prevCodes.filter(c => c.id !== selectedCode.id));
+          setActiveCodes(prev => prev.filter(c => c.id !== selectedCode.id));
+          setUsedCodes(prev => prev.filter(c => c.id !== selectedCode.id));
+          setInactiveCodes(prev => prev.filter(c => c.id !== selectedCode.id));
           setUsageDetails(prev => {
             const updated = { ...prev };
             delete updated[selectedCode.id];
@@ -345,7 +360,9 @@ export default function DiscountCodesManager() {
       
       // Aggressively clear all state
       setUsageDetails({});
-      setCodes([]);
+      setActiveCodes([]);
+      setUsedCodes([]);
+      setInactiveCodes([]);
       
       // Small delay to ensure database transaction is committed, then reload
       await new Promise<void>((resolve, reject) => {
@@ -360,13 +377,9 @@ export default function DiscountCodesManager() {
       });
       
       // Double-check: if the code still appears, filter it out
-      setCodes(prevCodes => {
-        const filtered = prevCodes.filter(c => c.id !== deletedCodeId);
-        if (filtered.length !== prevCodes.length) {
-          console.warn('[Delete Discount Code] Filtered out deleted code from state:', deletedCodeId);
-        }
-        return filtered;
-      });
+      setActiveCodes(prev => prev.filter(c => c.id !== deletedCodeId));
+      setUsedCodes(prev => prev.filter(c => c.id !== deletedCodeId));
+      setInactiveCodes(prev => prev.filter(c => c.id !== deletedCodeId));
       
       alert('Discount code deleted successfully!');
     } catch (err: any) {
@@ -400,8 +413,7 @@ export default function DiscountCodesManager() {
   };
 
   // Separate codes into active and used
-  const activeCodes = codes.filter(code => !code.used);
-  const usedCodes = codes.filter(code => code.used);
+  // Codes are now already grouped by status from API
 
   const handleViewBooking = async (code: DiscountCode) => {
     const usage = usageDetails[code.id];
@@ -612,14 +624,16 @@ export default function DiscountCodesManager() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleEdit(code)}
-                                className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
-                                title="Edit code"
-                              >
-                                <Edit className="w-3 h-3" />
-                                Edit
-                              </button>
+                              {code.is_active !== false && (
+                                <button
+                                  onClick={() => handleEdit(code)}
+                                  className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
+                                  title="Edit code"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                  Edit
+                                </button>
+                              )}
                               {code.expires_at && (
                                 <button
                                   onClick={() => {
@@ -654,17 +668,19 @@ export default function DiscountCodesManager() {
                                   </>
                                 )}
                               </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedCode(code);
-                                  setShowDeleteModal(true);
-                                }}
-                                className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
-                                title="Delete code"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Delete
-                              </button>
+                              {code.is_active !== false && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedCode(code);
+                                    setShowDeleteModal(true);
+                                  }}
+                                  className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 flex items-center gap-1"
+                                  title="Delete code (marks as inactive)"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  Delete
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -922,6 +938,119 @@ export default function DiscountCodesManager() {
         )}
       </div>
 
+      {/* Inactive/Expired Codes Section */}
+      <div className="bg-white border border-sand rounded-lg overflow-hidden">
+        <button
+          onClick={() => setInactiveSectionOpen(!inactiveSectionOpen)}
+          className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs font-semibold">Inactive</span>
+            <span className="text-sm font-semibold text-charcoal">
+              Inactive/Expired Codes ({inactiveCodes.length})
+            </span>
+          </div>
+          {inactiveSectionOpen ? (
+            <ChevronUp className="w-4 h-4 text-charcoal" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-charcoal" />
+          )}
+        </button>
+        {inactiveSectionOpen && (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Code</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Customer</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Discount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Expires</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-charcoal">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-sand">
+                  {inactiveCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
+                        No inactive/expired discount codes found
+                      </td>
+                    </tr>
+                  ) : (
+                    inactiveCodes.map((code) => (
+                      <tr key={code.id} className="hover:bg-gray-50 opacity-75">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-gray-400" />
+                            <span className="font-mono font-semibold text-charcoal">{code.code}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {code.customer_name || code.customer_email || 'General'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {code.discount_type === 'percent' 
+                            ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                            : `$${code.discount_value}`}
+                        </td>
+                        <td className="px-4 py-3">
+                          {code.is_active === false ? (
+                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">Inactive</span>
+                          ) : (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">Expired</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-charcoal">
+                          {formatDate(code.expires_at)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-warm-gray">
+                          {formatDate(code.created_at)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-2 p-2">
+              {inactiveCodes.length === 0 ? (
+                <div className="text-center py-8 text-warm-gray text-sm">
+                  No inactive/expired discount codes found
+                </div>
+              ) : (
+                inactiveCodes.map((code) => (
+                  <div key={code.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 opacity-75">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-gray-400" />
+                        <span className="font-mono font-semibold text-sm text-charcoal">{code.code}</span>
+                        {code.is_active === false ? (
+                          <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">Inactive</span>
+                        ) : (
+                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">Expired</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-charcoal">
+                        <div><strong>Customer:</strong> {code.customer_name || code.customer_email || 'General'}</div>
+                        <div><strong>Discount:</strong> {code.discount_type === 'percent' 
+                          ? `${code.discount_value}%${code.discount_cap ? ` (up to $${code.discount_cap})` : ''}` 
+                          : `$${code.discount_value}`}</div>
+                        <div><strong>Expires:</strong> {formatDate(code.expires_at)}</div>
+                        <div><strong>Created:</strong> {formatDate(code.created_at)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Booking Detail Modal */}
       {showBookingModal && selectedBooking && (
         <BookingDetailModal
@@ -1043,16 +1172,18 @@ export default function DiscountCodesManager() {
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal mb-2">
-                    Expires In (Days) <span className="text-warm-gray text-xs">(optional)</span>
+                    Expires On <span className="text-warm-gray text-xs">(optional)</span>
                   </label>
                   <input
-                    type="number"
-                    value={createForm.expiresInDays}
-                    onChange={(e) => setCreateForm({ ...createForm, expiresInDays: e.target.value })}
+                    type="date"
+                    value={createForm.expiresOn}
+                    onChange={(e) => setCreateForm({ ...createForm, expiresOn: e.target.value })}
                     className="w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-                    placeholder="30 (leave empty for no expiry)"
-                    min="1"
+                    min={new Date().toISOString().split('T')[0]}
                   />
+                  <p className="text-xs text-warm-gray mt-1">
+                    Leave empty for no expiry. Selected date will be set to end of day (11:59 PM).
+                  </p>
                 </div>
 
               </div>
@@ -1245,16 +1376,18 @@ export default function DiscountCodesManager() {
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal mb-2">
-                    Expires In (Days) <span className="text-warm-gray text-xs">(optional)</span>
+                    Expires On <span className="text-warm-gray text-xs">(optional)</span>
                   </label>
                   <input
-                    type="number"
-                    value={editForm.expiresInDays}
-                    onChange={(e) => setEditForm({ ...editForm, expiresInDays: e.target.value })}
+                    type="date"
+                    value={editForm.expiresOn}
+                    onChange={(e) => setEditForm({ ...editForm, expiresOn: e.target.value })}
                     className="w-full px-3 py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
-                    placeholder="30 (leave empty for no expiry)"
-                    min="1"
+                    min={new Date().toISOString().split('T')[0]}
                   />
+                  <p className="text-xs text-warm-gray mt-1">
+                    Leave empty for no expiry. Selected date will be set to end of day (11:59 PM).
+                  </p>
                 </div>
 
               </div>

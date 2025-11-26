@@ -18,16 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     const sql = getSqlClient();
 
-    // Auto-lock expired codes (set expiry to past if not already expired and not used)
     const now = new Date();
-    await sql`
-      UPDATE discount_codes
-      SET expires_at = ${now.toISOString()}, updated_at = NOW()
-      WHERE code_type = 'one_time'
-        AND expires_at IS NOT NULL
-        AND expires_at < ${now.toISOString()}
-        AND used = false
-    `;
 
     // Fetch all one-time discount codes with customer info
     const codesResult = await sql`
@@ -38,10 +29,10 @@ export async function GET(request: NextRequest) {
         dc.discount_type,
         dc.discount_value,
         dc.discount_cap,
-        dc.stripe_coupon_id,
         dc.used,
         dc.used_at,
         dc.expires_at,
+        dc.is_active,
         dc.created_at,
         dc.created_by,
         c.email AS customer_email,
@@ -49,49 +40,19 @@ export async function GET(request: NextRequest) {
       FROM discount_codes dc
       LEFT JOIN customers c ON dc.customer_id = c.id
       WHERE dc.code_type = 'one_time'
-        AND dc.stripe_coupon_id IS NOT NULL
       ORDER BY dc.created_at DESC
     `;
-    const codes = normalizeRows(codesResult);
-    
-    // Filter out codes without stripe_coupon_id (basic validation)
-    // These are likely phantom codes that were created but Stripe coupon creation failed
-    const validCodesList = codes.filter((code: any) => {
-      if (!code.stripe_coupon_id || code.stripe_coupon_id.trim() === '') {
-        console.warn(`[Discount Codes API] Found code without Stripe coupon ID (phantom code): ${code.code} (ID: ${code.id})`);
-        return false;
-      }
-      return true;
-    });
-    
-    // Log if we filtered out any codes
-    const filteredCount = codes.length - validCodesList.length;
-    if (filteredCount > 0) {
-      console.warn(`[Discount Codes API] Filtered out ${filteredCount} phantom codes (missing stripe_coupon_id) out of ${codes.length} total codes`);
-    }
-    
-    // Note: We don't validate against Stripe API here to avoid blocking the request
-    // A background job could be added to clean up orphaned Stripe coupons
-    
-    // Log for debugging
-    console.log(`[Discount Codes API] Found ${codes.length} discount codes`);
+    const allCodes = normalizeRows(codesResult);
 
     // For used codes, fetch booking usage details
     const codesWithUsage = await Promise.all(
-      validCodesList.map(async (code) => {
+      allCodes.map(async (code: any) => {
         if (!code.used || !code.used_at) {
           return code;
         }
 
-        // Find booking that used this code by checking payment intent metadata
-        // We need to check booking_events or payments metadata for discount code
+        // Find booking that used this code
         try {
-          // Check if we can find the booking via payment metadata
-          // This is a simplified approach - in production you might want to store booking_id in one_time_discount_codes
-          // Try multiple ways to find the booking that used this code
-          // 1. Check booking_events data
-          // 2. Check bookings metadata
-          // 3. Check payments via payment intent metadata
           let usageResult = await sql`
             SELECT 
               b.id AS booking_id,
@@ -109,7 +70,6 @@ export async function GET(request: NextRequest) {
             LIMIT 1
           `;
           
-          // If not found, try checking bookings metadata directly
           if (normalizeRows(usageResult).length === 0) {
             usageResult = await sql`
               SELECT 
@@ -142,7 +102,29 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({ codes: codesWithUsage });
+    // Group codes by status
+    const active: any[] = [];
+    const used: any[] = [];
+    const inactive: any[] = [];
+
+    codesWithUsage.forEach((code: any) => {
+      const isExpired = code.expires_at && new Date(code.expires_at) <= now;
+      const isInactive = code.is_active === false;
+
+      if (code.used) {
+        used.push(code);
+      } else if (isInactive || isExpired) {
+        inactive.push(code);
+      } else {
+        active.push(code);
+      }
+    });
+
+    return NextResponse.json({ 
+      active,
+      used,
+      inactive,
+    });
   } catch (error: any) {
     console.error('[Discount Codes API] Error:', error);
     console.error('[Discount Codes API] Error stack:', error?.stack);

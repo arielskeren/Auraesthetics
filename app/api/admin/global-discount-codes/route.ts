@@ -36,6 +36,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const now = new Date();
+
     // Fetch all global discount codes with usage_count from database
     const codesResult = await sql`
       SELECT 
@@ -54,15 +56,41 @@ export async function GET(request: NextRequest) {
       WHERE code_type = 'global' OR code_type IS NULL
       ORDER BY created_at DESC
     `;
-    const codes = normalizeRows(codesResult);
+    const allCodes = normalizeRows(codesResult);
 
-    // Use usage_count from database (no Stripe dependency)
-    const codesWithUsage = codes.map((code) => ({
-      ...code,
-      times_redeemed: code.usage_count || 0,
-    }));
+    // Group codes by status
+    const active: any[] = [];
+    const used: any[] = [];
+    const inactive: any[] = [];
 
-    return NextResponse.json({ codes: codesWithUsage });
+    allCodes.forEach((code: any) => {
+      const isExpired = code.expires_at && new Date(code.expires_at) <= now;
+      const isInactive = code.is_active === false;
+      const hasBeenUsed = (code.usage_count || 0) > 0;
+
+      if (isInactive || isExpired) {
+        inactive.push({
+          ...code,
+          times_redeemed: code.usage_count || 0,
+        });
+      } else if (hasBeenUsed) {
+        used.push({
+          ...code,
+          times_redeemed: code.usage_count || 0,
+        });
+      } else {
+        active.push({
+          ...code,
+          times_redeemed: code.usage_count || 0,
+        });
+      }
+    });
+
+    return NextResponse.json({ 
+      active,
+      used,
+      inactive,
+    });
   } catch (error: any) {
     console.error('[Global Discount Codes API] Error:', error);
     return NextResponse.json(
@@ -85,7 +113,8 @@ export async function POST(request: NextRequest) {
       discountValue, 
       discountCap, 
       maxUses, 
-      expiresInDays,
+      expiresOn, // Date string in YYYY-MM-DD format
+      expiresInDays, // Legacy support - will be removed
       isActive = true 
     } = body;
 
@@ -132,9 +161,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate expiration date
+    // Calculate expiration date from date string or legacy days
     let expiresAt = null;
-    if (expiresInDays && expiresInDays > 0) {
+    if (expiresOn && typeof expiresOn === 'string' && expiresOn.trim()) {
+      // New format: date string (YYYY-MM-DD) - set to end of day (23:59:59)
+      const date = new Date(expiresOn);
+      date.setHours(23, 59, 59, 999); // End of day
+      expiresAt = date.toISOString();
+    } else if (expiresInDays && expiresInDays > 0) {
+      // Legacy support: days from now
       expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
     }
 

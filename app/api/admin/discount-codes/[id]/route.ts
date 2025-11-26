@@ -23,7 +23,7 @@ export async function PATCH(
   try {
     const codeId = params.id;
     const body = await request.json();
-    const { discountType, discountValue, discountCap, expiresInDays } = body;
+    const { discountType, discountValue, discountCap, expiresOn, expiresInDays } = body; // expiresInDays for legacy support
 
     if (!discountType || !['percent', 'dollar'].includes(discountType)) {
       return NextResponse.json(
@@ -86,9 +86,20 @@ export async function PATCH(
       );
     }
 
-    // Calculate new expiration date
+    // Calculate new expiration date from date string or legacy days
     let newExpiresAt = existingCode.expires_at;
-    if (expiresInDays !== undefined && expiresInDays !== null) {
+    if (expiresOn !== undefined && expiresOn !== null) {
+      if (expiresOn && typeof expiresOn === 'string' && expiresOn.trim()) {
+        // New format: date string (YYYY-MM-DD) - set to end of day (23:59:59)
+        const date = new Date(expiresOn);
+        date.setHours(23, 59, 59, 999); // End of day
+        newExpiresAt = date.toISOString();
+      } else {
+        // Empty string means no expiry
+        newExpiresAt = null;
+      }
+    } else if (expiresInDays !== undefined && expiresInDays !== null) {
+      // Legacy support: days from now
       if (expiresInDays > 0) {
         newExpiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
       } else {
@@ -96,12 +107,7 @@ export async function PATCH(
       }
     }
 
-    // Update Stripe coupon if discount value or type changed
-    if (existingCode.stripe_coupon_id && 
-        (existingCode.discount_type !== discountType || 
-         Number(existingCode.discount_value) !== discountValue)) {
-      const oldCouponId = existingCode.stripe_coupon_id;
-      let newCouponId: string | null = null;
+    // No Stripe coupon updates needed (removed Stripe dependency)
       
       try {
         // Create new coupon FIRST (before deleting old one to avoid orphaned state)
@@ -209,7 +215,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/admin/discount-codes/[id] - Delete discount code
+// DELETE /api/admin/discount-codes/[id] - Mark discount code as inactive (soft delete)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -220,7 +226,7 @@ export async function DELETE(
 
     // Fetch existing code (one-time codes only)
     const codeResult = await sql`
-      SELECT id, code, stripe_coupon_id, used
+      SELECT id, code, used, is_active
       FROM discount_codes
       WHERE id = ${codeId} AND code_type = 'one_time'
       LIMIT 1
@@ -232,37 +238,19 @@ export async function DELETE(
 
     const existingCode = codeRows[0];
 
-    // Delete Stripe coupon if it exists
-    if (existingCode.stripe_coupon_id) {
-      try {
-        await stripe.coupons.del(existingCode.stripe_coupon_id);
-      } catch (stripeError: any) {
-        // Log but don't fail - coupon might already be deleted
-        console.warn('[Delete Discount Code] Stripe coupon deletion failed (may already be deleted):', stripeError);
-      }
+    // Check if already inactive
+    if (existingCode.is_active === false) {
+      return NextResponse.json({ error: 'Code is already inactive' }, { status: 400 });
     }
 
-    // Delete from database
-    const deleteResult = await sql`
-      DELETE FROM discount_codes
+    // Mark as inactive (soft delete) - keep record for history
+    await sql`
+      UPDATE discount_codes
+      SET is_active = false, updated_at = NOW()
       WHERE id = ${codeId} AND code_type = 'one_time'
     `;
 
-    // Verify deletion
-    const verifyResult = await sql`
-      SELECT id FROM discount_codes WHERE id = ${codeId} AND code_type = 'one_time' LIMIT 1
-    `;
-    const verifyRows = normalizeRows(verifyResult);
-    
-    if (verifyRows.length > 0) {
-      console.error('[Delete Discount Code] Code still exists after deletion attempt');
-      return NextResponse.json(
-        { error: 'Failed to delete discount code from database' },
-        { status: 500 }
-      );
-    }
-
-    console.log(`[Delete Discount Code] Successfully deleted code ${existingCode.code} (ID: ${codeId})`);
+    console.log(`[Delete Discount Code] Successfully marked code ${existingCode.code} as inactive (ID: ${codeId})`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[Delete Discount Code] Error:', error);

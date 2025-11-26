@@ -24,7 +24,7 @@ function generateUniqueCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerId, customerEmail, customerName, discountType, discountValue, discountCap, expiresInDays } = body;
+    const { customerId, customerEmail, customerName, discountType, discountValue, discountCap, expiresOn, expiresInDays } = body; // expiresInDays for legacy support
 
     // Validate inputs
     if (!customerId && !customerEmail) {
@@ -135,10 +135,17 @@ export async function POST(request: NextRequest) {
       }
     } while (true);
 
-    // Calculate expiration date
-    const expiresAt = expiresInDays 
-      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    // Calculate expiration date from date string or legacy days
+    let expiresAt = null;
+    if (expiresOn && typeof expiresOn === 'string' && expiresOn.trim()) {
+      // New format: date string (YYYY-MM-DD) - set to end of day (23:59:59)
+      const date = new Date(expiresOn);
+      date.setHours(23, 59, 59, 999); // End of day
+      expiresAt = date.toISOString();
+    } else if (expiresInDays && expiresInDays > 0) {
+      // Legacy support: days from now
+      expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+    }
 
     // Insert into database (no Stripe dependency - all logic handled in application)
     let inserted: any;
