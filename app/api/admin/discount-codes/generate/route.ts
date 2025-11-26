@@ -118,37 +118,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if one_time_discount_codes table exists
-    const tableCheck = await sql`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-        AND table_name = 'one_time_discount_codes'
-      LIMIT 1
-    `;
-    const hasOneTimeTable = normalizeRows(tableCheck).length > 0;
-    
-    if (!hasOneTimeTable) {
-      return NextResponse.json(
-        { 
-          error: 'One-time discount codes table does not exist. Please run migration 006_create_one_time_discount_codes.sql',
-          details: 'The one_time_discount_codes table is required for generating one-time discount codes.'
-        },
-        { status: 500 }
-      );
-    }
-
-    // Generate unique code (check both one_time_discount_codes and discount_codes tables)
+    // Generate unique code (check discount_codes table for any existing code)
     let code: string;
     let attempts = 0;
     const maxAttempts = 20; // Increased from 10 for better collision handling
     do {
       code = generateUniqueCode();
-      const [oneTimeCheck, regularCheck] = await Promise.all([
-        sql`SELECT id FROM one_time_discount_codes WHERE code = ${code} LIMIT 1`,
-        sql`SELECT id FROM discount_codes WHERE code = ${code} LIMIT 1`,
-      ]);
-      if (normalizeRows(oneTimeCheck).length === 0 && normalizeRows(regularCheck).length === 0) {
+      const codeCheck = await sql`SELECT id FROM discount_codes WHERE code = ${code} LIMIT 1`;
+      if (normalizeRows(codeCheck).length === 0) {
         break;
       }
       attempts++;
@@ -232,13 +209,13 @@ export async function POST(request: NextRequest) {
     let inserted: any;
     try {
       const insertResult = await sql`
-        INSERT INTO one_time_discount_codes (
-          customer_id, code, discount_type, discount_value, discount_cap,
-          expires_at, stripe_coupon_id, created_by
+        INSERT INTO discount_codes (
+          code, code_type, customer_id, discount_type, discount_value, discount_cap,
+          expires_at, stripe_coupon_id, used, created_by
         )
         VALUES (
-          ${finalCustomerId}, ${code}, ${discountType}, ${discountValue}, 
-          ${discountCap || null}, ${expiresAt}, ${stripeCouponId}, 'admin'
+          ${code}, 'one_time', ${finalCustomerId}, ${discountType}, ${discountValue}, 
+          ${discountCap || null}, ${expiresAt}, ${stripeCouponId}, false, 'admin'
         )
         RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
       `;
@@ -247,7 +224,7 @@ export async function POST(request: NextRequest) {
       if (!inserted || !inserted.id) {
         throw new Error('Database insert returned invalid result');
       }
-      console.log('[Generate Discount Code] Successfully inserted into one_time_discount_codes table:', inserted.id);
+      console.log('[Generate Discount Code] Successfully inserted into discount_codes table:', inserted.id);
     } catch (dbError: any) {
       console.error('[Generate Discount Code] Database insert failed:', {
         error: dbError.message,
@@ -403,16 +380,16 @@ export async function POST(request: NextRequest) {
         tags: ['discount_code', 'one_time_offer'],
       });
 
-      // Mark email as sent (if column exists)
+      // Mark email as sent
       try {
         await sql`
-          UPDATE one_time_discount_codes 
+          UPDATE discount_codes 
           SET email_sent = true, email_sent_at = NOW()
           WHERE id = ${inserted.id}
         `;
       } catch (e) {
-        // Column might not exist - non-critical
-        console.warn('[Generate Discount Code] email_sent column may not exist');
+        // Non-critical - log but continue
+        console.warn('[Generate Discount Code] Failed to update email_sent:', e);
       }
     } catch (emailError: any) {
       console.error('[Generate Discount Code] Email send failed:', emailError);

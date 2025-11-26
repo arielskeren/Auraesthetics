@@ -199,86 +199,70 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check database for discount code (both regular and one-time codes)
+    // Check database for discount code (both one-time and global codes in unified table)
     const sql = getSqlClient();
-    
-    // Check if one_time_discount_codes table exists
-    let hasOneTimeTable = false;
-    try {
-      const tableCheck = await sql`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-          AND table_name = 'one_time_discount_codes'
-        LIMIT 1
-      `;
-      hasOneTimeTable = normalizeRows(tableCheck).length > 0;
-    } catch (e) {
-      // If check fails, assume table doesn't exist
-      hasOneTimeTable = false;
-    }
     
     let discountCode: any = null;
     let stripeCouponId: string | null = null;
     let isOneTime = false;
 
-    // First check one-time discount codes (if table exists)
-    if (hasOneTimeTable) {
-      try {
-        const oneTimeResult = await sql`
-          SELECT id, code, customer_id, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at
-          FROM one_time_discount_codes 
-          WHERE code = ${codeUpper}
-            AND used = false
-            AND (expires_at IS NULL OR expires_at > NOW())
-        `;
-        const oneTimeRows = normalizeRows(oneTimeResult);
+    // First check one-time discount codes
+    try {
+      const oneTimeResult = await sql`
+        SELECT id, code, customer_id, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at, code_type
+        FROM discount_codes 
+        WHERE code = ${codeUpper}
+          AND code_type = 'one_time'
+          AND used = false
+          AND (expires_at IS NULL OR expires_at > NOW())
+      `;
+      const oneTimeRows = normalizeRows(oneTimeResult);
+      
+      if (oneTimeRows.length > 0) {
+        // One-time code found
+        discountCode = oneTimeRows[0];
+        stripeCouponId = discountCode.stripe_coupon_id;
+        isOneTime = true;
         
-        if (oneTimeRows.length > 0) {
-          // One-time code found
-          discountCode = oneTimeRows[0];
-          stripeCouponId = discountCode.stripe_coupon_id;
-          isOneTime = true;
+        // CRITICAL: If code is customer-specific, require email for validation
+        if (discountCode.customer_id) {
+          if (!customerEmail || typeof customerEmail !== 'string' || !customerEmail.trim()) {
+            return NextResponse.json(
+              { 
+                error: 'Please enter your email address to verify your eligibility for this discount code', 
+                valid: false,
+                requiresEmail: true 
+              },
+              { status: 400 }
+            );
+          }
           
-          // CRITICAL: If code is customer-specific, require email for validation
-          if (discountCode.customer_id) {
-            if (!customerEmail || typeof customerEmail !== 'string' || !customerEmail.trim()) {
-              return NextResponse.json(
-                { 
-                  error: 'Please enter your email address to verify your eligibility for this discount code', 
-                  valid: false,
-                  requiresEmail: true 
-                },
-                { status: 400 }
-              );
-            }
-            
-            // Verify customer matches
-            const customerCheck = await sql`
-              SELECT id FROM customers 
-              WHERE id = ${discountCode.customer_id} 
-                AND LOWER(email) = LOWER(${customerEmail.trim()})
-              LIMIT 1
-            `;
-            if (normalizeRows(customerCheck).length === 0) {
-              return NextResponse.json(
-                { error: 'This discount code is not valid for your account', valid: false },
-                { status: 400 }
-              );
-            }
+          // Verify customer matches
+          const customerCheck = await sql`
+            SELECT id FROM customers 
+            WHERE id = ${discountCode.customer_id} 
+              AND LOWER(email) = LOWER(${customerEmail.trim()})
+            LIMIT 1
+          `;
+          if (normalizeRows(customerCheck).length === 0) {
+            return NextResponse.json(
+              { error: 'This discount code is not valid for your account', valid: false },
+              { status: 400 }
+            );
           }
         }
-      } catch (e) {
-        // If one-time table query fails, continue to regular discount codes
-        console.warn('[Discount Validation] One-time discount codes table query failed:', e);
       }
+    } catch (e) {
+      // If query fails, continue to global discount codes
+      console.warn('[Discount Validation] One-time discount codes query failed:', e);
     }
 
-    // If no one-time code found, check regular discount codes
+    // If no one-time code found, check global discount codes
     if (!discountCode) {
       const dbResult = await sql`
         SELECT * FROM discount_codes 
         WHERE code = ${codeUpper} 
+        AND code_type = 'global'
         AND is_active = true
         AND (expires_at IS NULL OR expires_at > NOW())
       `;

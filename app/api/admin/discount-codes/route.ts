@@ -18,100 +18,40 @@ export async function GET(request: NextRequest) {
   try {
     const sql = getSqlClient();
 
-    // Check if table exists
-    const tableCheck = await sql`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-        AND table_name = 'one_time_discount_codes'
-      LIMIT 1
-    `;
-    const hasTable = normalizeRows(tableCheck).length > 0;
-
-    if (!hasTable) {
-      console.warn('[Discount Codes API] Table one_time_discount_codes does not exist');
-      return NextResponse.json({ 
-        codes: [],
-        warning: 'Discount codes table does not exist. Please run migration 006_create_one_time_discount_codes.sql',
-      });
-    }
-
     // Auto-lock expired codes (set expiry to past if not already expired and not used)
     const now = new Date();
     await sql`
-      UPDATE one_time_discount_codes
+      UPDATE discount_codes
       SET expires_at = ${now.toISOString()}, updated_at = NOW()
-      WHERE expires_at IS NOT NULL
+      WHERE code_type = 'one_time'
+        AND expires_at IS NOT NULL
         AND expires_at < ${now.toISOString()}
         AND used = false
     `;
 
-    // Fetch all discount codes with customer info
-    // Check if discount_cap column exists (for backward compatibility)
-    let hasDiscountCapColumn = false;
-    try {
-      const columnCheck = await sql`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-          AND table_name = 'one_time_discount_codes'
-          AND column_name = 'discount_cap'
-        LIMIT 1
-      `;
-      hasDiscountCapColumn = normalizeRows(columnCheck).length > 0;
-    } catch (e) {
-      // Column check failed, assume it doesn't exist
-      console.warn('[Discount Codes API] Could not check for discount_cap column:', e);
-    }
-
-    // Build query based on whether discount_cap column exists
-    // IMPORTANT: Only fetch from one_time_discount_codes table, NOT discount_codes table
-    let codesResult;
-    if (hasDiscountCapColumn) {
-      codesResult = await sql`
-        SELECT 
-          otc.id,
-          otc.code,
-          otc.customer_id,
-          otc.discount_type,
-          otc.discount_value,
-          otc.discount_cap,
-          otc.stripe_coupon_id,
-          otc.used,
-          otc.used_at,
-          otc.expires_at,
-          otc.created_at,
-          otc.created_by,
-          c.email AS customer_email,
-          TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
-        FROM one_time_discount_codes otc
-        LEFT JOIN customers c ON otc.customer_id = c.id
-        WHERE otc.stripe_coupon_id IS NOT NULL
-        ORDER BY otc.created_at DESC
-      `;
-    } else {
-      codesResult = await sql`
-        SELECT 
-          otc.id,
-          otc.code,
-          otc.customer_id,
-          otc.discount_type,
-          otc.discount_value,
-          NULL AS discount_cap,
-          otc.stripe_coupon_id,
-          otc.used,
-          otc.used_at,
-          otc.expires_at,
-          otc.created_at,
-          otc.created_by,
-          c.email AS customer_email,
-          TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
-        FROM one_time_discount_codes otc
-        LEFT JOIN customers c ON otc.customer_id = c.id
-        WHERE otc.stripe_coupon_id IS NOT NULL
-        ORDER BY otc.created_at DESC
-      `;
-    }
+    // Fetch all one-time discount codes with customer info
+    const codesResult = await sql`
+      SELECT 
+        dc.id,
+        dc.code,
+        dc.customer_id,
+        dc.discount_type,
+        dc.discount_value,
+        dc.discount_cap,
+        dc.stripe_coupon_id,
+        dc.used,
+        dc.used_at,
+        dc.expires_at,
+        dc.created_at,
+        dc.created_by,
+        c.email AS customer_email,
+        TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
+      FROM discount_codes dc
+      LEFT JOIN customers c ON dc.customer_id = c.id
+      WHERE dc.code_type = 'one_time'
+        AND dc.stripe_coupon_id IS NOT NULL
+      ORDER BY dc.created_at DESC
+    `;
     const codes = normalizeRows(codesResult);
     
     // Filter out codes without stripe_coupon_id (basic validation)

@@ -36,11 +36,11 @@ export async function POST(
       );
     }
 
-    // Get current code
+    // Get current code (one-time codes only)
     const codeResult = await sql`
       SELECT expires_at, stripe_coupon_id, used
-      FROM one_time_discount_codes
-      WHERE id = ${codeId}
+      FROM discount_codes
+      WHERE id = ${codeId} AND code_type = 'one_time'
       LIMIT 1
     `;
     const codeRows = normalizeRows(codeResult);
@@ -63,9 +63,9 @@ export async function POST(
 
     // Update database
     await sql`
-      UPDATE one_time_discount_codes
+      UPDATE discount_codes
       SET expires_at = ${newExpiry.toISOString()}, updated_at = NOW()
-      WHERE id = ${codeId}
+      WHERE id = ${codeId} AND code_type = 'one_time'
     `;
 
     // Note: Stripe coupons don't have expiry dates that can be updated

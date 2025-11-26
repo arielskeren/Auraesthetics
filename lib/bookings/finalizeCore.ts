@@ -102,76 +102,60 @@ export async function finalizeBookingTransactional(args: {
     let oneTimeCodeId: string | null = null;
     if (discountCodeFromMetadata && typeof discountCodeFromMetadata === 'string') {
       try {
-        // Check if one_time_discount_codes table exists
-        const tableCheck = await sql`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-            AND table_name = 'one_time_discount_codes'
+        const codeUpper = discountCodeFromMetadata.toUpperCase();
+        // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
+        // First check if code exists and is valid (with row lock)
+        const oneTimeCodeResult = await sql`
+          SELECT id, customer_id FROM discount_codes 
+          WHERE code = ${codeUpper} 
+            AND code_type = 'one_time'
+            AND used = false
+            AND (expires_at IS NULL OR expires_at > NOW())
           LIMIT 1
+          FOR UPDATE
         `;
-        const hasOneTimeTable = Array.isArray(tableCheck) 
-          ? tableCheck.length > 0 
-          : ((tableCheck as any)?.rows || []).length > 0;
-        
-        if (!hasOneTimeTable) {
-          // Table doesn't exist - skip one-time code checking
-          console.warn('[finalizeCore] one_time_discount_codes table does not exist, skipping one-time code validation');
-        } else {
-          const codeUpper = discountCodeFromMetadata.toUpperCase();
-          // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
-          // First check if code exists and is valid (with row lock)
-          const oneTimeCodeResult = await sql`
-            SELECT id, customer_id FROM one_time_discount_codes 
-            WHERE code = ${codeUpper} 
-              AND used = false
-              AND (expires_at IS NULL OR expires_at > NOW())
-            LIMIT 1
-            FOR UPDATE
-          `;
-          const oneTimeRows = Array.isArray(oneTimeCodeResult) 
-            ? oneTimeCodeResult 
-            : (oneTimeCodeResult as any)?.rows || [];
-          if (oneTimeRows.length > 0) {
-            const codeRecord = oneTimeRows[0];
-            // If code is customer-specific, verify customer matches
-            if (codeRecord.customer_id) {
-              if (!emailFromPi) {
-                // No email in payment - log security issue but still mark as used to prevent reuse
-                console.error('[finalizeCore] One-time code used without email (customer-specific code):', {
+        const oneTimeRows = Array.isArray(oneTimeCodeResult) 
+          ? oneTimeCodeResult 
+          : (oneTimeCodeResult as any)?.rows || [];
+        if (oneTimeRows.length > 0) {
+          const codeRecord = oneTimeRows[0];
+          // If code is customer-specific, verify customer matches
+          if (codeRecord.customer_id) {
+            if (!emailFromPi) {
+              // No email in payment - log security issue but still mark as used to prevent reuse
+              console.error('[finalizeCore] One-time code used without email (customer-specific code):', {
+                code: codeUpper,
+                codeCustomerId: codeRecord.customer_id,
+              });
+              // Still mark as used to prevent code reuse, but log security issue
+              oneTimeCodeId = codeRecord.id;
+            } else {
+              const customerMatch = await sql`
+                SELECT id FROM customers 
+                WHERE id = ${codeRecord.customer_id} 
+                  AND LOWER(email) = LOWER(${emailFromPi})
+                LIMIT 1
+              `;
+              const customerRows = Array.isArray(customerMatch) 
+                ? customerMatch 
+                : (customerMatch as any)?.rows || [];
+              if (customerRows.length === 0) {
+                // Customer doesn't match - log security issue but still mark as used to prevent reuse
+                console.error('[finalizeCore] One-time code customer mismatch (security issue):', {
                   code: codeUpper,
                   codeCustomerId: codeRecord.customer_id,
+                  paymentEmail: emailFromPi,
                 });
                 // Still mark as used to prevent code reuse, but log security issue
                 oneTimeCodeId = codeRecord.id;
               } else {
-                const customerMatch = await sql`
-                  SELECT id FROM customers 
-                  WHERE id = ${codeRecord.customer_id} 
-                    AND LOWER(email) = LOWER(${emailFromPi})
-                  LIMIT 1
-                `;
-                const customerRows = Array.isArray(customerMatch) 
-                  ? customerMatch 
-                  : (customerMatch as any)?.rows || [];
-                if (customerRows.length === 0) {
-                  // Customer doesn't match - log security issue but still mark as used to prevent reuse
-                  console.error('[finalizeCore] One-time code customer mismatch (security issue):', {
-                    code: codeUpper,
-                    codeCustomerId: codeRecord.customer_id,
-                    paymentEmail: emailFromPi,
-                  });
-                  // Still mark as used to prevent code reuse, but log security issue
-                  oneTimeCodeId = codeRecord.id;
-                } else {
-                  // Customer matches - safe to mark as used
-                  oneTimeCodeId = codeRecord.id;
-                }
+                // Customer matches - safe to mark as used
+                oneTimeCodeId = codeRecord.id;
               }
-            } else {
-              // Code is not customer-specific - safe to use
-              oneTimeCodeId = codeRecord.id;
             }
+          } else {
+            // Code is not customer-specific - safe to use
+            oneTimeCodeId = codeRecord.id;
           }
         }
       } catch (e) {
@@ -299,47 +283,33 @@ export async function finalizeBookingTransactional(args: {
     // CRITICAL: The row is already locked by SELECT FOR UPDATE, so this update is safe
     if (oneTimeCodeId) {
       try {
-        // Check if table exists before updating
-        const tableCheck = await sql`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-            AND table_name = 'one_time_discount_codes'
-          LIMIT 1
+        const updateResult = await sql`
+          UPDATE discount_codes 
+          SET used = true, used_at = NOW(), updated_at = NOW()
+          WHERE id = ${oneTimeCodeId} AND code_type = 'one_time' AND used = false
+          RETURNING id, code, used, used_at
         `;
-        const hasOneTimeTable = Array.isArray(tableCheck) 
-          ? tableCheck.length > 0 
-          : ((tableCheck as any)?.rows || []).length > 0;
-        
-        if (hasOneTimeTable) {
-          const updateResult = await sql`
-            UPDATE one_time_discount_codes 
-            SET used = true, used_at = NOW(), updated_at = NOW()
-            WHERE id = ${oneTimeCodeId} AND used = false
-            RETURNING id, code, used, used_at
-          `;
-          const updatedRows = Array.isArray(updateResult) 
-            ? updateResult 
-            : (updateResult as any)?.rows || [];
-          if (updatedRows.length === 0) {
-            console.warn('[finalizeCore] Failed to mark one-time code as used - code may have already been used:', oneTimeCodeId);
-          } else {
-            console.log('[finalizeCore] Successfully marked one-time code as used:', {
-              code: updatedRows[0].code,
-              used: updatedRows[0].used,
-              used_at: updatedRows[0].used_at,
-            });
-          }
-          // Verify the update succeeded (row might have been updated by another transaction)
-          const verifyResult = await sql`
-            SELECT used FROM one_time_discount_codes WHERE id = ${oneTimeCodeId} LIMIT 1
-          `;
-          const verifyRows = Array.isArray(verifyResult) 
-            ? verifyResult 
-            : (verifyResult as any)?.rows || [];
-          if (verifyRows.length > 0 && !verifyRows[0].used) {
-            console.warn('[finalizeCore] One-time code was not marked as used - possible race condition');
-          }
+        const updatedRows = Array.isArray(updateResult) 
+          ? updateResult 
+          : (updateResult as any)?.rows || [];
+        if (updatedRows.length === 0) {
+          console.warn('[finalizeCore] Failed to mark one-time code as used - code may have already been used:', oneTimeCodeId);
+        } else {
+          console.log('[finalizeCore] Successfully marked one-time code as used:', {
+            code: updatedRows[0].code,
+            used: updatedRows[0].used,
+            used_at: updatedRows[0].used_at,
+          });
+        }
+        // Verify the update succeeded (row might have been updated by another transaction)
+        const verifyResult = await sql`
+          SELECT used FROM discount_codes WHERE id = ${oneTimeCodeId} AND code_type = 'one_time' LIMIT 1
+        `;
+        const verifyRows = Array.isArray(verifyResult) 
+          ? verifyResult 
+          : (verifyResult as any)?.rows || [];
+        if (verifyRows.length > 0 && !verifyRows[0].used) {
+          console.warn('[finalizeCore] One-time code was not marked as used - possible race condition');
         }
       } catch (e) {
         // Non-critical - log but continue
@@ -353,93 +323,80 @@ export async function finalizeBookingTransactional(args: {
       try {
         const codeUpper = discountCodeFromMetadata.toUpperCase();
         
-        // Check if discount_codes table exists and has usage_count column
-        const tableCheck = await sql`
-          SELECT column_name 
-          FROM information_schema.columns 
-          WHERE table_name = 'discount_codes' 
-            AND column_name = 'usage_count'
+        // Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
+        const globalCodeResult = await sql`
+          SELECT id, max_uses, usage_count, is_active, stripe_promotion_code_id
+          FROM discount_codes 
+          WHERE code = ${codeUpper}
+            AND code_type = 'global'
+            AND is_active = true
           LIMIT 1
+          FOR UPDATE
         `;
-        const hasUsageCountColumn = Array.isArray(tableCheck) 
-          ? tableCheck.length > 0 
-          : ((tableCheck as any)?.rows || []).length > 0;
+        const globalCodeRows = Array.isArray(globalCodeResult) 
+          ? globalCodeResult 
+          : (globalCodeResult as any)?.rows || [];
         
-        if (hasUsageCountColumn) {
-          // Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
-          const globalCodeResult = await sql`
-            SELECT id, max_uses, usage_count, is_active, stripe_promotion_code_id
-            FROM discount_codes 
-            WHERE code = ${codeUpper}
-              AND is_active = true
-            LIMIT 1
-            FOR UPDATE
-          `;
-          const globalCodeRows = Array.isArray(globalCodeResult) 
-            ? globalCodeResult 
-            : (globalCodeResult as any)?.rows || [];
+        if (globalCodeRows.length > 0) {
+          const codeRecord = globalCodeRows[0];
+          const currentUsage = codeRecord.usage_count || 0;
+          const newUsage = currentUsage + 1;
+          const maxUses = codeRecord.max_uses;
           
-          if (globalCodeRows.length > 0) {
-            const codeRecord = globalCodeRows[0];
-            const currentUsage = codeRecord.usage_count || 0;
-            const newUsage = currentUsage + 1;
-            const maxUses = codeRecord.max_uses;
+          // Determine if code should be deactivated (reached max uses)
+          let newIsActive = codeRecord.is_active;
+          if (maxUses !== null && maxUses !== undefined && newUsage >= maxUses) {
+            newIsActive = false;
+            console.log('[finalizeCore] Global code reached max_uses limit, deactivating:', {
+              code: codeUpper,
+              usage: newUsage,
+              maxUses: maxUses,
+            });
+          }
+          
+          // Update usage count and active status atomically
+          const updateResult = await sql`
+            UPDATE discount_codes 
+            SET 
+              usage_count = ${newUsage},
+              is_active = ${newIsActive},
+              updated_at = NOW()
+            WHERE id = ${codeRecord.id}
+            RETURNING id, code, usage_count, is_active
+          `;
+          const updatedRows = Array.isArray(updateResult) 
+            ? updateResult 
+            : (updateResult as any)?.rows || [];
+          
+          if (updatedRows.length > 0) {
+            console.log('[finalizeCore] Successfully updated global code usage:', {
+              code: updatedRows[0].code,
+              usage_count: updatedRows[0].usage_count,
+              is_active: updatedRows[0].is_active,
+            });
             
-            // Determine if code should be deactivated (reached max uses)
-            let newIsActive = codeRecord.is_active;
-            if (maxUses !== null && maxUses !== undefined && newUsage >= maxUses) {
-              newIsActive = false;
-              console.log('[finalizeCore] Global code reached max_uses limit, deactivating:', {
-                code: codeUpper,
-                usage: newUsage,
-                maxUses: maxUses,
-              });
-            }
-            
-            // Update usage count and active status atomically
-            const updateResult = await sql`
-              UPDATE discount_codes 
-              SET 
-                usage_count = ${newUsage},
-                is_active = ${newIsActive},
-                updated_at = NOW()
-              WHERE id = ${codeRecord.id}
-              RETURNING id, code, usage_count, is_active
-            `;
-            const updatedRows = Array.isArray(updateResult) 
-              ? updateResult 
-              : (updateResult as any)?.rows || [];
-            
-            if (updatedRows.length > 0) {
-              console.log('[finalizeCore] Successfully updated global code usage:', {
-                code: updatedRows[0].code,
-                usage_count: updatedRows[0].usage_count,
-                is_active: updatedRows[0].is_active,
-              });
-              
-              // Optionally cross-check with Stripe promotion code
-              if (codeRecord.stripe_promotion_code_id) {
-                try {
-                  const promotionCode = await stripe.promotionCodes.retrieve(codeRecord.stripe_promotion_code_id);
-                  const stripeUsage = promotionCode.times_redeemed || 0;
-                  
-                  if (stripeUsage !== newUsage) {
-                    console.warn('[finalizeCore] Usage count mismatch between Neon and Stripe:', {
-                      code: codeUpper,
-                      neonUsage: newUsage,
-                      stripeUsage: stripeUsage,
-                    });
-                    // Note: We keep Neon as source of truth for business logic
-                    // Stripe is used for reporting/analytics only
-                  }
-                } catch (stripeError) {
-                  // Non-critical - log but continue
-                  console.warn('[finalizeCore] Failed to cross-check with Stripe promotion code:', stripeError);
+            // Optionally cross-check with Stripe promotion code
+            if (codeRecord.stripe_promotion_code_id) {
+              try {
+                const promotionCode = await stripe.promotionCodes.retrieve(codeRecord.stripe_promotion_code_id);
+                const stripeUsage = promotionCode.times_redeemed || 0;
+                
+                if (stripeUsage !== newUsage) {
+                  console.warn('[finalizeCore] Usage count mismatch between Neon and Stripe:', {
+                    code: codeUpper,
+                    neonUsage: newUsage,
+                    stripeUsage: stripeUsage,
+                  });
+                  // Note: We keep Neon as source of truth for business logic
+                  // Stripe is used for reporting/analytics only
                 }
+              } catch (stripeError) {
+                // Non-critical - log but continue
+                console.warn('[finalizeCore] Failed to cross-check with Stripe promotion code:', stripeError);
               }
-            } else {
-              console.warn('[finalizeCore] Failed to update global code usage - row may have been updated by another transaction');
             }
+          } else {
+            console.warn('[finalizeCore] Failed to update global code usage - row may have been updated by another transaction');
           }
         }
       } catch (e) {

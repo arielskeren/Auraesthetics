@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all global discount codes
-    // Note: Run migration 010_add_global_discount_code_fields.sql first
     const codesResult = await sql`
       SELECT 
         id,
@@ -55,6 +54,7 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at
       FROM discount_codes
+      WHERE code_type = 'global' OR code_type IS NULL
       ORDER BY created_at DESC
     `;
     const codes = normalizeRows(codesResult);
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     const sql = getSqlClient();
     const codeUpper = code.toUpperCase();
 
-    // Check if code already exists
+    // Check if code already exists (any type)
     const existingCheck = await sql`
       SELECT id FROM discount_codes WHERE code = ${codeUpper} LIMIT 1
     `;
@@ -302,6 +302,7 @@ export async function POST(request: NextRequest) {
       await sql`
         INSERT INTO discount_codes (
           code,
+          code_type,
           discount_type,
           discount_value,
           discount_cap,
@@ -314,6 +315,7 @@ export async function POST(request: NextRequest) {
           updated_at
         ) VALUES (
           ${codeUpper},
+          'global',
           ${discountType},
           ${discountValue},
           ${discountCap || null},

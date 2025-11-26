@@ -30,10 +30,10 @@ export async function GET(request: NextRequest) {
 
     const sql = getSqlClient();
 
-    // Check which IDs actually exist in the database
+    // Check which IDs actually exist in the database (one-time codes only)
     const result = await sql`
-      SELECT id FROM one_time_discount_codes
-      WHERE id = ANY(${ids})
+      SELECT id FROM discount_codes
+      WHERE code_type = 'one_time' AND id = ANY(${ids})
     `;
     
     const existingIds = normalizeRows(result).map((row: any) => row.id);

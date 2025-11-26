@@ -31,11 +31,11 @@ export async function POST(
       );
     }
 
-    // Get current code
+    // Get current code (one-time codes only)
     const codeResult = await sql`
       SELECT used, expires_at
-      FROM one_time_discount_codes
-      WHERE id = ${codeId}
+      FROM discount_codes
+      WHERE id = ${codeId} AND code_type = 'one_time'
       LIMIT 1
     `;
     const codeRows = normalizeRows(codeResult);
@@ -56,9 +56,9 @@ export async function POST(
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 1);
       await sql`
-        UPDATE one_time_discount_codes
+        UPDATE discount_codes
         SET expires_at = ${pastDate.toISOString()}, updated_at = NOW()
-        WHERE id = ${codeId}
+        WHERE id = ${codeId} AND code_type = 'one_time'
       `;
     } else {
       // Unlock code by removing expiry or setting to future
@@ -66,9 +66,9 @@ export async function POST(
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 30);
       await sql`
-        UPDATE one_time_discount_codes
+        UPDATE discount_codes
         SET expires_at = ${futureDate.toISOString()}, updated_at = NOW()
-        WHERE id = ${codeId}
+        WHERE id = ${codeId} AND code_type = 'one_time'
       `;
     }
 

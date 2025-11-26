@@ -22,9 +22,9 @@ export async function GET(
     const sql = getSqlClient();
     const codeId = params.id;
 
-    // Get the code to find the code string
+    // Get the code to find the code string (one-time codes only)
     const codeResult = await sql`
-      SELECT code FROM one_time_discount_codes WHERE id = ${codeId} LIMIT 1
+      SELECT code FROM discount_codes WHERE id = ${codeId} AND code_type = 'one_time' LIMIT 1
     `;
     const codeRows = normalizeRows(codeResult);
     if (codeRows.length === 0) {

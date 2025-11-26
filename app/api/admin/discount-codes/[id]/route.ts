@@ -64,11 +64,11 @@ export async function PATCH(
 
     const sql = getSqlClient();
 
-    // Fetch existing code
+    // Fetch existing code (one-time codes only)
     const codeResult = await sql`
-      SELECT id, code, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at
-      FROM one_time_discount_codes
-      WHERE id = ${codeId}
+      SELECT id, code, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at, code_type
+      FROM discount_codes
+      WHERE id = ${codeId} AND code_type = 'one_time'
       LIMIT 1
     `;
     const codeRows = normalizeRows(codeResult);
@@ -144,7 +144,7 @@ export async function PATCH(
         
         // Update database with new coupon ID
         await sql`
-          UPDATE one_time_discount_codes
+          UPDATE discount_codes
           SET 
             discount_type = ${discountType},
             discount_value = ${discountValue},
@@ -152,7 +152,7 @@ export async function PATCH(
             expires_at = ${newExpiresAt},
             stripe_coupon_id = ${newCouponId},
             updated_at = NOW()
-          WHERE id = ${codeId}
+          WHERE id = ${codeId} AND code_type = 'one_time'
         `;
         
         // Only delete old coupon after DB update succeeds
@@ -188,14 +188,14 @@ export async function PATCH(
     } else {
       // Just update database fields
       await sql`
-        UPDATE one_time_discount_codes
+        UPDATE discount_codes
         SET 
           discount_type = ${discountType},
           discount_value = ${discountValue},
           discount_cap = ${discountCap || null},
           expires_at = ${newExpiresAt},
           updated_at = NOW()
-        WHERE id = ${codeId}
+        WHERE id = ${codeId} AND code_type = 'one_time'
       `;
     }
 
@@ -218,11 +218,11 @@ export async function DELETE(
     const codeId = params.id;
     const sql = getSqlClient();
 
-    // Fetch existing code
+    // Fetch existing code (one-time codes only)
     const codeResult = await sql`
       SELECT id, code, stripe_coupon_id, used
-      FROM one_time_discount_codes
-      WHERE id = ${codeId}
+      FROM discount_codes
+      WHERE id = ${codeId} AND code_type = 'one_time'
       LIMIT 1
     `;
     const codeRows = normalizeRows(codeResult);
@@ -244,13 +244,13 @@ export async function DELETE(
 
     // Delete from database
     const deleteResult = await sql`
-      DELETE FROM one_time_discount_codes
-      WHERE id = ${codeId}
+      DELETE FROM discount_codes
+      WHERE id = ${codeId} AND code_type = 'one_time'
     `;
 
     // Verify deletion
     const verifyResult = await sql`
-      SELECT id FROM one_time_discount_codes WHERE id = ${codeId} LIMIT 1
+      SELECT id FROM discount_codes WHERE id = ${codeId} AND code_type = 'one_time' LIMIT 1
     `;
     const verifyRows = normalizeRows(verifyResult);
     
