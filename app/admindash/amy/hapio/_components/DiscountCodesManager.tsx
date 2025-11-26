@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Lock, Unlock, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { Plus, RefreshCw, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import BookingDetailModal from '../../BookingDetailModal';
 import GlobalCodesManager from './GlobalCodesManager';
 
@@ -220,25 +220,6 @@ export default function DiscountCodesManager() {
     }
   };
 
-  const handleLock = async (codeId: string, lock: boolean) => {
-    try {
-      const response = await fetch(`/api/admin/discount-codes/${codeId}/lock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lock }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        alert(data.error || 'Failed to update code status');
-        return;
-      }
-
-      await loadCodes();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update code status');
-    }
-  };
 
   const handleEdit = (code: DiscountCode) => {
     // Prevent editing inactive codes
@@ -651,27 +632,6 @@ export default function DiscountCodesManager() {
                                   Extend
                                 </button>
                               )}
-                              <button
-                                onClick={() => handleLock(code.id, !isExpired(code))}
-                                className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${
-                                  isExpired(code)
-                                    ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                    : 'bg-red-100 text-red-800 hover:bg-red-200'
-                                }`}
-                                title={isExpired(code) ? 'Unlock code (extend by 30 days)' : 'Lock code (set to expired)'}
-                              >
-                                {isExpired(code) ? (
-                                  <>
-                                    <Unlock className="w-3 h-3" />
-                                    Unlock
-                                  </>
-                                ) : (
-                                  <>
-                                    <Lock className="w-3 h-3" />
-                                    Lock
-                                  </>
-                                )}
-                              </button>
                               {code.is_active !== false && (
                                 <button
                                   onClick={() => {
@@ -740,27 +700,6 @@ export default function DiscountCodesManager() {
                             Extend
                           </button>
                         )}
-                        <button
-                          onClick={() => handleLock(code.id, !isExpired(code))}
-                          className={`px-2 py-1.5 text-xs rounded flex items-center gap-1 min-h-[44px] ${
-                            isExpired(code)
-                              ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                              : 'bg-red-100 text-red-800 hover:bg-red-200'
-                          }`}
-                          title={isExpired(code) ? 'Unlock code (extend by 30 days)' : 'Lock code (set to expired)'}
-                        >
-                          {isExpired(code) ? (
-                            <>
-                              <Unlock className="w-3 h-3" />
-                              Unlock
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3 h-3" />
-                              Lock
-                            </>
-                          )}
-                        </button>
                         <button
                           onClick={() => {
                             setSelectedCode(code);

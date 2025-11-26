@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
         
         if (hasWelcomeOfferColumn) {
           const customerCheck = await sql`
-            SELECT used_welcome_offer, email, first_name, last_name 
+            SELECT id, used_welcome_offer, email, first_name, last_name 
             FROM customers 
             WHERE LOWER(email) = ${emailLower}
             LIMIT 1
@@ -99,6 +99,72 @@ export async function POST(request: NextRequest) {
             if (customer.used_welcome_offer === true) {
               return NextResponse.json(
                 { error: 'This welcome offer has already been used', valid: false },
+                { status: 400 }
+              );
+            }
+            
+            // CRITICAL CHECK 1: Is this their first booking?
+            // Check if customer has any completed bookings (payment_status = 'paid' or 'completed')
+            // Check by both customer_id (if exists) and email (fallback)
+            const previousBookingsCheck = await sql`
+              SELECT COUNT(*) as booking_count
+              FROM bookings
+              WHERE (
+                customer_id = ${customer.id}
+                OR LOWER(client_email) = ${emailLower}
+              )
+                AND payment_status IN ('paid', 'completed')
+              LIMIT 1
+            `;
+            const bookingCount = normalizeRows(previousBookingsCheck)[0]?.booking_count || 0;
+            
+            if (bookingCount > 0) {
+              return NextResponse.json(
+                { error: 'This welcome offer is only valid for your first service booking', valid: false },
+                { status: 400 }
+              );
+            }
+            
+            // CRITICAL CHECK 2: Have they ever used any other discount code?
+            // Check bookings table for any discount codes used (by customer_id or email)
+            const otherDiscountCheck = await sql`
+              SELECT COUNT(*) as discount_count
+              FROM bookings
+              WHERE (
+                customer_id = ${customer.id}
+                OR LOWER(client_email) = ${emailLower}
+              )
+                AND (
+                  metadata->>'discountCode' IS NOT NULL 
+                  AND metadata->>'discountCode' != ''
+                  AND UPPER(metadata->>'discountCode') != 'WELCOME15'
+                )
+              LIMIT 1
+            `;
+            const otherDiscountCount = normalizeRows(otherDiscountCheck)[0]?.discount_count || 0;
+            
+            // Also check booking_events for discount codes
+            const bookingEventsDiscountCheck = await sql`
+              SELECT COUNT(*) as discount_count
+              FROM booking_events be
+              JOIN bookings b ON be.booking_id = b.id
+              WHERE (
+                b.customer_id = ${customer.id}
+                OR LOWER(b.client_email) = ${emailLower}
+              )
+                AND be.type = 'finalized'
+                AND (
+                  be.data->>'discountCode' IS NOT NULL 
+                  AND be.data->>'discountCode' != ''
+                  AND UPPER(be.data->>'discountCode') != 'WELCOME15'
+                )
+              LIMIT 1
+            `;
+            const eventsDiscountCount = normalizeRows(bookingEventsDiscountCheck)[0]?.discount_count || 0;
+            
+            if (otherDiscountCount > 0 || eventsDiscountCount > 0) {
+              return NextResponse.json(
+                { error: 'This welcome offer cannot be used if you have previously used any other discount code', valid: false },
                 { status: 400 }
               );
             }
@@ -131,7 +197,62 @@ export async function POST(request: NextRequest) {
               }
             }
           } else {
-            // New customer - check if someone with the same email/name combination has used it
+            // New customer (not in customers table yet)
+            // CRITICAL CHECK 1: Check if this email has any previous bookings
+            const previousBookingsCheck = await sql`
+              SELECT COUNT(*) as booking_count
+              FROM bookings
+              WHERE LOWER(client_email) = ${emailLower}
+                AND payment_status IN ('paid', 'completed')
+              LIMIT 1
+            `;
+            const bookingCount = normalizeRows(previousBookingsCheck)[0]?.booking_count || 0;
+            
+            if (bookingCount > 0) {
+              return NextResponse.json(
+                { error: 'This welcome offer is only valid for your first service booking', valid: false },
+                { status: 400 }
+              );
+            }
+            
+            // CRITICAL CHECK 2: Check if this email has used any other discount codes
+            const otherDiscountCheck = await sql`
+              SELECT COUNT(*) as discount_count
+              FROM bookings
+              WHERE LOWER(client_email) = ${emailLower}
+                AND (
+                  metadata->>'discountCode' IS NOT NULL 
+                  AND metadata->>'discountCode' != ''
+                  AND UPPER(metadata->>'discountCode') != 'WELCOME15'
+                )
+              LIMIT 1
+            `;
+            const otherDiscountCount = normalizeRows(otherDiscountCheck)[0]?.discount_count || 0;
+            
+            // Also check booking_events for discount codes
+            const bookingEventsDiscountCheck = await sql`
+              SELECT COUNT(*) as discount_count
+              FROM booking_events be
+              JOIN bookings b ON be.booking_id = b.id
+              WHERE LOWER(b.client_email) = ${emailLower}
+                AND be.type = 'finalized'
+                AND (
+                  be.data->>'discountCode' IS NOT NULL 
+                  AND be.data->>'discountCode' != ''
+                  AND UPPER(be.data->>'discountCode') != 'WELCOME15'
+                )
+              LIMIT 1
+            `;
+            const eventsDiscountCount = normalizeRows(bookingEventsDiscountCheck)[0]?.discount_count || 0;
+            
+            if (otherDiscountCount > 0 || eventsDiscountCount > 0) {
+              return NextResponse.json(
+                { error: 'This welcome offer cannot be used if you have previously used any other discount code', valid: false },
+                { status: 400 }
+              );
+            }
+            
+            // Check if someone with the same email/name combination has used it
             if (customerName && typeof customerName === 'string') {
               const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
               if (nameParts.length >= 2) {
@@ -162,31 +283,25 @@ export async function POST(request: NextRequest) {
           console.warn('[Discount Validation] used_welcome_offer column does not exist, skipping WELCOME15 validation');
         }
       } else if (customerName && typeof customerName === 'string') {
-        // Only name provided - check for duplicates (only if column exists)
-        if (hasWelcomeOfferColumn) {
-          const nameParts = customerName.trim().split(/\s+/).filter(Boolean);
-          if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts.slice(1).join(' ');
-            
-            const nameCheck = await sql`
-              SELECT used_welcome_offer 
-              FROM customers 
-              WHERE LOWER(first_name) = LOWER(${firstName})
-                AND LOWER(last_name) = LOWER(${lastName})
-                AND used_welcome_offer = true
-              LIMIT 1
-            `;
-            const nameRows = normalizeRows(nameCheck);
-            
-            if (nameRows.length > 0) {
-              return NextResponse.json(
-                { error: 'This welcome offer has already been used by someone with this name', valid: false },
-                { status: 400 }
-              );
-            }
-          }
-        }
+        // Only name provided - require email for WELCOME15 validation
+        return NextResponse.json(
+          { 
+            error: 'Please enter your email address to verify your eligibility for this welcome offer', 
+            valid: false,
+            requiresEmail: true 
+          },
+          { status: 400 }
+        );
+      } else {
+        // No email or name provided - require email for WELCOME15
+        return NextResponse.json(
+          { 
+            error: 'Please enter your email address to verify your eligibility for this welcome offer', 
+            valid: false,
+            requiresEmail: true 
+          },
+          { status: 400 }
+        );
       }
     }
 
