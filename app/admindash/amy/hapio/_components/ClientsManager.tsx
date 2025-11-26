@@ -551,7 +551,10 @@ export default function ClientsManager() {
         
         // If no available contacts, auto-create without asking
         if (availableBrevoContacts.length === 0) {
-          // Auto-create Brevo contact
+          // Auto-create Brevo contact in backend
+          setSaving(true);
+          setSaveStatus('saving');
+          
           if (editingCustomer) {
             // For existing customer, create Brevo contact using form data (not DB data)
             // This ensures we use the latest form values, not stale DB values
@@ -582,13 +585,12 @@ export default function ClientsManager() {
                 setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
                 setPendingBrevoId(String(createData.brevoId));
                 setSelectedBrevoId(String(createData.brevoId));
-                setToast('Brevo contact created and linked! Saving customer...');
+                // Continue with normal save flow below - brevo_contact_id is now set
               } else {
                 // Contact created but linking failed - still proceed
                 setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
                 setPendingBrevoId(String(createData.brevoId));
                 setSelectedBrevoId(String(createData.brevoId));
-                setToast('Brevo contact created! Saving customer...');
               }
             } else {
               const errorData = await createResponse.json();
@@ -610,15 +612,20 @@ export default function ClientsManager() {
             
             if (createResponse.ok) {
               const createData = await createResponse.json();
-              setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
-              setPendingBrevoId(String(createData.brevoId));
-              setSelectedBrevoId(String(createData.brevoId));
-              setToast('Brevo contact created! Saving customer...');
+              const brevoId = String(createData.brevoId);
+              // Update state immediately
+              setFormData(prev => ({ ...prev, brevo_contact_id: brevoId }));
+              setPendingBrevoId(brevoId);
+              setSelectedBrevoId(brevoId);
+              // Update formData reference for immediate use in save
+              formData.brevo_contact_id = brevoId;
+              // Continue with normal save flow below - brevo_contact_id is now set
             } else {
               const errorData = await createResponse.json();
               throw new Error(errorData.error || 'Failed to create Brevo contact');
             }
           }
+          // After auto-creating, willSaveWithoutBrevo is now false, so we'll proceed to save normally
         } else {
           // Show pre-save confirmation modal (only link option, no skip)
           const userChoice = await new Promise<'link' | 'create'>((resolve) => {
@@ -710,8 +717,11 @@ export default function ClientsManager() {
         }
       }
 
-      setSaving(true);
-      setSaveStatus('saving');
+      // Only set saving if not already set (auto-create may have already set it)
+      if (!saving) {
+        setSaving(true);
+        setSaveStatus('saving');
+      }
       
       if (editingCustomer) {
         // Handle conflict resolutions first if pending
@@ -737,6 +747,8 @@ export default function ClientsManager() {
         }
 
         // Update existing customer
+        // Use pendingBrevoId or finalFormData.brevo_contact_id (pendingBrevoId takes precedence as it's the most recent)
+        const brevoIdToSave = pendingBrevoId || finalFormData.brevo_contact_id || null;
         const response = await fetch(`/api/admin/customers/${editingCustomer.id}`, {
           method: 'PATCH',
           headers: {
@@ -746,9 +758,9 @@ export default function ClientsManager() {
             email: finalFormData.email,
             first_name: finalFormData.first_name || null,
             last_name: finalFormData.last_name || null,
-            phone: finalFormData.phone || null,
+            phone: normalizePhoneForStorage(finalFormData.phone) || null,
             marketing_opt_in: finalFormData.marketing_opt_in,
-            brevo_contact_id: pendingBrevoId || finalFormData.brevo_contact_id || null,
+            brevo_contact_id: brevoIdToSave,
           }),
         });
 
@@ -795,6 +807,8 @@ export default function ClientsManager() {
         }, 1500);
       } else {
         // Create new customer
+        // Use pendingBrevoId or formData.brevo_contact_id (pendingBrevoId takes precedence as it's the most recent)
+        const brevoIdToSave = pendingBrevoId || formData.brevo_contact_id || null;
         const response = await fetch('/api/admin/customers', {
           method: 'POST',
           headers: {
@@ -806,7 +820,7 @@ export default function ClientsManager() {
             last_name: formData.last_name || null,
             phone: formData.phone || null,
             marketing_opt_in: formData.marketing_opt_in,
-            brevo_contact_id: formData.brevo_contact_id || null,
+            brevo_contact_id: brevoIdToSave,
           }),
         });
 
@@ -819,7 +833,9 @@ export default function ClientsManager() {
         const savedCustomer = data.customer;
 
         // Check if Brevo ID was actually saved
-        if (!savedCustomer.brevo_contact_id && willSaveWithoutBrevo) {
+        // Only show post-save modal if we didn't auto-create (willSaveWithoutBrevo would be false if we auto-created)
+        const stillNoBrevoId = !savedCustomer.brevo_contact_id && !pendingBrevoId && !formData.brevo_contact_id;
+        if (stillNoBrevoId && willSaveWithoutBrevo) {
           // Save succeeded but no Brevo ID - show post-save modal
           setSavedCustomerId(savedCustomer.id);
           setShowPostSaveBrevoModal(true);
@@ -831,7 +847,12 @@ export default function ClientsManager() {
 
         await loadCustomers();
         setSaveStatus('saved');
-        setToast('Client created successfully!');
+        // Show appropriate message based on whether we auto-created
+        if (pendingBrevoId || formData.brevo_contact_id) {
+          setToast('Client created successfully! Brevo contact linked.');
+        } else {
+          setToast('Client created successfully!');
+        }
         
         // Close modal after a brief delay to show "Saved!" state
         setTimeout(() => {
