@@ -1,4 +1,4 @@
-const BREVO_API_BASE = 'https://api.brevo.com/v3';
+import { BREVO_API_BASE, getBrevoHeaders, cleanBrevoPayload, buildBrevoContactUrl, logBrevoRequest, logBrevoResponse } from './brevoApiHelpers';
 
 function getApiKey(): string {
   const key = process.env.BREVO_API_KEY;
@@ -44,11 +44,18 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
   if (input.listId) body.listIds = [input.listId];
   if (input.tags?.length) body.tags = input.tags;
 
-  const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
+  // Clean payload to remove undefined/null fields
+  const cleanedBody = cleanBrevoPayload(body);
+  const postUrl = `${BREVO_API_BASE}/contacts`;
+  logBrevoRequest('POST', postUrl, cleanedBody);
+  
+  const resp = await fetch(postUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-    body: JSON.stringify(body),
+    headers: getBrevoHeaders(),
+    body: JSON.stringify(cleanedBody),
   });
+  
+  logBrevoResponse(resp.status);
 
   if (resp.status === 200 || resp.status === 201) {
     return { id: (await resp.json().catch(() => ({})))?.id, success: true };
@@ -56,9 +63,15 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
   
   // Contact exists (400) - fetch existing to merge attributes, then PUT
   if (resp.status === 400) {
-    const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(input.email)}`, {
-      headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+    // Use email as identifier with identifierType query param
+    const existingUrl = buildBrevoContactUrl(input.email, 'email_id');
+    logBrevoRequest('GET', existingUrl);
+    
+    const existingResp = await fetch(existingUrl, {
+      headers: getBrevoHeaders(),
     });
+    
+    logBrevoResponse(existingResp.status);
     
     if (existingResp.ok) {
       const existing = await existingResp.json();
@@ -71,11 +84,18 @@ export async function upsertBrevoContact(input: BrevoContactUpsert): Promise<{ i
         updateBody.listIds = existing.listIds;
       }
       
-      const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(input.email)}`, {
+      // Clean update body and use proper identifier
+      const cleanedUpdateBody = cleanBrevoPayload(updateBody);
+      const updateUrl = buildBrevoContactUrl(input.email, 'email_id');
+      logBrevoRequest('PUT', updateUrl, cleanedUpdateBody);
+      
+      const update = await fetch(updateUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-        body: JSON.stringify(updateBody),
+        headers: getBrevoHeaders(),
+        body: JSON.stringify(cleanedUpdateBody),
       });
+      
+      logBrevoResponse(update.status);
       
       if (update.ok) return { success: true };
     }
@@ -271,6 +291,9 @@ export async function syncCustomerToBrevo(params: {
     if (finalListId && Number.isFinite(finalListId)) body.listIds = [finalListId];
     if (tags?.length) body.tags = tags;
     
+    // Clean payload to remove undefined/null fields
+    const cleanedBody = cleanBrevoPayload(body);
+    
     // Try POST first, then PUT if contact exists
     let brevoResult: { id?: number; success: boolean } = { success: false };
     let brevoContactId: number | undefined = undefined;
@@ -278,8 +301,12 @@ export async function syncCustomerToBrevo(params: {
     // If we already have a brevo_contact_id, try to use it first (more efficient)
     if (customer.brevo_contact_id) {
       try {
-        const existingByIdResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(customer.brevo_contact_id))}`, {
-          headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+        // Use contact_id as identifier with identifierType query param
+        const getUrl = buildBrevoContactUrl(String(customer.brevo_contact_id), 'contact_id');
+        logBrevoRequest('GET', getUrl);
+        
+        const existingByIdResp = await fetch(getUrl, {
+          headers: getBrevoHeaders(),
         });
         
         if (existingByIdResp.ok) {
@@ -324,11 +351,18 @@ export async function syncCustomerToBrevo(params: {
           // Ensure emailBlacklisted matches marketing_opt_in (use normalized value)
           updateBody.emailBlacklisted = !marketingOptIn;
           
-          const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(brevoContactId))}`, {
+          // Clean update body and use proper identifier
+          const cleanedUpdateBody = cleanBrevoPayload(updateBody);
+          const updateUrl = buildBrevoContactUrl(String(brevoContactId), 'contact_id');
+          logBrevoRequest('PUT', updateUrl, cleanedUpdateBody);
+          
+          const update = await fetch(updateUrl, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-            body: JSON.stringify(updateBody),
+            headers: getBrevoHeaders(),
+            body: JSON.stringify(cleanedUpdateBody),
           });
+          
+          logBrevoResponse(update.status);
           
           if (update.ok) {
             brevoResult = { id: brevoContactId, success: true };
@@ -352,11 +386,17 @@ export async function syncCustomerToBrevo(params: {
               delete mergedAttributes.SMS;
               
               const retryBody = { ...updateBody, attributes: mergedAttributes };
-              const retry = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(String(brevoContactId))}`, {
+              const cleanedRetryBody = cleanBrevoPayload(retryBody);
+              const retryUrl = buildBrevoContactUrl(String(brevoContactId), 'contact_id');
+              logBrevoRequest('PUT', retryUrl, cleanedRetryBody);
+              
+              const retry = await fetch(retryUrl, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-                body: JSON.stringify(retryBody),
+                headers: getBrevoHeaders(),
+                body: JSON.stringify(cleanedRetryBody),
               });
+              
+              logBrevoResponse(retry.status);
               
               if (retry.ok) {
                 brevoResult = { id: brevoContactId, success: true };
@@ -385,11 +425,16 @@ export async function syncCustomerToBrevo(params: {
     
     // If we don't have a contact ID yet, try POST (create) or fetch by email (update)
     if (!brevoContactId) {
-      const resp = await fetch(`${BREVO_API_BASE}/contacts`, {
+      const postUrl = `${BREVO_API_BASE}/contacts`;
+      logBrevoRequest('POST', postUrl, cleanedBody);
+      
+      const resp = await fetch(postUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-        body: JSON.stringify(body),
+        headers: getBrevoHeaders(),
+        body: JSON.stringify(cleanedBody),
       });
+      
+      logBrevoResponse(resp.status);
       
       if (resp.status === 200 || resp.status === 201) {
         const data = await resp.json().catch(() => ({}));
@@ -400,8 +445,12 @@ export async function syncCustomerToBrevo(params: {
         // POST returned 400 - could mean contact exists OR validation error
         // Try to fetch by email to see if contact exists
         try {
-          const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
-            headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+          // Use email as identifier with identifierType query param
+          const existingUrl = buildBrevoContactUrl(customer.email, 'email_id');
+          logBrevoRequest('GET', existingUrl);
+          
+          const existingResp = await fetch(existingUrl, {
+            headers: getBrevoHeaders(),
           });
           
           if (existingResp.ok) {
@@ -449,11 +498,18 @@ export async function syncCustomerToBrevo(params: {
             // Ensure emailBlacklisted matches marketing_opt_in (use normalized value)
             updateBody.emailBlacklisted = !marketingOptIn;
             
-            const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+            // Clean update body and use proper identifier
+            const cleanedUpdateBody = cleanBrevoPayload(updateBody);
+            const updateUrl = buildBrevoContactUrl(customer.email, 'email_id');
+            logBrevoRequest('PUT', updateUrl, cleanedUpdateBody);
+            
+            const update = await fetch(updateUrl, {
               method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-              body: JSON.stringify(updateBody),
+              headers: getBrevoHeaders(),
+              body: JSON.stringify(cleanedUpdateBody),
             });
+            
+            logBrevoResponse(update.status);
             
             if (update.ok) {
               brevoResult = { id: brevoContactId, success: true };
@@ -477,11 +533,17 @@ export async function syncCustomerToBrevo(params: {
                 delete mergedAttributes.SMS;
                 
                 const retryBody = { ...updateBody, attributes: mergedAttributes };
-                const retry = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
+                const cleanedRetryBody = cleanBrevoPayload(retryBody);
+                const retryUrl = buildBrevoContactUrl(customer.email, 'email_id');
+                logBrevoRequest('PUT', retryUrl, cleanedRetryBody);
+                
+                const retry = await fetch(retryUrl, {
                   method: 'PUT',
-                  headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-                  body: JSON.stringify(retryBody),
+                  headers: getBrevoHeaders(),
+                  body: JSON.stringify(cleanedRetryBody),
                 });
+                
+                logBrevoResponse(retry.status);
                 
                 if (retry.ok) {
                   brevoResult = { id: brevoContactId, success: true };
@@ -521,11 +583,17 @@ export async function syncCustomerToBrevo(params: {
             if (finalListId && Number.isFinite(finalListId)) minimalBody.listIds = [finalListId];
             if (tags?.length) minimalBody.tags = tags;
             
-            const retryResp = await fetch(`${BREVO_API_BASE}/contacts`, {
+            const cleanedMinimalBody = cleanBrevoPayload(minimalBody);
+            const retryUrl = `${BREVO_API_BASE}/contacts`;
+            logBrevoRequest('POST', retryUrl, cleanedMinimalBody);
+            
+            const retryResp = await fetch(retryUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-              body: JSON.stringify(minimalBody),
+              headers: getBrevoHeaders(),
+              body: JSON.stringify(cleanedMinimalBody),
             });
+            
+            logBrevoResponse(retryResp.status);
             
             if (retryResp.status === 200 || retryResp.status === 201) {
               const retryData = await retryResp.json().catch(() => ({}));
@@ -544,9 +612,15 @@ export async function syncCustomerToBrevo(params: {
               // If it's a duplicate error, try to fetch the contact again
               if (retryResp.status === 400 && (retryErrorData?.code === 'duplicate_parameter' || retryErrorData?.message?.toLowerCase().includes('already exist'))) {
                 console.warn(`[syncCustomerToBrevo] Retry creation returned duplicate error for ${customer.email}. Attempting to fetch by email again.`);
-                const finalFetch = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email)}`, {
-                  headers: { 'api-key': apiKey, 'Accept': 'application/json' },
+                // Use email as identifier with identifierType query param
+                const finalFetchUrl = buildBrevoContactUrl(customer.email, 'email_id');
+                logBrevoRequest('GET', finalFetchUrl);
+                
+                const finalFetch = await fetch(finalFetchUrl, {
+                  headers: getBrevoHeaders(),
                 });
+                
+                logBrevoResponse(finalFetch.status);
                 
                 if (finalFetch.ok) {
                   const finalData = await finalFetch.json().catch(() => ({}));
@@ -590,11 +664,17 @@ export async function syncCustomerToBrevo(params: {
             if (finalListId && Number.isFinite(finalListId)) fallbackBody.listIds = [finalListId];
             if (tags?.length) fallbackBody.tags = tags;
             
-            const fallbackResp = await fetch(`${BREVO_API_BASE}/contacts`, {
+            const cleanedFallbackBody = cleanBrevoPayload(fallbackBody);
+            const fallbackUrl = `${BREVO_API_BASE}/contacts`;
+            logBrevoRequest('POST', fallbackUrl, cleanedFallbackBody);
+            
+            const fallbackResp = await fetch(fallbackUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-              body: JSON.stringify(fallbackBody),
+              headers: getBrevoHeaders(),
+              body: JSON.stringify(cleanedFallbackBody),
             });
+            
+            logBrevoResponse(fallbackResp.status);
             
             if (fallbackResp.status === 200 || fallbackResp.status === 201) {
               const fallbackData = await fallbackResp.json().catch(() => ({}));

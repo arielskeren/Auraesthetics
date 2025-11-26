@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { buildBrevoContactUrl, getBrevoHeaders, logBrevoRequest, logBrevoResponse } from '@/lib/brevoApiHelpers';
 import { syncCustomerToBrevo } from '@/lib/brevoClient';
 
 // GET /api/admin/customers/[id] - Get customer details
@@ -309,21 +310,22 @@ export async function DELETE(
     // Delete from Brevo if linked
     if (brevoContactId) {
       try {
-        const apiKey = process.env.BREVO_API_KEY;
-        if (apiKey) {
-          const brevoResponse = await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(brevoContactId)}`, {
-            method: 'DELETE',
-            headers: {
-              'api-key': apiKey,
-            },
-          });
+        // Use contact_id as identifier with identifierType query param
+        const deleteUrl = buildBrevoContactUrl(String(brevoContactId), 'contact_id');
+        logBrevoRequest('DELETE', deleteUrl);
+        
+        const brevoResponse = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: getBrevoHeaders(),
+        });
+        
+        logBrevoResponse(brevoResponse.status);
 
-          if (!brevoResponse.ok && brevoResponse.status !== 404) {
-            // Log but don't fail - we'll still delete from Neon
-            console.warn(`[Delete Customer] Failed to delete Brevo contact ${brevoContactId}:`, brevoResponse.status);
-          } else {
-            console.log(`[Delete Customer] Successfully deleted Brevo contact ${brevoContactId}`);
-          }
+        if (!brevoResponse.ok && brevoResponse.status !== 404) {
+          // Log but don't fail - we'll still delete from Neon
+          console.warn(`[Delete Customer] Failed to delete Brevo contact ${brevoContactId}:`, brevoResponse.status);
+        } else {
+          console.log(`[Delete Customer] Successfully deleted Brevo contact ${brevoContactId}`);
         }
       } catch (brevoError) {
         // Log but don't fail - we'll still delete from Neon

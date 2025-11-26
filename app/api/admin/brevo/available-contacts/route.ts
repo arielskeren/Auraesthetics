@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { BREVO_API_BASE, getBrevoHeaders, logBrevoRequest, logBrevoResponse } from '@/lib/brevoApiHelpers';
 
 export const dynamic = 'force-dynamic';
-
-const BREVO_API_BASE = 'https://api.brevo.com/v3';
-
-function getApiKey(): string {
-  const key = process.env.BREVO_API_KEY;
-  if (!key) throw new Error('Missing BREVO_API_KEY');
-  return key;
-}
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -24,7 +17,6 @@ function normalizeRows(result: any): any[] {
 // GET /api/admin/brevo/available-contacts - Get Brevo contacts not linked to Neon customers
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = getApiKey();
     const sql = getSqlClient();
 
     // Fetch all Brevo contacts (paginated)
@@ -34,13 +26,15 @@ export async function GET(request: NextRequest) {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await fetch(`${BREVO_API_BASE}/contacts?limit=${limit}&offset=${offset}`, {
-        headers: {
-          'api-key': apiKey,
-          'Accept': 'application/json',
-        },
+      const url = `${BREVO_API_BASE}/contacts?limit=${limit}&offset=${offset}`;
+      logBrevoRequest('GET', url);
+      
+      const response = await fetch(url, {
+        headers: getBrevoHeaders(),
         cache: 'no-store',
       });
+      
+      logBrevoResponse(response.status);
 
       if (!response.ok) {
         const errorText = await response.text();

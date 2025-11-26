@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { BREVO_API_BASE, getBrevoHeaders, cleanBrevoPayload, buildBrevoContactUrl, logBrevoRequest, logBrevoResponse } from '@/lib/brevoApiHelpers';
 
 export const dynamic = 'force-dynamic';
-
-const BREVO_API_BASE = 'https://api.brevo.com/v3';
-
-function getApiKey(): string {
-  const key = process.env.BREVO_API_KEY;
-  if (!key) throw new Error('Missing BREVO_API_KEY');
-  return key;
-}
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -29,7 +22,6 @@ export async function POST(
   try {
     const sql = getSqlClient();
     const customerId = params.id;
-    const apiKey = getApiKey();
     const listId = process.env.BREVO_LIST_ID ? Number(process.env.BREVO_LIST_ID) : undefined;
 
     // Fetch customer from Neon
@@ -109,27 +101,26 @@ export async function POST(
       body.listIds = [listId]; // Array of int64s
     }
 
-    console.log('[Link Brevo API] Creating contact:', {
-      email: body.email,
-      hasAttributes: Object.keys(attributes).length > 0,
-      emailBlacklisted: body.emailBlacklisted,
-      hasListId: !!body.listIds,
+    // Clean payload to remove undefined/null fields
+    const cleanedBody = cleanBrevoPayload(body);
+    
+    const url = `${BREVO_API_BASE}/contacts`;
+    logBrevoRequest('POST', url, cleanedBody);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getBrevoHeaders(),
+      body: JSON.stringify(cleanedBody),
     });
 
-    const response = await fetch(`${BREVO_API_BASE}/contacts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': apiKey,
-      },
-      body: JSON.stringify(body),
-    });
+    const responseData = await response.json().catch(() => null);
+    logBrevoResponse(response.status, responseData);
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = responseData ? JSON.stringify(responseData) : await response.text().catch(() => 'Unknown error');
       let errorData: any = {};
       try {
-        errorData = JSON.parse(errorText);
+        errorData = typeof errorText === 'string' ? JSON.parse(errorText) : errorText;
       } catch {
         errorData = { message: errorText };
       }
@@ -146,11 +137,12 @@ export async function POST(
         errorData.message?.toLowerCase().includes('duplicate')
       )) {
         try {
-          const existingResp = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email.trim())}`, {
-            headers: {
-              'api-key': apiKey,
-              'Accept': 'application/json',
-            },
+          // Use email as identifier with identifierType query param
+          const existingUrl = buildBrevoContactUrl(customer.email.trim(), 'email_id');
+          logBrevoRequest('GET', existingUrl);
+          
+          const existingResp = await fetch(existingUrl, {
+            headers: getBrevoHeaders(),
           });
 
           if (existingResp.ok) {
@@ -167,14 +159,18 @@ export async function POST(
               updateBody.listIds = [listId];
             }
 
-            const update = await fetch(`${BREVO_API_BASE}/contacts/${encodeURIComponent(customer.email.trim())}`, {
+            // Clean update body and use proper identifier
+            const cleanedUpdateBody = cleanBrevoPayload(updateBody);
+            const updateUrl = buildBrevoContactUrl(customer.email.trim(), 'email_id');
+            logBrevoRequest('PUT', updateUrl, cleanedUpdateBody);
+            
+            const update = await fetch(updateUrl, {
               method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'api-key': apiKey,
-              },
-              body: JSON.stringify(updateBody),
+              headers: getBrevoHeaders(),
+              body: JSON.stringify(cleanedUpdateBody),
             });
+            
+            logBrevoResponse(update.status);
 
             if (update.ok) {
               // Link the existing contact
@@ -210,7 +206,7 @@ export async function POST(
       );
     }
 
-    const brevoContact = await response.json();
+    const brevoContact = responseData || {};
     const brevoId = brevoContact.id;
 
     // Link it in Neon
