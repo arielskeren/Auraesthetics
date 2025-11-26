@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-10-29.clover',
-});
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -68,8 +63,7 @@ export async function POST(
       WHERE id = ${codeId} AND code_type = 'one_time'
     `;
 
-    // Note: Stripe coupons don't have expiry dates that can be updated
-    // The expiry is enforced at the application level
+    // Expiry is enforced at the application level (database)
 
     return NextResponse.json({
       success: true,

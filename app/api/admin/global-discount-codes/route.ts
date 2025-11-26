@@ -204,15 +204,6 @@ export async function POST(request: NextRequest) {
     } catch (dbError: any) {
       console.error('[Create Global Discount Code] Database insert failed:', dbError);
       
-      // If DB insert fails, clean up Stripe resources to avoid orphaned records
-      try {
-        await stripe.promotionCodes.update(promotionCode.id, { active: false });
-        await stripe.coupons.del(couponId);
-        console.log('[Create Global Discount Code] Cleaned up Stripe resources after DB failure');
-      } catch (cleanupError) {
-        console.error('[Create Global Discount Code] Failed to clean up Stripe resources after DB failure:', cleanupError);
-      }
-      
       return NextResponse.json(
         { 
           error: 'Failed to save discount code to database', 
