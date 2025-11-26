@@ -106,7 +106,9 @@ export default function GlobalCodesManager() {
     } catch (err: any) {
       console.error('[GlobalCodesManager] Error loading codes:', err);
       setError(err);
-      setCodes([]);
+      setActiveCodes([]);
+      setUsedCodes([]);
+      setInactiveCodes([]);
     } finally {
       setLoading(false);
     }

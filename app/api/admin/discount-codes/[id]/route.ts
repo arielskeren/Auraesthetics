@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import { stripe } from '@/lib/stripeClient';
-import Stripe from 'stripe';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -107,103 +105,17 @@ export async function PATCH(
       }
     }
 
-    // No Stripe coupon updates needed (removed Stripe dependency)
-      
-      try {
-        // Create new coupon FIRST (before deleting old one to avoid orphaned state)
-        const couponName = `One-time: ${existingCode.code}`;
-        let coupon: Stripe.Coupon;
-        if (discountType === 'percent') {
-          const couponParams: Stripe.CouponCreateParams = {
-            name: couponName,
-            duration: 'once',
-            percent_off: Math.round(discountValue),
-            metadata: {
-              one_time_code: existingCode.code,
-              discount_type: discountType,
-            },
-          };
-          if (discountCap) {
-            couponParams.metadata = {
-              ...couponParams.metadata,
-              discount_cap: String(discountCap),
-            };
-          }
-          coupon = await stripe.coupons.create(couponParams);
-        } else {
-          coupon = await stripe.coupons.create({
-            name: couponName,
-            duration: 'once',
-            amount_off: Math.round(discountValue * 100),
-            currency: 'usd',
-            metadata: {
-              one_time_code: existingCode.code,
-              discount_type: discountType,
-            },
-          });
-        }
-        
-        newCouponId = String(coupon.id).trim();
-        if (!newCouponId || newCouponId.length === 0) {
-          throw new Error('Invalid coupon ID returned from Stripe');
-        }
-        
-        // Update database with new coupon ID
-        await sql`
-          UPDATE discount_codes
-          SET 
-            discount_type = ${discountType},
-            discount_value = ${discountValue},
-            discount_cap = ${discountCap || null},
-            expires_at = ${newExpiresAt},
-            stripe_coupon_id = ${newCouponId},
-            updated_at = NOW()
-          WHERE id = ${codeId} AND code_type = 'one_time'
-        `;
-        
-        // Only delete old coupon after DB update succeeds
-        try {
-          await stripe.coupons.del(oldCouponId);
-          console.log('[Update Discount Code] Successfully replaced old coupon:', oldCouponId);
-        } catch (delError: any) {
-          // Log but don't fail - old coupon might already be deleted
-          console.warn('[Update Discount Code] Failed to delete old coupon (non-critical):', delError.message);
-        }
-      } catch (stripeError: any) {
-        console.error('[Update Discount Code] Stripe coupon update failed:', {
-          error: stripeError.message,
-          code: stripeError.code,
-          type: stripeError.type,
-        });
-        
-        // If new coupon was created but DB update failed, clean it up
-        if (newCouponId) {
-          try {
-            await stripe.coupons.del(newCouponId);
-            console.log('[Update Discount Code] Cleaned up orphaned new coupon:', newCouponId);
-          } catch (cleanupError) {
-            console.error('[Update Discount Code] Failed to clean up orphaned coupon:', cleanupError);
-          }
-        }
-        
-        return NextResponse.json(
-          { error: 'Failed to update Stripe coupon', details: stripeError.message },
-          { status: 500 }
-        );
-      }
-    } else {
-      // Just update database fields
-      await sql`
-        UPDATE discount_codes
-        SET 
-          discount_type = ${discountType},
-          discount_value = ${discountValue},
-          discount_cap = ${discountCap || null},
-          expires_at = ${newExpiresAt},
-          updated_at = NOW()
-        WHERE id = ${codeId} AND code_type = 'one_time'
-      `;
-    }
+    // Update database fields (no Stripe dependency)
+    await sql`
+      UPDATE discount_codes
+      SET 
+        discount_type = ${discountType},
+        discount_value = ${discountValue},
+        discount_cap = ${discountCap || null},
+        expires_at = ${newExpiresAt},
+        updated_at = NOW()
+      WHERE id = ${codeId} AND code_type = 'one_time'
+    `;
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
