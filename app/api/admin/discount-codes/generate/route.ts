@@ -153,11 +153,11 @@ export async function POST(request: NextRequest) {
       const insertResult = await sql`
         INSERT INTO discount_codes (
           code, code_type, customer_id, discount_type, discount_value, discount_cap,
-          expires_at, used, created_by
+          expires_at, used, is_active, created_by
         )
         VALUES (
           ${code}, 'one_time', ${finalCustomerId}, ${discountType}, ${discountValue}, 
-          ${discountCap || null}, ${expiresAt}, false, 'admin'
+          ${discountCap || null}, ${expiresAt}, false, true, 'admin'
         )
         RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
       `;
