@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import { BREVO_API_BASE, getBrevoHeaders, cleanBrevoPayload, buildBrevoContactUrl, logBrevoRequest, logBrevoResponse } from '@/lib/brevoApiHelpers';
+import { BREVO_API_BASE, getBrevoHeaders, cleanBrevoPayload, buildBrevoContactUrl, logBrevoRequest, logBrevoResponse, normalizeUSPhone } from '@/lib/brevoApiHelpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,58 +51,24 @@ export async function POST(
       LASTNAME: customer.last_name || '',
     };
 
-    // Format phone number for Brevo
-    // According to Brevo API: SMS field accepts: 91xxxxxxxxxx, +91xxxxxxxxxx, or 0091xxxxxxxxxx
-    // For US numbers stored as 1##########, we convert to +1##########
-    // IMPORTANT: Only send phone attributes if we have a valid phone number (10+ digits)
-    // Invalid phone numbers should NOT be sent to Brevo to avoid API errors
-    if (customer.phone) {
-      const digitsOnly = customer.phone.trim().replace(/\D/g, '');
-      
-      // Only process if we have at least 10 digits (valid US phone number minimum)
-      if (digitsOnly.length >= 10) {
-        let formattedPhone: string;
-        if (digitsOnly.length === 10) {
-          // 10 digits: assume US number, add country code
-          formattedPhone = `+1${digitsOnly}`;
-        } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
-          // 11 digits starting with 1: US number with country code
-          formattedPhone = `+${digitsOnly}`;
-        } else if (customer.phone.trim().startsWith('+')) {
-          // Already has + prefix
-          const cleaned = customer.phone.trim().replace(/[^\d+]/g, '');
-          formattedPhone = cleaned.startsWith('+') ? cleaned : `+${cleaned.replace(/\+/g, '')}`;
-        } else if (customer.phone.trim().startsWith('00')) {
-          // Has 00 prefix (international format)
-          formattedPhone = customer.phone.trim();
-        } else {
-          // Other formats: add + prefix
-          formattedPhone = `+${digitsOnly}`;
-        }
-        
-        // Only add phone attributes if we have a valid format (E.164 format: +country code + number)
-        // Minimum length for E.164 is typically 11 characters (+1 + 10 digits for US)
-        // Brevo requires SMS field for phone-only contacts, but we always have email
-        if (formattedPhone && formattedPhone.length >= 11 && formattedPhone.startsWith('+')) {
-          attributes.PHONE = formattedPhone;
-          attributes.LANDLINE_NUMBER = formattedPhone;
-          attributes.SMS = formattedPhone; // Required field for phone number
-        } else {
-          // Invalid phone format - log warning but don't send to Brevo
-          console.warn('[Link Brevo API] Invalid phone format, skipping phone attributes:', {
-            original: customer.phone,
-            digitsOnly,
-            formattedPhone,
-          });
-        }
-      } else {
-        // Phone number too short - log warning but don't send to Brevo
-        console.warn('[Link Brevo API] Phone number too short, skipping phone attributes:', {
-          original: customer.phone,
-          digitsOnly,
-          digitCount: digitsOnly.length,
-        });
-      }
+    // Normalize phone number for Brevo SMS attribute
+    // Use strict US phone normalization: only send SMS if we get a valid "+1XXXXXXXXXX" format
+    // If invalid, do NOT send SMS attribute to avoid Brevo rejecting the contact
+    const smsFormatted = normalizeUSPhone(customer.phone);
+    
+    if (smsFormatted) {
+      // Valid US phone number - include SMS attribute
+      // Brevo requires SMS field to have proper country code format: +1XXXXXXXXXX
+      attributes.SMS = smsFormatted;
+      // Also set PHONE and LANDLINE_NUMBER for consistency (Brevo may use these)
+      attributes.PHONE = smsFormatted;
+      attributes.LANDLINE_NUMBER = smsFormatted;
+    } else if (customer.phone) {
+      // Invalid phone number - log warning but don't send to Brevo
+      console.warn('[Link Brevo API] Invalid US phone number, skipping SMS attribute:', {
+        original: customer.phone,
+        reason: 'Must be 10 digits or 11 digits starting with 1',
+      });
     }
 
     // Create Brevo contact
@@ -225,10 +191,67 @@ export async function POST(
         errorMessage = errorText;
       }
       
-      // Check if error is specifically about phone number
+      // Check if error is specifically about phone number/SMS
       const isPhoneError = errorMessage.toLowerCase().includes('phone') || 
                           errorMessage.toLowerCase().includes('sms') ||
-                          errorMessage.toLowerCase().includes('invalid number');
+                          errorMessage.toLowerCase().includes('invalid number') ||
+                          errorMessage.toLowerCase().includes('mobile');
+      
+      // If it's a phone error and we sent SMS, try to retry without SMS as fallback
+      const shouldRetryWithoutSMS = isPhoneError && attributes.SMS && response.status === 400;
+      
+      if (shouldRetryWithoutSMS) {
+        try {
+          console.log('[Link Brevo API] Retrying without SMS attribute due to phone error');
+          const retryBody: any = {
+            email: customer.email.trim(),
+            attributes: {
+              FIRSTNAME: attributes.FIRSTNAME || '',
+              LASTNAME: attributes.LASTNAME || '',
+              // Explicitly omit SMS, PHONE, LANDLINE_NUMBER
+            },
+            updateEnabled: true,
+            emailBlacklisted: !marketingOptIn,
+          };
+          
+          if (listId && Number.isFinite(listId)) {
+            retryBody.listIds = [listId];
+          }
+          
+          const cleanedRetryBody = cleanBrevoPayload(retryBody);
+          logBrevoRequest('POST', url, cleanedRetryBody);
+          
+          const retryResponse = await fetch(url, {
+            method: 'POST',
+            headers: getBrevoHeaders(),
+            body: JSON.stringify(cleanedRetryBody),
+          });
+          
+          const retryData = await retryResponse.json().catch(() => null);
+          logBrevoResponse(retryResponse.status, retryData);
+          
+          if (retryResponse.ok) {
+            const brevoContact = retryData || {};
+            const brevoId = brevoContact.id;
+            
+            // Link it in Neon
+            await sql`
+              UPDATE customers
+              SET brevo_contact_id = ${String(brevoId)}, updated_at = NOW()
+              WHERE id = ${customerId}
+            `;
+            
+            return NextResponse.json({
+              success: true,
+              brevoId: brevoId,
+              message: 'Brevo contact created and linked successfully (without phone due to validation error)',
+              phoneWarning: 'Phone number was invalid and was not included',
+            });
+          }
+        } catch (retryError) {
+          console.error('[Link Brevo API] Retry without SMS failed:', retryError);
+        }
+      }
       
       return NextResponse.json(
         { 
