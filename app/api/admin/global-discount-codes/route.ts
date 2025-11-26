@@ -239,6 +239,10 @@ export async function POST(request: NextRequest) {
     if (maxUses && maxUses > 0) {
       promotionCodeParams.max_redemptions = maxUses;
     }
+    if (expiresAt) {
+      // Convert ISO timestamp to Unix timestamp (seconds since epoch)
+      promotionCodeParams.expires_at = Math.floor(new Date(expiresAt).getTime() / 1000);
+    }
     
     let promotionCode: Stripe.PromotionCode;
     try {

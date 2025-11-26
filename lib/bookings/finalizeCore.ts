@@ -347,6 +347,107 @@ export async function finalizeBookingTransactional(args: {
       }
     }
 
+    // Track global discount code usage (inside transaction to ensure atomicity)
+    // Only process if this is NOT a one-time code (one-time codes are handled above)
+    if (discountCodeFromMetadata && typeof discountCodeFromMetadata === 'string' && !oneTimeCodeId) {
+      try {
+        const codeUpper = discountCodeFromMetadata.toUpperCase();
+        
+        // Check if discount_codes table exists and has usage_count column
+        const tableCheck = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'discount_codes' 
+            AND column_name = 'usage_count'
+          LIMIT 1
+        `;
+        const hasUsageCountColumn = Array.isArray(tableCheck) 
+          ? tableCheck.length > 0 
+          : ((tableCheck as any)?.rows || []).length > 0;
+        
+        if (hasUsageCountColumn) {
+          // Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
+          const globalCodeResult = await sql`
+            SELECT id, max_uses, usage_count, is_active, stripe_promotion_code_id
+            FROM discount_codes 
+            WHERE code = ${codeUpper}
+              AND is_active = true
+            LIMIT 1
+            FOR UPDATE
+          `;
+          const globalCodeRows = Array.isArray(globalCodeResult) 
+            ? globalCodeResult 
+            : (globalCodeResult as any)?.rows || [];
+          
+          if (globalCodeRows.length > 0) {
+            const codeRecord = globalCodeRows[0];
+            const currentUsage = codeRecord.usage_count || 0;
+            const newUsage = currentUsage + 1;
+            const maxUses = codeRecord.max_uses;
+            
+            // Determine if code should be deactivated (reached max uses)
+            let newIsActive = codeRecord.is_active;
+            if (maxUses !== null && maxUses !== undefined && newUsage >= maxUses) {
+              newIsActive = false;
+              console.log('[finalizeCore] Global code reached max_uses limit, deactivating:', {
+                code: codeUpper,
+                usage: newUsage,
+                maxUses: maxUses,
+              });
+            }
+            
+            // Update usage count and active status atomically
+            const updateResult = await sql`
+              UPDATE discount_codes 
+              SET 
+                usage_count = ${newUsage},
+                is_active = ${newIsActive},
+                updated_at = NOW()
+              WHERE id = ${codeRecord.id}
+              RETURNING id, code, usage_count, is_active
+            `;
+            const updatedRows = Array.isArray(updateResult) 
+              ? updateResult 
+              : (updateResult as any)?.rows || [];
+            
+            if (updatedRows.length > 0) {
+              console.log('[finalizeCore] Successfully updated global code usage:', {
+                code: updatedRows[0].code,
+                usage_count: updatedRows[0].usage_count,
+                is_active: updatedRows[0].is_active,
+              });
+              
+              // Optionally cross-check with Stripe promotion code
+              if (codeRecord.stripe_promotion_code_id) {
+                try {
+                  const promotionCode = await stripe.promotionCodes.retrieve(codeRecord.stripe_promotion_code_id);
+                  const stripeUsage = promotionCode.times_redeemed || 0;
+                  
+                  if (stripeUsage !== newUsage) {
+                    console.warn('[finalizeCore] Usage count mismatch between Neon and Stripe:', {
+                      code: codeUpper,
+                      neonUsage: newUsage,
+                      stripeUsage: stripeUsage,
+                    });
+                    // Note: We keep Neon as source of truth for business logic
+                    // Stripe is used for reporting/analytics only
+                  }
+                } catch (stripeError) {
+                  // Non-critical - log but continue
+                  console.warn('[finalizeCore] Failed to cross-check with Stripe promotion code:', stripeError);
+                }
+              }
+            } else {
+              console.warn('[finalizeCore] Failed to update global code usage - row may have been updated by another transaction');
+            }
+          }
+        }
+      } catch (e) {
+        // Non-critical - log but continue
+        console.error('[finalizeCore] Failed to track global code usage:', e);
+      }
+    }
+
     // Confirm on Hapio (critical - must succeed before committing transaction)
     try {
       await confirmBooking(args.hapioBookingId, { isTemporary: false, metadata: { stripePaymentIntentId: (pi as any).id } });

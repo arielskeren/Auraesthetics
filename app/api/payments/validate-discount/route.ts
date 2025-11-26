@@ -280,6 +280,7 @@ export async function POST(request: NextRequest) {
         SELECT * FROM discount_codes 
         WHERE code = ${codeUpper} 
         AND is_active = true
+        AND (expires_at IS NULL OR expires_at > NOW())
       `;
       const discountRows = normalizeRows(dbResult);
 
@@ -292,6 +293,17 @@ export async function POST(request: NextRequest) {
 
       discountCode = discountRows[0];
       stripeCouponId = discountCode.stripe_coupon_id;
+      
+      // Check max_uses limit (if set)
+      if (discountCode.max_uses !== null && discountCode.max_uses !== undefined) {
+        const usageCount = discountCode.usage_count || 0;
+        if (usageCount >= discountCode.max_uses) {
+          return NextResponse.json(
+            { error: 'This discount code has reached its usage limit', valid: false },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Validate coupon with Stripe
@@ -310,6 +322,17 @@ export async function POST(request: NextRequest) {
           { error: 'Discount code is no longer valid', valid: false },
           { status: 400 }
         );
+      }
+
+      // Check redeem_by if set (Stripe coupon expiration)
+      if (coupon.redeem_by && typeof coupon.redeem_by === 'number') {
+        const now = Math.floor(Date.now() / 1000); // Current time in Unix seconds
+        if (now > coupon.redeem_by) {
+          return NextResponse.json(
+            { error: 'This discount code has expired', valid: false },
+            { status: 400 }
+          );
+        }
       }
 
       // Calculate discount amount
