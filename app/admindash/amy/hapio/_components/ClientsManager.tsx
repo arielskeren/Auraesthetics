@@ -270,7 +270,10 @@ export default function ClientsManager() {
     setFormattedPhone(value);
     
     // Normalize and store in formData
-    const normalized = normalizePhoneForStorage(value);
+    // If value is just digits (partial input), normalize it
+    // If value is formatted (has +1), extract digits first
+    const digits = value.replace(/\D/g, '');
+    const normalized = normalizePhoneForStorage(digits);
     setFormData(prev => ({ ...prev, phone: normalized }));
   };
 
@@ -793,25 +796,58 @@ export default function ClientsManager() {
                     value={formattedPhone}
                     onChange={(e) => {
                       const input = e.target.value;
-                      // Allow user to type, format as they type
+                      // Extract only digits from input
                       const digits = input.replace(/\D/g, '');
                       
-                      // Limit to 10 digits (US phone number)
-                      if (digits.length <= 10) {
-                        let formatted = '';
-                        if (digits.length > 0) {
-                          formatted = '+1';
-                          if (digits.length > 0) {
-                            formatted += ` (${digits.slice(0, 3)}`;
+                      // Limit to 11 digits (1 + 10 digit US phone number)
+                      if (digits.length <= 11) {
+                        // Only format if we have at least 3 digits (enough to show area code)
+                        // This prevents the "+1" from appearing too early and interfering with typing
+                        if (digits.length >= 3) {
+                          // Remove leading 1 if present (we'll add it back in formatting)
+                          const cleaned = digits.startsWith('1') && digits.length === 11 ? digits.slice(1) : digits;
+                          
+                          let formatted = '';
+                          if (cleaned.length >= 3) {
+                            formatted = '+1 (';
+                            formatted += cleaned.slice(0, 3);
+                            if (cleaned.length > 3) {
+                              formatted += ')';
+                              formatted += cleaned.slice(3, 6);
+                              if (cleaned.length > 6) {
+                                formatted += '-';
+                                formatted += cleaned.slice(6, 10);
+                              }
+                            }
                           }
-                          if (digits.length > 3) {
-                            formatted += `)${digits.slice(3, 6)}`;
-                          }
-                          if (digits.length > 6) {
-                            formatted += `-${digits.slice(6, 10)}`;
-                          }
+                          handlePhoneChange(formatted);
+                        } else if (digits.length > 0) {
+                          // For 1-2 digits, just show the digits without formatting
+                          // This allows free typing without the "+1" prefix interfering
+                          handlePhoneChange(digits);
+                        } else {
+                          // Empty input
+                          handlePhoneChange('');
                         }
-                        handlePhoneChange(formatted || input);
+                      } else {
+                        // If more than 11 digits, truncate to 11 and format
+                        const truncated = digits.slice(0, 11);
+                        const cleaned = truncated.startsWith('1') ? truncated.slice(1) : truncated;
+                        if (cleaned.length >= 3) {
+                          let formatted = '+1 (';
+                          formatted += cleaned.slice(0, 3);
+                          if (cleaned.length > 3) {
+                            formatted += ')';
+                            formatted += cleaned.slice(3, 6);
+                            if (cleaned.length > 6) {
+                              formatted += '-';
+                              formatted += cleaned.slice(6, 10);
+                            }
+                          }
+                          handlePhoneChange(formatted);
+                        } else {
+                          handlePhoneChange(cleaned);
+                        }
                       }
                     }}
                     placeholder="+1 (555) 123-4567"
