@@ -33,25 +33,36 @@ export async function POST(request: NextRequest) {
     };
 
     // Format phone number for Brevo
+    // According to Brevo API: SMS field accepts: 91xxxxxxxxxx, +91xxxxxxxxxx, or 0091xxxxxxxxxx
+    // For US numbers stored as 1##########, we convert to +1##########
     if (phone) {
       const digitsOnly = phone.trim().replace(/\D/g, '');
       if (digitsOnly.length >= 10) {
         let formattedPhone: string;
         if (digitsOnly.length === 10) {
+          // 10 digits: assume US number, add country code
           formattedPhone = `+1${digitsOnly}`;
         } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+          // 11 digits starting with 1: US number with country code
           formattedPhone = `+${digitsOnly}`;
         } else if (phone.trim().startsWith('+')) {
+          // Already has + prefix
           const cleaned = phone.trim().replace(/[^\d+]/g, '');
           formattedPhone = cleaned.startsWith('+') ? cleaned : `+${cleaned.replace(/\+/g, '')}`;
+        } else if (phone.trim().startsWith('00')) {
+          // Has 00 prefix (international format)
+          formattedPhone = phone.trim();
         } else {
+          // Other formats: add + prefix
           formattedPhone = `+${digitsOnly}`;
         }
         
-        if (formattedPhone.startsWith('+') && formattedPhone.length >= 11) {
+        // Only add phone attributes if we have a valid format
+        // Brevo requires SMS field for phone-only contacts, but we always have email
+        if (formattedPhone && formattedPhone.length >= 11) {
           attributes.PHONE = formattedPhone;
           attributes.LANDLINE_NUMBER = formattedPhone;
-          attributes.SMS = formattedPhone;
+          attributes.SMS = formattedPhone; // Required field for phone number
         }
       }
     }
@@ -60,15 +71,18 @@ export async function POST(request: NextRequest) {
     const marketingOptIn = marketing_opt_in === true || marketing_opt_in === 'true' || marketing_opt_in === 1;
 
     // Create Brevo contact
+    // Per Brevo API: email is mandatory if ext_id & SMS not passed
+    // We always pass email, so this requirement is met
     const brevoBody: any = {
       email: email.trim(),
-      attributes,
-      updateEnabled: true,
+      attributes, // Attributes must be in CAPITAL LETTERS (FIRSTNAME, LASTNAME, SMS, etc.)
+      updateEnabled: true, // Allows updating existing contacts
       emailBlacklisted: !marketingOptIn, // Set based on marketing_opt_in
+      // smsBlacklisted: false, // Can be set if needed in the future
     };
     
     if (listId && Number.isFinite(listId)) {
-      brevoBody.listIds = [listId];
+      brevoBody.listIds = [listId]; // Array of int64s
     }
 
     console.log('[Create Brevo Contact API] Creating contact:', {

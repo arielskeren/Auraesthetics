@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Search, Check, X, Plus, Edit, AlertCircle } from 'lucide-react';
+import { RefreshCw, Search, Check, X, Plus, Edit, AlertCircle, Trash2 } from 'lucide-react';
 import LoadingState from './LoadingState';
 import Toast from './Toast';
 
@@ -43,6 +43,57 @@ interface Conflicts {
   phone?: ConflictData;
 }
 
+// Phone number formatting utilities
+function formatPhoneForDisplay(phone: string | null | undefined): string {
+  if (!phone) return '';
+  
+  // Remove all non-digits
+  const digits = phone.replace(/\D/g, '');
+  
+  // Remove leading 1 if present (US country code)
+  const cleaned = digits.startsWith('1') && digits.length === 11 ? digits.slice(1) : digits;
+  
+  // Format as +1 (###)###-####
+  if (cleaned.length === 10) {
+    return `+1 (${cleaned.slice(0, 3)})${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  
+  // If it's 11 digits with leading 1, format it
+  if (digits.length === 11 && digits.startsWith('1')) {
+    const cleaned = digits.slice(1);
+    return `+1 (${cleaned.slice(0, 3)})${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  
+  // If not 10 or 11 digits, return as-is (partial input or invalid)
+  return phone;
+}
+
+function normalizePhoneForStorage(phone: string | null | undefined): string {
+  if (!phone) return '';
+  
+  // Remove all non-digits
+  const digits = phone.replace(/\D/g, '');
+  
+  // If it starts with 1 and is 11 digits, keep it
+  if (digits.startsWith('1') && digits.length === 11) {
+    return digits;
+  }
+  
+  // If it's 10 digits, add 1 prefix
+  if (digits.length === 10) {
+    return `1${digits}`;
+  }
+  
+  // If it's less than 10 digits, return as-is (partial input)
+  // If it's more than 11 digits, truncate to 11 (keep first 11)
+  if (digits.length > 11) {
+    return digits.slice(0, 11);
+  }
+  
+  // Otherwise return digits as-is
+  return digits;
+}
+
 export default function ClientsManager() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +117,9 @@ export default function ClientsManager() {
   const [conflicts, setConflicts] = useState<Conflicts>({});
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'neon' | 'brevo'>>({});
   const [creatingBrevo, setCreatingBrevo] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -75,6 +129,9 @@ export default function ClientsManager() {
     marketing_opt_in: false,
     brevo_contact_id: '',
   });
+  
+  // Separate state for formatted phone display
+  const [formattedPhone, setFormattedPhone] = useState('');
 
   useEffect(() => {
     loadCustomers();
@@ -149,6 +206,7 @@ export default function ClientsManager() {
     };
     setFormData(initial);
     setInitialFormData(initial);
+    setFormattedPhone(formatPhoneForDisplay(customer.phone));
     setPendingBrevoId(null);
     setSelectedBrevoId(null);
     setShowModal(true);
@@ -171,6 +229,7 @@ export default function ClientsManager() {
     };
     setFormData(initial);
     setInitialFormData(initial);
+    setFormattedPhone('');
     setPendingBrevoId(null);
     setSelectedBrevoId(null);
     setShowModal(true);
@@ -200,9 +259,19 @@ export default function ClientsManager() {
       marketing_opt_in: false,
       brevo_contact_id: '',
     });
+    setFormattedPhone('');
     setInitialFormData(null);
     setConflictResolutions({});
     setConflicts({});
+  };
+  
+  const handlePhoneChange = (value: string) => {
+    // Update formatted display
+    setFormattedPhone(value);
+    
+    // Normalize and store in formData
+    const normalized = normalizePhoneForStorage(value);
+    setFormData(prev => ({ ...prev, phone: normalized }));
   };
 
   const handleCreateBrevoRecord = async () => {
@@ -454,6 +523,37 @@ export default function ClientsManager() {
     }
   };
 
+  const handleDeleteClick = (customer: Customer, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row click from opening edit modal
+    setDeletingCustomer(customer);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingCustomer) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`/api/admin/customers/${deletingCustomer.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete customer');
+      }
+
+      await loadCustomers();
+      setToast('Client deleted successfully!');
+      setShowDeleteConfirm(false);
+      setDeletingCustomer(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete customer');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Filter customers by search query
   const filteredCustomers = customers.filter((customer) => {
     if (!searchQuery.trim()) return true;
@@ -569,6 +669,7 @@ export default function ClientsManager() {
                   <th className="px-4 py-3 text-left text-xs md:text-sm font-semibold text-charcoal">Brevo ID</th>
                   <th className="px-4 py-3 text-left text-xs md:text-sm font-semibold text-charcoal">Email Opt In</th>
                   <th className="px-4 py-3 text-left text-xs md:text-sm font-semibold text-charcoal">Welcome Code Used</th>
+                  <th className="px-4 py-3 text-left text-xs md:text-sm font-semibold text-charcoal">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand">
@@ -602,6 +703,15 @@ export default function ClientsManager() {
                         ) : (
                           <X className="w-5 h-5 text-red-500" />
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-xs md:text-sm">
+                        <button
+                          onClick={(e) => handleDeleteClick(customer, e)}
+                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete client"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -680,8 +790,31 @@ export default function ClientsManager() {
                   </label>
                   <input
                     type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    value={formattedPhone}
+                    onChange={(e) => {
+                      const input = e.target.value;
+                      // Allow user to type, format as they type
+                      const digits = input.replace(/\D/g, '');
+                      
+                      // Limit to 10 digits (US phone number)
+                      if (digits.length <= 10) {
+                        let formatted = '';
+                        if (digits.length > 0) {
+                          formatted = '+1';
+                          if (digits.length > 0) {
+                            formatted += ` (${digits.slice(0, 3)}`;
+                          }
+                          if (digits.length > 3) {
+                            formatted += `)${digits.slice(3, 6)}`;
+                          }
+                          if (digits.length > 6) {
+                            formatted += `-${digits.slice(6, 10)}`;
+                          }
+                        }
+                        handlePhoneChange(formatted || input);
+                      }
+                    }}
+                    placeholder="+1 (555) 123-4567"
                     className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
                   />
                 </div>
@@ -902,6 +1035,55 @@ export default function ClientsManager() {
                 className="px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/90 transition-colors"
               >
                 Resolve & Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && deletingCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-charcoal mb-1">Delete Client</h4>
+                <p className="text-sm text-warm-gray">
+                  Are you sure you want to delete <strong>{deletingCustomer.first_name} {deletingCustomer.last_name}</strong> ({deletingCustomer.email})?
+                </p>
+                <p className="text-xs text-warm-gray mt-2">
+                  This will soft delete the client in Neon (kept for records) and permanently remove them from Brevo.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeletingCustomer(null);
+                }}
+                className="px-4 py-2 text-charcoal border border-sand rounded-lg hover:bg-sand/30 transition-colors"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Delete Client
+                  </>
+                )}
               </button>
             </div>
           </div>

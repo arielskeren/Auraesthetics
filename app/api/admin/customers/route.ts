@@ -61,10 +61,13 @@ export async function GET(request: NextRequest) {
                 updated_at
               FROM customers
               WHERE 
-                LOWER(email) LIKE ${searchLower}
-                OR LOWER(first_name) LIKE ${searchLower}
-                OR LOWER(last_name) LIKE ${searchLower}
-                OR LOWER(phone) LIKE ${searchLower}
+                (deleted = false OR deleted IS NULL)
+                AND (
+                  LOWER(email) LIKE ${searchLower}
+                  OR LOWER(first_name) LIKE ${searchLower}
+                  OR LOWER(last_name) LIKE ${searchLower}
+                  OR LOWER(phone) LIKE ${searchLower}
+                )
               ORDER BY created_at DESC
               LIMIT ${limit}
               OFFSET ${offset}
@@ -85,10 +88,13 @@ export async function GET(request: NextRequest) {
                 updated_at
               FROM customers
               WHERE 
-                LOWER(email) LIKE ${searchLower}
-                OR LOWER(first_name) LIKE ${searchLower}
-                OR LOWER(last_name) LIKE ${searchLower}
-                OR LOWER(phone) LIKE ${searchLower}
+                (deleted = false OR deleted IS NULL)
+                AND (
+                  LOWER(email) LIKE ${searchLower}
+                  OR LOWER(first_name) LIKE ${searchLower}
+                  OR LOWER(last_name) LIKE ${searchLower}
+                  OR LOWER(phone) LIKE ${searchLower}
+                )
               ORDER BY created_at DESC
               LIMIT ${limit}
               OFFSET ${offset}
@@ -109,6 +115,7 @@ export async function GET(request: NextRequest) {
                 created_at,
                 updated_at
               FROM customers
+              WHERE deleted = false OR deleted IS NULL
               ORDER BY created_at DESC
               LIMIT ${limit}
               OFFSET ${offset}
@@ -128,6 +135,7 @@ export async function GET(request: NextRequest) {
                 created_at,
                 updated_at
               FROM customers
+              WHERE deleted = false OR deleted IS NULL
               ORDER BY created_at DESC
               LIMIT ${limit}
               OFFSET ${offset}
@@ -138,15 +146,19 @@ export async function GET(request: NextRequest) {
       ? await sql`
           SELECT COUNT(*) as total
           FROM customers
+          WHERE deleted = false OR deleted IS NULL
           WHERE 
-            LOWER(email) LIKE ${searchLower}
-            OR LOWER(first_name) LIKE ${searchLower}
+            (deleted = false OR deleted IS NULL)
+            AND (
+              LOWER(email) LIKE ${searchLower}
+              OR LOWER(first_name) LIKE ${searchLower}
             OR LOWER(last_name) LIKE ${searchLower}
             OR LOWER(phone) LIKE ${searchLower}
         `
       : await sql`
           SELECT COUNT(*) as total
           FROM customers
+          WHERE deleted = false OR deleted IS NULL
         `;
 
     const customers = normalizeRows(customersResult);

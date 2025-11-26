@@ -247,10 +247,11 @@ export async function syncCustomerToBrevo(params: {
           }
           
           // Validate the formatted phone (should start with + and have at least 11 characters including +)
+          // Brevo API requires SMS field for phone numbers: accepts 91xxxxxxxxxx, +91xxxxxxxxxx, or 0091xxxxxxxxxx
           if (formattedPhone.startsWith('+') && formattedPhone.length >= 11) {
             attributes.PHONE = formattedPhone;
             attributes.LANDLINE_NUMBER = formattedPhone;
-            attributes.SMS = formattedPhone;
+            attributes.SMS = formattedPhone; // Required field per Brevo API docs
           } else {
             console.warn(`[syncCustomerToBrevo] Invalid phone format for customer ${customerId} (${customer.email}): ${customer.phone} -> ${formattedPhone}. Skipping phone in sync.`);
           }
