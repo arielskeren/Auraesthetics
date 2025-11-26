@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           code: c.code,
           code_type: c.code_type,
           is_active: c.is_active,
+          is_active_type: typeof c.is_active,
           used: c.used,
           expires_at: c.expires_at,
           customer_id: c.customer_id ? 'has customer' : 'no customer'
@@ -151,6 +152,15 @@ export async function GET(request: NextRequest) {
         inactive: inactive.length,
         total: allCodes.length
       });
+      // Log codes with is_active = false to verify they're being filtered correctly
+      const inactiveCodes = allCodes.filter((c: any) => c.is_active === false || c.is_active === 'f');
+      if (inactiveCodes.length > 0) {
+        console.log('[Discount Codes API] Codes with is_active=false:', inactiveCodes.map((c: any) => ({
+          code: c.code,
+          is_active: c.is_active,
+          is_active_type: typeof c.is_active
+        })));
+      }
     }
 
     return NextResponse.json({ 
