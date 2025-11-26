@@ -333,16 +333,16 @@ export async function DELETE(
       }
     }
 
-    // Soft delete in Neon (set deleted = true instead of hard delete)
+    // Soft delete in Neon (set deleted = true AND clear brevo_contact_id)
     await sql`
       UPDATE customers 
-      SET deleted = true, updated_at = NOW()
+      SET deleted = true, brevo_contact_id = NULL, updated_at = NOW()
       WHERE id = ${customerId}
     `;
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Customer deleted successfully (soft deleted in Neon, removed from Brevo)',
+      message: 'Customer deleted successfully (soft deleted in Neon, removed from Brevo, brevo_contact_id cleared)',
       deletedFromBrevo: !!brevoContactId,
     });
   } catch (error: any) {

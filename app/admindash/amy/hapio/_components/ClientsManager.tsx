@@ -121,6 +121,14 @@ export default function ClientsManager() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  
+  // Pre/Post-save Brevo linking state
+  const [showPreSaveBrevoModal, setShowPreSaveBrevoModal] = useState(false);
+  const [showPostSaveBrevoModal, setShowPostSaveBrevoModal] = useState(false);
+  const [savedCustomerId, setSavedCustomerId] = useState<string | null>(null);
+  const [postSaveBrevoAction, setPostSaveBrevoAction] = useState<'link' | 'create' | null>(null);
+  const [userBrevoChoice, setUserBrevoChoice] = useState<'link' | 'create' | 'skip' | null>(null);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -138,6 +146,10 @@ export default function ClientsManager() {
   useEffect(() => {
     loadCustomers();
   }, []);
+
+  useEffect(() => {
+    loadCustomers();
+  }, [showDeleted]);
 
   // Track unsaved changes
   useEffect(() => {
@@ -158,7 +170,8 @@ export default function ClientsManager() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/admin/customers?limit=1000`, {
+      const deletedParam = showDeleted ? '&deleted=true' : '';
+      const response = await fetch(`/api/admin/customers?limit=1000${deletedParam}`, {
         cache: 'no-store',
       });
 
@@ -255,6 +268,11 @@ export default function ClientsManager() {
     setHasUnsavedChanges(false);
     setPendingBrevoId(null);
     setSelectedBrevoId(null);
+    setShowPreSaveBrevoModal(false);
+    setShowPostSaveBrevoModal(false);
+    setSavedCustomerId(null);
+    setPostSaveBrevoAction(null);
+    setUserBrevoChoice(null);
     setFormData({
       email: '',
       first_name: '',
@@ -520,7 +538,81 @@ export default function ClientsManager() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
+
     try {
+      // Check if we're about to save without a Brevo ID
+      const hasBrevoId = pendingBrevoId || formData.brevo_contact_id;
+      const willSaveWithoutBrevo = !hasBrevoId;
+
+      if (willSaveWithoutBrevo) {
+        // Show pre-save confirmation modal
+        const userChoice = await new Promise<'link' | 'create' | 'skip'>((resolve) => {
+          setUserBrevoChoice(null);
+          setShowPreSaveBrevoModal(true);
+          
+          // Store resolve function to be called by modal buttons
+          (window as any).__brevoChoiceResolve = resolve;
+        });
+
+        if (userChoice === 'skip') {
+          // User chose to skip - proceed with save
+          setShowPreSaveBrevoModal(false);
+        } else if (userChoice === 'create') {
+          // User wants to create - create Brevo contact first, then save
+          setShowPreSaveBrevoModal(false);
+          
+          if (editingCustomer) {
+            // For existing customer, create and link
+            const linkResponse = await fetch(`/api/admin/customers/${editingCustomer.id}/link-brevo`, {
+              method: 'POST',
+            });
+            
+            if (linkResponse.ok) {
+              const linkData = await linkResponse.json();
+              setFormData(prev => ({ ...prev, brevo_contact_id: String(linkData.brevoId) }));
+              setPendingBrevoId(String(linkData.brevoId));
+              setSelectedBrevoId(String(linkData.brevoId));
+              await loadAvailableBrevoContacts();
+              setToast('Brevo contact created! Saving customer...');
+            } else {
+              const errorData = await linkResponse.json();
+              throw new Error(errorData.error || 'Failed to create Brevo contact');
+            }
+          } else {
+            // For new customer, create Brevo contact first
+            const createResponse = await fetch('/api/admin/brevo/create-contact', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: formData.email,
+                first_name: formData.first_name || null,
+                last_name: formData.last_name || null,
+                phone: formData.phone || null,
+                marketing_opt_in: formData.marketing_opt_in,
+              }),
+            });
+            
+            if (createResponse.ok) {
+              const createData = await createResponse.json();
+              setFormData(prev => ({ ...prev, brevo_contact_id: String(createData.brevoId) }));
+              setPendingBrevoId(String(createData.brevoId));
+              setSelectedBrevoId(String(createData.brevoId));
+              setToast('Brevo contact created! Saving customer...');
+            } else {
+              const errorData = await createResponse.json();
+              throw new Error(errorData.error || 'Failed to create Brevo contact');
+            }
+          }
+        } else if (userChoice === 'link') {
+          // User wants to link - they need to select from dropdown
+          // Don't proceed with save yet - let them select
+          setShowPreSaveBrevoModal(false);
+          setToast('Please select a Brevo contact to link, then save again.');
+          return; // Exit early - don't save yet
+        }
+      }
+
       setSaving(true);
       setSaveStatus('saving');
       
@@ -568,6 +660,20 @@ export default function ClientsManager() {
           throw new Error(errorData.error || 'Failed to update customer');
         }
 
+        const data = await response.json();
+        const savedCustomer = data.customer;
+
+        // Check if Brevo ID was actually saved
+        if (!savedCustomer.brevo_contact_id && willSaveWithoutBrevo) {
+          // Save succeeded but no Brevo ID - show post-save modal
+          setSavedCustomerId(savedCustomer.id);
+          setShowPostSaveBrevoModal(true);
+          setPostSaveBrevoAction('link'); // Default to showing link option
+          setSaveStatus('idle'); // Don't close modal yet
+          await loadAvailableBrevoContacts(); // Load available contacts for dropdown
+          return; // Don't close modal - show post-save options
+        }
+
         await loadCustomers();
         
         // Update initial form data to reflect saved state
@@ -610,6 +716,20 @@ export default function ClientsManager() {
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to create customer');
+        }
+
+        const data = await response.json();
+        const savedCustomer = data.customer;
+
+        // Check if Brevo ID was actually saved
+        if (!savedCustomer.brevo_contact_id && willSaveWithoutBrevo) {
+          // Save succeeded but no Brevo ID - show post-save modal
+          setSavedCustomerId(savedCustomer.id);
+          setShowPostSaveBrevoModal(true);
+          setPostSaveBrevoAction('link'); // Default to showing link option
+          setSaveStatus('idle'); // Don't close modal yet
+          await loadAvailableBrevoContacts(); // Load available contacts for dropdown
+          return; // Don't close modal - show post-save options
         }
 
         await loadCustomers();
@@ -658,6 +778,111 @@ export default function ClientsManager() {
       alert(err.message || 'Failed to delete customer');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleReactivate = async (customer: Customer) => {
+    if (!confirm(`Are you sure you want to reactivate ${customer.first_name} ${customer.last_name} (${customer.email})? A new Brevo contact will be created automatically.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/customers/${customer.id}/reactivate`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reactivate customer');
+      }
+
+      const data = await response.json();
+      setToast(data.message || 'Customer reactivated successfully!');
+      await loadCustomers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reactivate customer');
+    }
+  };
+
+  const handlePostSaveBrevoLink = async (action: 'link' | 'create' | 'skip') => {
+    if (!savedCustomerId) return;
+
+    try {
+      if (action === 'create') {
+        // Automatically create Brevo contact
+        const response = await fetch(`/api/admin/customers/${savedCustomerId}/link-brevo`, {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create Brevo contact');
+        }
+
+        const data = await response.json();
+        setToast(data.message || 'Brevo contact created and linked successfully!');
+        
+        // Reload customers and close modals
+        await loadCustomers();
+        setShowPostSaveBrevoModal(false);
+        setSavedCustomerId(null);
+        closeModal();
+        
+        // Optionally reopen edit modal with the updated customer
+        const updatedResponse = await fetch(`/api/admin/customers/${savedCustomerId}`);
+        if (updatedResponse.ok) {
+          const updatedData = await updatedResponse.json();
+          if (updatedData.customer) {
+            await openEditModal(updatedData.customer);
+          }
+        }
+      } else if (action === 'link') {
+        // Load available contacts and show selection
+        await loadAvailableBrevoContacts();
+        setPostSaveBrevoAction('link');
+        // Modal will show dropdown - user selects, then we link
+      } else {
+        // Skip - just close modal
+        setShowPostSaveBrevoModal(false);
+        setSavedCustomerId(null);
+        closeModal();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to link Brevo contact');
+    }
+  };
+
+  const handleLinkSelectedBrevoAfterSave = async (brevoId: string) => {
+    if (!savedCustomerId) return;
+
+    try {
+      const response = await fetch(`/api/admin/customers/${savedCustomerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brevo_contact_id: brevoId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to link Brevo contact');
+      }
+
+      setToast('Brevo contact linked successfully!');
+      await loadCustomers();
+      setShowPostSaveBrevoModal(false);
+      setSavedCustomerId(null);
+      closeModal();
+      
+      // Reopen edit modal with updated customer
+      const updatedResponse = await fetch(`/api/admin/customers/${savedCustomerId}`);
+      if (updatedResponse.ok) {
+        const updatedData = await updatedResponse.json();
+        if (updatedData.customer) {
+          await openEditModal(updatedData.customer);
+        }
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to link Brevo contact');
     }
   };
 
@@ -747,6 +972,30 @@ export default function ClientsManager() {
         </div>
       </div>
 
+      {/* Active/Deleted Tabs */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowDeleted(false)}
+          className={`px-4 py-2 rounded-lg transition-colors ${
+            !showDeleted
+              ? 'bg-dark-sage text-white'
+              : 'bg-sand text-charcoal hover:bg-sand/80'
+          }`}
+        >
+          Active Clients
+        </button>
+        <button
+          onClick={() => setShowDeleted(true)}
+          className={`px-4 py-2 rounded-lg transition-colors ${
+            showDeleted
+              ? 'bg-dark-sage text-white'
+              : 'bg-sand text-charcoal hover:bg-sand/80'
+          }`}
+        >
+          Deleted Clients
+        </button>
+      </div>
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-warm-gray" />
@@ -812,13 +1061,26 @@ export default function ClientsManager() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs md:text-sm">
-                        <button
-                          onClick={(e) => handleDeleteClick(customer, e)}
-                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete client"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!showDeleted ? (
+                          <button
+                            onClick={(e) => handleDeleteClick(customer, e)}
+                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete client"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReactivate(customer);
+                            }}
+                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs"
+                            title="Reactivate client and create Brevo contact"
+                          >
+                            Reactivate
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1184,6 +1446,133 @@ export default function ClientsManager() {
                     Delete Client
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pre-Save Brevo Linking Modal */}
+      {showPreSaveBrevoModal && !savedCustomerId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-semibold text-charcoal mb-4">
+              Link Brevo Contact?
+            </h2>
+            <p className="text-warm-gray mb-6">
+              This customer doesn&apos;t have a Brevo contact ID. Would you like to:
+            </p>
+            
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  if ((window as any).__brevoChoiceResolve) {
+                    (window as any).__brevoChoiceResolve('link');
+                    (window as any).__brevoChoiceResolve = null;
+                  }
+                }}
+                className="w-full px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/90 transition-colors"
+              >
+                Link Existing Brevo Contact
+              </button>
+              
+              <button
+                onClick={() => {
+                  if ((window as any).__brevoChoiceResolve) {
+                    (window as any).__brevoChoiceResolve('create');
+                    (window as any).__brevoChoiceResolve = null;
+                  }
+                }}
+                className="w-full px-4 py-2 bg-sand text-charcoal rounded-lg hover:bg-sand/80 transition-colors"
+              >
+                Create New Brevo Contact
+              </button>
+              
+              <button
+                onClick={() => {
+                  if ((window as any).__brevoChoiceResolve) {
+                    (window as any).__brevoChoiceResolve('skip');
+                    (window as any).__brevoChoiceResolve = null;
+                  }
+                }}
+                className="w-full px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/30 transition-colors"
+              >
+                Skip (Save Without Brevo ID)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post-Save Brevo Linking Modal */}
+      {showPostSaveBrevoModal && savedCustomerId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-semibold text-charcoal mb-4">
+              Customer Saved - Link Brevo Contact?
+            </h2>
+            <p className="text-warm-gray mb-6">
+              The customer was saved successfully, but doesn&apos;t have a Brevo contact ID. Would you like to link one now?
+            </p>
+            
+            {postSaveBrevoAction === 'link' && availableBrevoContacts.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-charcoal mb-2">
+                  Select a Brevo contact to link:
+                </label>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleLinkSelectedBrevoAfterSave(e.target.value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-sand rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage"
+                >
+                  <option value="">Select a contact...</option>
+                  {availableBrevoContacts.map((contact) => (
+                    <option key={contact.id} value={String(contact.id)}>
+                      {contact.displayText}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {postSaveBrevoAction === 'link' && availableBrevoContacts.length === 0 && (
+              <div className="mb-4 p-3 bg-sand/30 rounded-lg">
+                <p className="text-sm text-charcoal mb-2">
+                  No available Brevo contacts to link. Would you like to create a new one?
+                </p>
+              </div>
+            )}
+            
+            <div className="space-y-3">
+              {availableBrevoContacts.length === 0 && (
+                <button
+                  onClick={() => handlePostSaveBrevoLink('create')}
+                  className="w-full px-4 py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/90 transition-colors"
+                >
+                  Create New Brevo Contact
+                </button>
+              )}
+              
+              {postSaveBrevoAction !== 'link' && (
+                <button
+                  onClick={() => {
+                    setPostSaveBrevoAction('link');
+                    loadAvailableBrevoContacts();
+                  }}
+                  className="w-full px-4 py-2 bg-sand text-charcoal rounded-lg hover:bg-sand/80 transition-colors"
+                >
+                  Link Existing Brevo Contact
+                </button>
+              )}
+              
+              <button
+                onClick={() => handlePostSaveBrevoLink('skip')}
+                className="w-full px-4 py-2 border border-sand text-charcoal rounded-lg hover:bg-sand/30 transition-colors"
+              >
+                Skip (Do Later)
               </button>
             </div>
           </div>

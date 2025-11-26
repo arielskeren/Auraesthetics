@@ -20,10 +20,13 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const search = searchParams.get('search') || '';
-    
+    const showDeleted = searchParams.get('deleted') === 'true';
 
     // Build query based on search
     const searchLower = search ? `%${search.toLowerCase()}%` : null;
+    
+    // Build deleted filter condition
+    // We'll use conditional queries instead of sql.raw() since Neon doesn't support it
     
     // Check if used_welcome_offer column exists
     let hasWelcomeOfferColumn = false;
@@ -43,123 +46,241 @@ export async function GET(request: NextRequest) {
     
     // Fetch customers with search filter
     // Use conditional column selection based on whether column exists
+    // Use conditional queries for deleted filter since Neon doesn't support sql.raw()
     const customersResult = search
       ? (hasWelcomeOfferColumn
-          ? await sql`
-              SELECT 
-                id,
-                email,
-                first_name,
-                last_name,
-                phone,
-                marketing_opt_in,
-                brevo_contact_id,
-                used_welcome_offer,
-                stripe_customer_id,
-                last_seen_at,
-                created_at,
-                updated_at
-              FROM customers
-              WHERE 
-                (deleted = false OR deleted IS NULL)
-                AND (
-                  LOWER(email) LIKE ${searchLower}
-                  OR LOWER(first_name) LIKE ${searchLower}
-                  OR LOWER(last_name) LIKE ${searchLower}
-                  OR LOWER(phone) LIKE ${searchLower}
-                )
-              ORDER BY created_at DESC
-              LIMIT ${limit}
-              OFFSET ${offset}
-            `
-          : await sql`
-              SELECT 
-                id,
-                email,
-                first_name,
-                last_name,
-                phone,
-                marketing_opt_in,
-                brevo_contact_id,
-                FALSE as used_welcome_offer,
-                stripe_customer_id,
-                last_seen_at,
-                created_at,
-                updated_at
-              FROM customers
-              WHERE 
-                (deleted = false OR deleted IS NULL)
-                AND (
-                  LOWER(email) LIKE ${searchLower}
-                  OR LOWER(first_name) LIKE ${searchLower}
-                  OR LOWER(last_name) LIKE ${searchLower}
-                  OR LOWER(phone) LIKE ${searchLower}
-                )
-              ORDER BY created_at DESC
-              LIMIT ${limit}
-              OFFSET ${offset}
-            `)
+          ? (showDeleted
+              ? await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE 
+                    deleted = true
+                    AND (
+                      LOWER(email) LIKE ${searchLower}
+                      OR LOWER(first_name) LIKE ${searchLower}
+                      OR LOWER(last_name) LIKE ${searchLower}
+                      OR LOWER(phone) LIKE ${searchLower}
+                    )
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `
+              : await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE 
+                    (deleted = false OR deleted IS NULL)
+                    AND (
+                      LOWER(email) LIKE ${searchLower}
+                      OR LOWER(first_name) LIKE ${searchLower}
+                      OR LOWER(last_name) LIKE ${searchLower}
+                      OR LOWER(phone) LIKE ${searchLower}
+                    )
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `)
+          : (showDeleted
+              ? await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    FALSE as used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE 
+                    deleted = true
+                    AND (
+                      LOWER(email) LIKE ${searchLower}
+                      OR LOWER(first_name) LIKE ${searchLower}
+                      OR LOWER(last_name) LIKE ${searchLower}
+                      OR LOWER(phone) LIKE ${searchLower}
+                    )
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `
+              : await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    FALSE as used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE 
+                    (deleted = false OR deleted IS NULL)
+                    AND (
+                      LOWER(email) LIKE ${searchLower}
+                      OR LOWER(first_name) LIKE ${searchLower}
+                      OR LOWER(last_name) LIKE ${searchLower}
+                      OR LOWER(phone) LIKE ${searchLower}
+                    )
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `))
       : (hasWelcomeOfferColumn
-          ? await sql`
-              SELECT 
-                id,
-                email,
-                first_name,
-                last_name,
-                phone,
-                marketing_opt_in,
-                brevo_contact_id,
-                used_welcome_offer,
-                stripe_customer_id,
-                last_seen_at,
-                created_at,
-                updated_at
-              FROM customers
-              WHERE deleted = false OR deleted IS NULL
-              ORDER BY created_at DESC
-              LIMIT ${limit}
-              OFFSET ${offset}
-            `
-          : await sql`
-              SELECT 
-                id,
-                email,
-                first_name,
-                last_name,
-                phone,
-                marketing_opt_in,
-                brevo_contact_id,
-                FALSE as used_welcome_offer,
-                stripe_customer_id,
-                last_seen_at,
-                created_at,
-                updated_at
-              FROM customers
-              WHERE deleted = false OR deleted IS NULL
-              ORDER BY created_at DESC
-              LIMIT ${limit}
-              OFFSET ${offset}
-            `);
+          ? (showDeleted
+              ? await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE deleted = true
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `
+              : await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE deleted = false OR deleted IS NULL
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `)
+          : (showDeleted
+              ? await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    FALSE as used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE deleted = true
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `
+              : await sql`
+                  SELECT 
+                    id,
+                    email,
+                    first_name,
+                    last_name,
+                    phone,
+                    marketing_opt_in,
+                    brevo_contact_id,
+                    FALSE as used_welcome_offer,
+                    stripe_customer_id,
+                    last_seen_at,
+                    created_at,
+                    updated_at
+                  FROM customers
+                  WHERE deleted = false OR deleted IS NULL
+                  ORDER BY created_at DESC
+                  LIMIT ${limit}
+                  OFFSET ${offset}
+                `));
 
     // Get total count
     const countResult = search
-      ? await sql`
-          SELECT COUNT(*) as total
-          FROM customers
-          WHERE deleted = false OR deleted IS NULL
-          WHERE 
-            (deleted = false OR deleted IS NULL)
-            AND (
-              LOWER(email) LIKE ${searchLower}
-              OR LOWER(first_name) LIKE ${searchLower}
-            OR LOWER(last_name) LIKE ${searchLower}
-            OR LOWER(phone) LIKE ${searchLower}
-        `
-      : await sql`
-          SELECT COUNT(*) as total
-          FROM customers
-          WHERE deleted = false OR deleted IS NULL
-        `;
+      ? (showDeleted
+          ? await sql`
+              SELECT COUNT(*) as total
+              FROM customers
+              WHERE 
+                deleted = true
+                AND (
+                  LOWER(email) LIKE ${searchLower}
+                  OR LOWER(first_name) LIKE ${searchLower}
+                  OR LOWER(last_name) LIKE ${searchLower}
+                  OR LOWER(phone) LIKE ${searchLower}
+                )
+            `
+          : await sql`
+              SELECT COUNT(*) as total
+              FROM customers
+              WHERE 
+                (deleted = false OR deleted IS NULL)
+                AND (
+                  LOWER(email) LIKE ${searchLower}
+                  OR LOWER(first_name) LIKE ${searchLower}
+                  OR LOWER(last_name) LIKE ${searchLower}
+                  OR LOWER(phone) LIKE ${searchLower}
+                )
+            `)
+      : (showDeleted
+          ? await sql`
+              SELECT COUNT(*) as total
+              FROM customers
+              WHERE deleted = true
+            `
+          : await sql`
+              SELECT COUNT(*) as total
+              FROM customers
+              WHERE deleted = false OR deleted IS NULL
+            `);
 
     const customers = normalizeRows(customersResult);
     const total = normalizeRows(countResult)[0]?.total || 0;

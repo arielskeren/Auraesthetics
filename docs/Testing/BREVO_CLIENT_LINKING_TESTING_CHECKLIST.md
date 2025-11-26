@@ -31,11 +31,11 @@ This checklist covers all features related to Brevo contact linking, conflict re
 - [x] Verify changes are reflected in the table
 
 ### ✅ Close Modal with Unsaved Changes
-- [ ] Open edit modal
-- [ ] Make changes to client data
-- [ ] Click "Close" button (X or Close button)
-- [ ] Verify confirmation dialog appears: "Are you sure? Unsaved changes will be lost."
-- [ ] Click "Cancel" in confirmation
+- [x] Open edit modal
+- [x] Make changes to client data
+- [x] Click "Close" button (X or Close button)
+- [x] Verify confirmation dialog appears: "Are you sure? Unsaved changes will be lost."
+- [x] Click "Cancel" in confirmation
 - [ ] Verify modal stays open
 - [ ] Click "Close" again
 - [ ] Click "Close Without Saving"
