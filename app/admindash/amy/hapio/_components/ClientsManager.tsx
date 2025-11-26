@@ -206,31 +206,74 @@ export default function ClientsManager() {
   };
 
   const handleCreateBrevoRecord = async () => {
-    if (!editingCustomer) return;
+    // Validate required fields
+    if (!formData.email) {
+      alert('Please enter an email address first');
+      return;
+    }
 
     try {
       setCreatingBrevo(true);
-      const response = await fetch(`/api/admin/customers/${editingCustomer.id}/link-brevo`, {
-        method: 'POST',
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create Brevo record');
+      if (editingCustomer) {
+        // For existing customer, use link-brevo endpoint
+        const response = await fetch(`/api/admin/customers/${editingCustomer.id}/link-brevo`, {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create Brevo record');
+        }
+
+        const data = await response.json();
+        
+        // Update form data with new Brevo ID
+        setFormData(prev => ({ ...prev, brevo_contact_id: String(data.brevoId) }));
+        setPendingBrevoId(null);
+        setSelectedBrevoId(String(data.brevoId));
+        
+        // Reload available contacts
+        await loadAvailableBrevoContacts();
+        await loadCustomers();
+        
+        setToast('Brevo contact created and linked successfully!');
+      } else {
+        // For new customer, create Brevo contact first (without linking)
+        const response = await fetch('/api/admin/brevo/create-contact', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            first_name: formData.first_name || null,
+            last_name: formData.last_name || null,
+            phone: formData.phone || null,
+            marketing_opt_in: formData.marketing_opt_in,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMessage = errorData.details 
+            ? `${errorData.error || 'Failed to create Brevo record'}: ${errorData.details}`
+            : errorData.error || 'Failed to create Brevo record';
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        
+        // Store Brevo ID in form data (will be linked when customer is created)
+        setFormData(prev => ({ ...prev, brevo_contact_id: String(data.brevoId) }));
+        setPendingBrevoId(null);
+        setSelectedBrevoId(String(data.brevoId));
+        
+        // Reload available contacts
+        await loadAvailableBrevoContacts();
+        
+        setToast('Brevo contact created successfully! It will be linked when you save the client.');
       }
-
-      const data = await response.json();
-      
-      // Update form data with new Brevo ID
-      setFormData(prev => ({ ...prev, brevo_contact_id: String(data.brevoId) }));
-      setPendingBrevoId(null);
-      setSelectedBrevoId(String(data.brevoId));
-      
-      // Reload available contacts
-      await loadAvailableBrevoContacts();
-      await loadCustomers();
-      
-      setToast('Brevo contact created and linked successfully!');
     } catch (err: any) {
       alert(err.message || 'Failed to create Brevo record');
     } finally {
@@ -239,12 +282,17 @@ export default function ClientsManager() {
   };
 
   const handleSelectBrevoContact = async (brevoId: string) => {
-    if (!editingCustomer) return;
-
     setSelectedBrevoId(brevoId);
     setPendingBrevoId(brevoId);
 
-    // Check for conflicts
+    // For new customers, no conflict check needed (no existing Neon data)
+    if (!editingCustomer) {
+      // Just store the Brevo ID to be linked when customer is created
+      setFormData(prev => ({ ...prev, brevo_contact_id: brevoId }));
+      return;
+    }
+
+    // For existing customers, check for conflicts
     try {
       const response = await fetch(`/api/admin/customers/${editingCustomer.id}/resolve-conflicts`, {
         method: 'POST',
@@ -672,7 +720,7 @@ export default function ClientsManager() {
                       <button
                         type="button"
                         onClick={handleCreateBrevoRecord}
-                        disabled={creatingBrevo || !editingCustomer}
+                        disabled={creatingBrevo || !formData.email}
                         className="w-full px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                       >
                         {creatingBrevo ? (
