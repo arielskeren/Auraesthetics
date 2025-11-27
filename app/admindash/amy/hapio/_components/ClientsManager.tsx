@@ -135,6 +135,7 @@ export default function ClientsManager() {
   
   // Booking history state
   const [bookingHistory, setBookingHistory] = useState<BookingHistory[]>([]);
+  const [upcomingBookings, setUpcomingBookings] = useState<BookingHistory[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   
   // Pre/Post-save Brevo linking state
@@ -236,9 +237,11 @@ export default function ClientsManager() {
 
       const data = await response.json();
       setBookingHistory(data.bookings || []);
+      setUpcomingBookings(data.upcoming || []);
     } catch (err: any) {
       console.error('Error loading booking history:', err);
       setBookingHistory([]);
+      setUpcomingBookings([]);
     } finally {
       setLoadingBookings(false);
     }
@@ -274,6 +277,7 @@ export default function ClientsManager() {
   const openAddModal = async () => {
     setEditingCustomer(null);
     setBookingHistory([]);
+    setUpcomingBookings([]);
     const initial = {
       email: '',
       first_name: '',
@@ -1413,78 +1417,210 @@ export default function ClientsManager() {
                 </div>
               </div>
 
-              {/* Booking History Section - Only show when editing existing customer */}
+              {/* Upcoming Appointments & Booking History Section - Only show when editing existing customer */}
               {editingCustomer && (
-                <div className="mt-6 pt-6 border-t border-sand">
-                  <h4 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    Booking History
-                  </h4>
-                  
-                  {loadingBookings ? (
-                    <div className="text-center py-8">
-                      <RefreshCw className="w-6 h-6 animate-spin text-warm-gray mx-auto mb-2" />
-                      <p className="text-sm text-warm-gray">Loading booking history...</p>
-                    </div>
-                  ) : bookingHistory.length === 0 ? (
-                    <div className="text-center py-8 bg-sand/20 rounded-lg">
-                      <p className="text-sm text-warm-gray">No booking history found</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-xs text-warm-gray mb-3">
-                        Showing {bookingHistory.length} {bookingHistory.length === 1 ? 'booking' : 'bookings'} (last 10 services or 12 months, whichever is greater)
-                      </p>
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {bookingHistory.map((booking) => {
-                          const bookingDate = booking.booking_date ? new Date(booking.booking_date) : null;
-                          const formattedDate = bookingDate 
-                            ? bookingDate.toLocaleDateString('en-US', { 
+                <div className="mt-6 pt-6 border-t border-sand space-y-6">
+                  {/* Upcoming Appointments */}
+                  <div>
+                    <h4 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-dark-sage" />
+                      Upcoming Appointments
+                    </h4>
+                    
+                    {loadingBookings ? (
+                      <div className="text-center py-8">
+                        <RefreshCw className="w-6 h-6 animate-spin text-warm-gray mx-auto mb-2" />
+                        <p className="text-sm text-warm-gray">Loading appointments...</p>
+                      </div>
+                    ) : upcomingBookings.length === 0 ? (
+                      <div className="text-center py-8 bg-sand/20 rounded-lg">
+                        <p className="text-sm text-warm-gray">No upcoming appointments</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-xs text-warm-gray mb-3">
+                          {upcomingBookings.length} {upcomingBookings.length === 1 ? 'appointment' : 'appointments'} scheduled
+                        </p>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {upcomingBookings.map((booking) => {
+                            const bookingDate = booking.booking_date ? new Date(booking.booking_date) : null;
+                            const now = new Date();
+                            
+                            let formattedDate = 'N/A';
+                            let relativeTime = '';
+                            
+                            if (bookingDate) {
+                              formattedDate = bookingDate.toLocaleDateString('en-US', { 
                                 year: 'numeric', 
                                 month: 'short', 
                                 day: 'numeric',
                                 hour: 'numeric',
                                 minute: '2-digit',
                                 hour12: true
-                              })
-                            : 'N/A';
-                          
-                          return (
-                            <div 
-                              key={booking.id} 
-                              className="bg-sand/20 rounded-lg p-4 border border-sand/40 hover:bg-sand/30 transition-colors"
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <Calendar className="w-4 h-4 text-dark-sage" />
-                                    <span className="font-semibold text-charcoal">{formattedDate}</span>
-                                  </div>
-                                  <p className="text-sm text-charcoal font-medium mb-1">
-                                    {booking.service_name || 'Service'}
-                                  </p>
-                                  <div className="flex items-center gap-2">
-                                    <DollarSign className="w-3 h-3 text-dark-sage" />
-                                    <span className="text-sm text-warm-gray">
-                                      ${booking.total_paid}
-                                    </span>
-                                    <span className="text-xs text-warm-gray">•</span>
-                                    <span className={`text-xs px-2 py-0.5 rounded ${
-                                      booking.payment_status === 'paid' || booking.payment_status === 'completed'
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-gray-100 text-gray-800'
-                                    }`}>
-                                      {booking.payment_status}
-                                    </span>
+                              });
+                              
+                              // Calculate relative time
+                              const diffMs = bookingDate.getTime() - now.getTime();
+                              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                              const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                              const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                              
+                              if (diffDays > 0) {
+                                relativeTime = diffDays === 1 ? 'Tomorrow' : `In ${diffDays} days`;
+                              } else if (diffHours > 0) {
+                                relativeTime = diffHours === 1 ? 'In 1 hour' : `In ${diffHours} hours`;
+                              } else if (diffMinutes > 0) {
+                                relativeTime = diffMinutes === 1 ? 'In 1 minute' : `In ${diffMinutes} minutes`;
+                              } else if (diffMs > 0) {
+                                relativeTime = 'Very soon';
+                              } else {
+                                relativeTime = 'Past due';
+                              }
+                            }
+                            
+                            const isUpcoming = bookingDate && bookingDate > now;
+                            const isToday = bookingDate && 
+                              bookingDate.toDateString() === now.toDateString();
+                            
+                            return (
+                              <div 
+                                key={booking.id} 
+                                className={`rounded-lg p-4 border transition-colors ${
+                                  isToday 
+                                    ? 'bg-dark-sage/10 border-dark-sage/30 hover:bg-dark-sage/15'
+                                    : 'bg-green-50 border-green-200 hover:bg-green-100/50'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                      <Calendar className={`w-4 h-4 ${isToday ? 'text-dark-sage' : 'text-dark-sage'}`} />
+                                      <span className="font-semibold text-charcoal">{formattedDate}</span>
+                                      {isToday && (
+                                        <span className="text-xs px-2 py-0.5 bg-dark-sage text-white rounded font-medium">
+                                          Today
+                                        </span>
+                                      )}
+                                      {isUpcoming && !isToday && (
+                                        <span className="text-xs px-2 py-0.5 bg-green-600 text-white rounded">
+                                          Upcoming
+                                        </span>
+                                      )}
+                                      {relativeTime && (
+                                        <span className="text-xs text-warm-gray italic">
+                                          ({relativeTime})
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-charcoal font-medium mb-2">
+                                      {booking.service_name || 'Service'}
+                                    </p>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {Number(booking.total_paid) > 0 && (
+                                        <>
+                                          <DollarSign className="w-3 h-3 text-dark-sage" />
+                                          <span className="text-sm text-warm-gray">
+                                            ${booking.total_paid}
+                                          </span>
+                                          <span className="text-xs text-warm-gray">•</span>
+                                        </>
+                                      )}
+                                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                        booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                                          ? 'bg-green-100 text-green-800'
+                                          : booking.payment_status === 'pending'
+                                          ? 'bg-yellow-100 text-yellow-800'
+                                          : booking.payment_status === 'partially_paid'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {booking.payment_status === 'succeeded' ? 'Paid' : 
+                                         booking.payment_status === 'partially_paid' ? 'Partial' :
+                                         booking.payment_status}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  {/* Booking History */}
+                  <div>
+                    <h4 className="text-lg font-semibold text-charcoal mb-4 flex items-center gap-2">
+                      <Calendar className="w-5 h-5" />
+                      Booking History
+                    </h4>
+                    
+                    {loadingBookings ? (
+                      <div className="text-center py-8">
+                        <RefreshCw className="w-6 h-6 animate-spin text-warm-gray mx-auto mb-2" />
+                        <p className="text-sm text-warm-gray">Loading booking history...</p>
+                      </div>
+                    ) : bookingHistory.length === 0 ? (
+                      <div className="text-center py-8 bg-sand/20 rounded-lg">
+                        <p className="text-sm text-warm-gray">No booking history found</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-xs text-warm-gray mb-3">
+                          Showing {bookingHistory.length} {bookingHistory.length === 1 ? 'booking' : 'bookings'} (last 10 services or 12 months, whichever is greater)
+                        </p>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {bookingHistory.map((booking) => {
+                            const bookingDate = booking.booking_date ? new Date(booking.booking_date) : null;
+                            const formattedDate = bookingDate 
+                              ? bookingDate.toLocaleDateString('en-US', { 
+                                  year: 'numeric', 
+                                  month: 'short', 
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })
+                              : 'N/A';
+                            
+                            return (
+                              <div 
+                                key={booking.id} 
+                                className="bg-sand/20 rounded-lg p-4 border border-sand/40 hover:bg-sand/30 transition-colors"
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Calendar className="w-4 h-4 text-dark-sage" />
+                                      <span className="font-semibold text-charcoal">{formattedDate}</span>
+                                    </div>
+                                    <p className="text-sm text-charcoal font-medium mb-1">
+                                      {booking.service_name || 'Service'}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <DollarSign className="w-3 h-3 text-dark-sage" />
+                                      <span className="text-sm text-warm-gray">
+                                        ${booking.total_paid}
+                                      </span>
+                                      <span className="text-xs text-warm-gray">•</span>
+                                      <span className={`text-xs px-2 py-0.5 rounded ${
+                                        booking.payment_status === 'paid' || booking.payment_status === 'completed'
+                                          ? 'bg-green-100 text-green-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {booking.payment_status}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

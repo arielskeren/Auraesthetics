@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, RefreshCw, Calendar, User, DollarSign, Tag, X, Edit, Trash2, ChevronDown, ChevronUp, Eye, Search, Check } from 'lucide-react';
 import BookingDetailModal from '../../BookingDetailModal';
 import GlobalCodesManager from './GlobalCodesManager';
 
@@ -60,11 +60,22 @@ export default function DiscountCodesManager() {
   // Create form state
   const [createForm, setCreateForm] = useState({
     customerEmail: '',
+    customerId: null as string | null,
     discountType: 'percent' as 'percent' | 'dollar',
     discountValue: '',
     discountCap: '',
     expiresOn: '', // Date string in YYYY-MM-DD format
   });
+
+  // Client picker state
+  const [clientPickerMode, setClientPickerMode] = useState<'email' | 'select'>('email');
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [clientSearchResults, setClientSearchResults] = useState<any[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const clientSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -81,6 +92,96 @@ export default function DiscountCodesManager() {
     loadCodes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle clicking outside client dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+        setShowClientDropdown(false);
+      }
+    };
+
+    if (showClientDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showClientDropdown]);
+
+  // Search for clients
+  const searchClients = async (query: string) => {
+    if (!query || query.length < 2) {
+      setClientSearchResults([]);
+      return;
+    }
+
+    try {
+      setLoadingClients(true);
+      const response = await fetch(`/api/admin/customers?search=${encodeURIComponent(query)}&limit=10`);
+      if (!response.ok) {
+        throw new Error('Failed to search clients');
+      }
+      const data = await response.json();
+      setClientSearchResults(data.customers || []);
+    } catch (error) {
+      console.error('Error searching clients:', error);
+      setClientSearchResults([]);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  // Handle client search input with debounce
+  useEffect(() => {
+    if (clientSearchTimeoutRef.current) {
+      clearTimeout(clientSearchTimeoutRef.current);
+    }
+
+    if (clientSearchQuery.length >= 2) {
+      clientSearchTimeoutRef.current = setTimeout(() => {
+        searchClients(clientSearchQuery);
+        // Dropdown will be shown by onFocus or onChange handlers
+      }, 300);
+    } else if (clientSearchQuery.length === 0) {
+      // Clear results when query is empty, but don't hide dropdown if it's already showing
+      setClientSearchResults([]);
+    }
+
+    return () => {
+      if (clientSearchTimeoutRef.current) {
+        clearTimeout(clientSearchTimeoutRef.current);
+      }
+    };
+  }, [clientSearchQuery]);
+
+  // Handle client selection
+  const handleClientSelect = (client: any) => {
+    setSelectedClient(client);
+    setCreateForm({
+      ...createForm,
+      customerEmail: client.email,
+      customerId: client.id,
+    });
+    setClientSearchQuery('');
+    setShowClientDropdown(false);
+  };
+
+  // Reset client selection when switching modes
+  const handleModeChange = (mode: 'email' | 'select') => {
+    setClientPickerMode(mode);
+    setSelectedClient(null);
+    setClientSearchQuery('');
+    setClientSearchResults([]);
+    // Show dropdown when switching to select mode so user sees instructions
+    setShowClientDropdown(mode === 'select');
+    setCreateForm({
+      ...createForm,
+      customerEmail: '',
+      customerId: null,
+    });
+  };
 
   const loadCodes = async () => {
     try {
@@ -167,6 +268,7 @@ export default function DiscountCodesManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerEmail: createForm.customerEmail,
+          customerId: createForm.customerId || null,
           discountType: createForm.discountType,
           discountValue: parseFloat(createForm.discountValue),
           discountCap: createForm.discountType === 'percent' && createForm.discountCap ? parseFloat(createForm.discountCap) : null,
@@ -183,7 +285,10 @@ export default function DiscountCodesManager() {
 
       alert('Discount code created and emailed to customer!');
       setShowCreateModal(false);
-      setCreateForm({ customerEmail: '', discountType: 'percent', discountValue: '', discountCap: '', expiresOn: '' });
+      setCreateForm({ customerEmail: '', customerId: null, discountType: 'percent', discountValue: '', discountCap: '', expiresOn: '' });
+      setSelectedClient(null);
+      setClientPickerMode('email');
+      setClientSearchQuery('');
       await loadCodes();
     } catch (err: any) {
       alert(err.message || 'Failed to create discount code');
@@ -1018,7 +1123,14 @@ export default function DiscountCodesManager() {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg md:text-xl font-semibold text-charcoal">Create Discount Code</h3>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateForm({ customerEmail: '', customerId: null, discountType: 'percent', discountValue: '', discountCap: '', expiresOn: '' });
+                    setSelectedClient(null);
+                    setClientPickerMode('email');
+                    setClientSearchQuery('');
+                    setShowClientDropdown(false);
+                  }}
                   className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-5 h-5 text-charcoal" />
@@ -1028,15 +1140,136 @@ export default function DiscountCodesManager() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-charcoal mb-2">
-                    Customer Email <span className="text-red-500">*</span>
+                    Customer <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="email"
-                    value={createForm.customerEmail}
-                    onChange={(e) => setCreateForm({ ...createForm, customerEmail: e.target.value })}
-                    className="w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-                    placeholder="customer@example.com"
-                  />
+                  
+                  {/* Mode Toggle */}
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => handleModeChange('email')}
+                      className={`flex-1 px-3 py-2 rounded-lg transition-colors text-sm ${
+                        clientPickerMode === 'email'
+                          ? 'bg-dark-sage text-white'
+                          : 'bg-sand/30 text-charcoal hover:bg-sand/50'
+                      }`}
+                    >
+                      Enter Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleModeChange('select')}
+                      className={`flex-1 px-3 py-2 rounded-lg transition-colors text-sm ${
+                        clientPickerMode === 'select'
+                          ? 'bg-dark-sage text-white'
+                          : 'bg-sand/30 text-charcoal hover:bg-sand/50'
+                      }`}
+                    >
+                      Pick Client
+                    </button>
+                  </div>
+
+                  {/* Email Input Mode */}
+                  {clientPickerMode === 'email' && (
+                    <input
+                      type="email"
+                      value={createForm.customerEmail}
+                      onChange={(e) => setCreateForm({ ...createForm, customerEmail: e.target.value, customerId: null })}
+                      className="w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                      placeholder="customer@example.com"
+                    />
+                  )}
+
+                  {/* Client Picker Mode */}
+                  {clientPickerMode === 'select' && (
+                    <div className="relative" ref={clientDropdownRef}>
+                      {selectedClient ? (
+                        <div className="flex items-center justify-between w-full px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg bg-sage-light/20">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-charcoal">
+                              {selectedClient.first_name} {selectedClient.last_name}
+                            </p>
+                            <p className="text-xs text-warm-gray">{selectedClient.email}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedClient(null);
+                              setCreateForm({ ...createForm, customerEmail: '', customerId: null });
+                              setClientSearchQuery('');
+                            }}
+                            className="ml-2 p-1 hover:bg-sand/30 rounded transition-colors"
+                          >
+                            <X className="w-4 h-4 text-charcoal" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-warm-gray" />
+                            <input
+                              type="text"
+                              value={clientSearchQuery}
+                              onChange={(e) => {
+                                setClientSearchQuery(e.target.value);
+                                // Show dropdown when user starts typing
+                                if (e.target.value.length > 0) {
+                                  setShowClientDropdown(true);
+                                }
+                              }}
+                              onFocus={() => {
+                                // Always show dropdown on focus to show instructions or results
+                                setShowClientDropdown(true);
+                              }}
+                              className="w-full pl-10 pr-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                              placeholder="Search by name or email..."
+                            />
+                          </div>
+                          
+                          {/* Dropdown Results */}
+                          {showClientDropdown && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-sage-dark/20 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                              {loadingClients ? (
+                                <div className="p-4 text-center text-sm text-warm-gray">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-dark-sage mx-auto mb-2"></div>
+                                  <p>Searching...</p>
+                                </div>
+                              ) : clientSearchResults.length > 0 ? (
+                                clientSearchResults.map((client) => (
+                                  <button
+                                    key={client.id}
+                                    type="button"
+                                    onClick={() => handleClientSelect(client)}
+                                    className="w-full px-4 py-3 text-left hover:bg-sage-light/30 transition-colors border-b border-sand/30 last:border-b-0"
+                                  >
+                                    <p className="text-sm font-medium text-charcoal">
+                                      {client.first_name || ''} {client.last_name || ''}
+                                    </p>
+                                    <p className="text-xs text-warm-gray">{client.email}</p>
+                                    {client.phone && (
+                                      <p className="text-xs text-warm-gray/70">{client.phone}</p>
+                                    )}
+                                  </button>
+                                ))
+                              ) : clientSearchQuery.length >= 2 ? (
+                                <div className="p-4 text-center text-sm text-warm-gray">
+                                  No clients found matching &quot;{clientSearchQuery}&quot;
+                                </div>
+                              ) : clientSearchQuery.length > 0 ? (
+                                <div className="p-4 text-center text-sm text-warm-gray">
+                                  Type at least 2 characters to search
+                                </div>
+                              ) : (
+                                <div className="p-4 text-center text-sm text-warm-gray">
+                                  Start typing to search for a client...
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>

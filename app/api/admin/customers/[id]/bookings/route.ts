@@ -133,10 +133,52 @@ export async function GET(
       created_at: booking.created_at,
     }));
 
+    // Fetch upcoming bookings (future dates, not cancelled)
+    const now = new Date();
+    const upcomingBookingsResult = await sql`
+      SELECT 
+        b.id,
+        b.booking_date,
+        b.service_name,
+        b.payment_status,
+        b.created_at,
+        b.hapio_booking_id,
+        COALESCE(
+          (
+            SELECT SUM(p.amount_cents) - COALESCE(SUM(p.refunded_cents), 0)
+            FROM payments p
+            WHERE p.booking_id = b.id
+              AND p.status = 'succeeded'
+          ),
+          0
+        ) as total_paid_cents
+      FROM bookings b
+      WHERE (
+        b.customer_id = ${customerId}
+        OR LOWER(b.client_email) = LOWER(${customerEmail})
+      )
+        AND b.booking_date >= ${now.toISOString()}
+        AND b.payment_status != 'cancelled'
+      ORDER BY b.booking_date ASC
+    `;
+
+    const upcomingBookings = normalizeRows(upcomingBookingsResult);
+    const formattedUpcoming = upcomingBookings.map((booking: any) => ({
+      id: booking.id,
+      booking_date: booking.booking_date,
+      service_name: booking.service_name,
+      payment_status: booking.payment_status,
+      total_paid: booking.total_paid_cents ? (Number(booking.total_paid_cents) / 100).toFixed(2) : '0.00',
+      hapio_booking_id: booking.hapio_booking_id,
+      created_at: booking.created_at,
+    }));
+
     return NextResponse.json({
       success: true,
       bookings: formattedBookings,
+      upcoming: formattedUpcoming,
       count: formattedBookings.length,
+      upcomingCount: formattedUpcoming.length,
       twelveMonthsCount: twelveMonthsBookings.length,
       lastTenCount: lastTenBookings.length,
     });
