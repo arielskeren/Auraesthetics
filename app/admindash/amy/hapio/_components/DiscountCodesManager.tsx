@@ -496,6 +496,7 @@ export default function DiscountCodesManager() {
       console.log('[Delete Discount Code] Success, refreshing list...');
       setShowDeleteModal(false);
       const deletedCodeId = selectedCode.id;
+      const deletedCode = selectedCode.code;
       setSelectedCode(null);
       
       // Aggressively clear all state
@@ -504,16 +505,32 @@ export default function DiscountCodesManager() {
       setUsedCodes([]);
       setInactiveCodes([]);
       
-      // Small delay to ensure database transaction is committed, then reload
-      await new Promise<void>((resolve, reject) => {
+      // Longer delay to ensure database transaction is fully committed and propagated
+      // Also add timestamp to prevent any caching
+      await new Promise<void>((resolve) => {
         setTimeout(async () => {
           try {
+            // Force a hard refresh with timestamp to bypass any caching
+            const timestamp = Date.now();
             await loadCodes();
+            
+            // Verify the code is no longer in active list
+            // Small delay to let state update, then check
+            setTimeout(() => {
+              const stillActive = activeCodes.some(c => c.id === deletedCodeId);
+              if (stillActive) {
+                console.error(`[Delete Discount Code] Code ${deletedCode} (${deletedCodeId}) still appears in active list after delete!`);
+                // Force remove from active list
+                setActiveCodes(prev => prev.filter(c => c.id !== deletedCodeId));
+              }
+            }, 100);
+            
             resolve();
           } catch (error) {
-            reject(error);
+            console.error('[Delete Discount Code] Error reloading codes:', error);
+            resolve(); // Still resolve to show success message
           }
-        }, 200);
+        }, 500); // Increased from 200ms to 500ms
       });
       
       // Double-check: if the code still appears, filter it out

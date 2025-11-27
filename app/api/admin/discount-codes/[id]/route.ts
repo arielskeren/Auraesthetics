@@ -127,6 +127,21 @@ export async function PATCH(
   }
 }
 
+/**
+ * Helper function to check if a code is already inactive
+ * Uses the same logic as the GET endpoint for consistency
+ */
+function isCodeInactive(code: any): boolean {
+  const rawIsActive = code.is_active;
+  return (
+    rawIsActive === false || 
+    rawIsActive === 'f' || 
+    rawIsActive === 'false' ||
+    rawIsActive === 0 ||
+    (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase() === 'false')
+  );
+}
+
 // DELETE /api/admin/discount-codes/[id] - Mark discount code as inactive (soft delete)
 export async function DELETE(
   request: NextRequest,
@@ -150,19 +165,57 @@ export async function DELETE(
 
     const existingCode = codeRows[0];
 
-    // Check if already inactive
-    if (existingCode.is_active === false) {
+    // Check if already inactive - use same normalization logic as GET endpoint
+    if (isCodeInactive(existingCode)) {
+      console.log(`[Delete Discount Code] Code ${existingCode.code} (ID: ${codeId}) is already inactive`, {
+        is_active: existingCode.is_active,
+        is_active_type: typeof existingCode.is_active
+      });
       return NextResponse.json({ error: 'Code is already inactive' }, { status: 400 });
     }
 
     // Mark as inactive (soft delete) - keep record for history
-    await sql`
+    const updateResult = await sql`
       UPDATE discount_codes
       SET is_active = false, updated_at = NOW()
       WHERE id = ${codeId} AND code_type = 'one_time'
+      RETURNING id, code, is_active
     `;
 
-    console.log(`[Delete Discount Code] Successfully marked code ${existingCode.code} as inactive (ID: ${codeId})`);
+    const updatedRows = normalizeRows(updateResult);
+    if (updatedRows.length === 0) {
+      console.error(`[Delete Discount Code] UPDATE query returned no rows for code ID: ${codeId}`);
+      return NextResponse.json(
+        { error: 'Failed to update discount code' },
+        { status: 500 }
+      );
+    }
+
+    const updatedCode = updatedRows[0];
+    
+    // Verify the update actually set is_active to false
+    if (!isCodeInactive(updatedCode)) {
+      console.error(`[Delete Discount Code] UPDATE succeeded but is_active is not false for code ${updatedCode.code} (ID: ${codeId})`, {
+        is_active: updatedCode.is_active,
+        is_active_type: typeof updatedCode.is_active
+      });
+      return NextResponse.json(
+        { error: 'Failed to properly deactivate discount code' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[Delete Discount Code] Successfully marked code ${existingCode.code} as inactive (ID: ${codeId})`, {
+      before: {
+        is_active: existingCode.is_active,
+        is_active_type: typeof existingCode.is_active
+      },
+      after: {
+        is_active: updatedCode.is_active,
+        is_active_type: typeof updatedCode.is_active
+      }
+    });
+    
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[Delete Discount Code] Error:', error);

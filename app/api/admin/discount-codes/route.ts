@@ -164,6 +164,31 @@ export async function GET(request: NextRequest) {
     const inactive: any[] = [];
 
     codesWithUsage.forEach((code: any) => {
+      // CRITICAL SAFETY CHECK: Run FIRST before any other logic
+      // Check all possible representations of false to ensure codes with is_active=false go to inactive
+      const rawIsActive = code.is_active;
+      const shouldBeInactive = 
+        rawIsActive === false || 
+        rawIsActive === 'f' || 
+        rawIsActive === 'false' ||
+        rawIsActive === 0 ||
+        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase() === 'false');
+      
+      // Handle used: explicitly true means used (handles both boolean true and string 't')
+      const isUsed = code.used === true || code.used === 't';
+      
+      // If code should be inactive and not used, force it to inactive section immediately
+      if (shouldBeInactive && !isUsed) {
+        console.error(`[Discount Codes API] SAFETY CHECK: Code ${code.code} (${code.id}) has is_active=false. Forcing to inactive section.`, {
+          is_active: code.is_active,
+          is_active_type: typeof code.is_active,
+          is_active_string: String(code.is_active),
+          isUsed
+        });
+        inactive.push(code);
+        return; // Skip all other logic for this code
+      }
+      
       // Use PostgreSQL NOW() comparison for consistency with database queries
       // Convert expires_at to Date and compare with current time
       const expiresAtDate = code.expires_at ? new Date(code.expires_at) : null;
@@ -172,9 +197,6 @@ export async function GET(request: NextRequest) {
       // Use helper function to normalize boolean values
       const codeIsActive = isCodeActive(code);
       const isInactive = !codeIsActive;
-      
-      // Handle used: explicitly true means used (handles both boolean true and string 't')
-      const isUsed = code.used === true || code.used === 't';
 
       // Log each code's evaluation for debugging - especially for codes with is_active = false
       if (process.env.NODE_ENV !== 'production' || code.is_active === false || code.is_active === 'f') {
@@ -192,33 +214,6 @@ export async function GET(request: NextRequest) {
           now: now.toISOString(),
           finalStatus: isUsed ? 'used' : (isInactive || isExpired ? 'inactive' : 'active')
         });
-      }
-
-      // CRITICAL: Double-check that codes with is_active = false go to inactive
-      // This is a safety check to catch any edge cases
-      // Use the same logic as isCodeActive to ensure consistency - check all possible false representations
-      const rawIsActive = code.is_active;
-      const shouldBeInactive = 
-        rawIsActive === false || 
-        rawIsActive === 'f' || 
-        rawIsActive === 'false' ||
-        rawIsActive === 0 ||
-        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase() === 'false');
-      
-      // Force to inactive if is_active indicates inactive, regardless of expiry
-      // Only skip if already used (used codes have their own section)
-      if (shouldBeInactive && !isUsed) {
-        console.warn(`[Discount Codes API] Code ${code.code} (${code.id}) has is_active=false but was not marked as inactive. Forcing to inactive.`, {
-          is_active: code.is_active,
-          is_active_type: typeof code.is_active,
-          is_active_string: String(code.is_active),
-          codeIsActive,
-          isInactive,
-          isUsed,
-          isExpired
-        });
-        inactive.push(code);
-        return; // Skip the normal flow for this code
       }
 
       if (isUsed) {
