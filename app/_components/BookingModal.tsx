@@ -510,7 +510,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                       <div className="flex items-center gap-2 mb-3">
                         <CalendarDays className="w-5 h-5 text-dark-sage" />
                         <h4 className="text-lg font-semibold text-charcoal">
-                          Pick a time that works for you
+                          Pick a day that works for you
                         </h4>
                       </div>
 
