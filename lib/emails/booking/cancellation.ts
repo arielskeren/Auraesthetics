@@ -39,6 +39,7 @@ export function generateBookingCancellationEmail(params: {
 
   const styles = getEmailStyles();
   const detailsColumnWidth = serviceImageUrl ? '55%' : '100%';
+  const dateTimeStyle = `margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};`;
   const h4Style = `margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.h4}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};`;
   const formattedDate = formatDateForEmail(bookingDate);
   const refundAmountFormatted = refundAmount != null ? `$${refundAmount.toFixed(2)}` : null;
