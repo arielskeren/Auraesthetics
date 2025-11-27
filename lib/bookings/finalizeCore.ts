@@ -123,7 +123,7 @@ export async function finalizeBookingTransactional(args: {
           const codeRecord = oneTimeRows[0];
           
           // Defensive check: Verify is_active is actually true using normalization utility
-          const { normalizeIsActive } = await import('../app/_utils/discountCodeUtils');
+          const { normalizeIsActive } = await import('../../app/_utils/discountCodeUtils');
           if (!normalizeIsActive(codeRecord.is_active)) {
             // Code is not active, skip marking as used
             console.warn('[finalizeCore] One-time code is not active, skipping usage tracking:', {
@@ -355,7 +355,7 @@ export async function finalizeBookingTransactional(args: {
           const codeRecord = globalCodeRows[0];
           
           // Defensive check: Verify is_active is actually true using normalization utility
-          const { normalizeIsActive } = await import('../app/_utils/discountCodeUtils');
+          const { normalizeIsActive } = await import('../../app/_utils/discountCodeUtils');
           if (!normalizeIsActive(codeRecord.is_active)) {
             // Code is not active, skip usage tracking
             console.warn('[finalizeCore] Global code is not active, skipping usage tracking:', {
