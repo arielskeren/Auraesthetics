@@ -319,6 +319,7 @@ export async function POST(request: NextRequest) {
         WHERE code = ${codeUpper}
           AND code_type = 'one_time'
           AND used = false
+          AND (is_active IS NULL OR is_active = true)
           AND (expires_at IS NULL OR expires_at > NOW())
       `;
       const oneTimeRows = normalizeRows(oneTimeResult);

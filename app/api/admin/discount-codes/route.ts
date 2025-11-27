@@ -128,10 +128,10 @@ export async function GET(request: NextRequest) {
     codesWithUsage.forEach((code: any) => {
       const isExpired = code.expires_at && new Date(code.expires_at) <= now;
       // Handle is_active: explicitly false means inactive, NULL/true means active (default)
-      // PostgreSQL booleans can be true/false/null, ensure we check correctly
+      // PostgreSQL booleans can be true/false/null or strings 't'/'f', ensure we check correctly
       // Check for false explicitly (handles both boolean false and string 'f' from PostgreSQL)
       const isInactive = code.is_active === false || code.is_active === 'f';
-      // Handle used: explicitly true means used
+      // Handle used: explicitly true means used (handles both boolean true and string 't')
       const isUsed = code.used === true || code.used === 't';
 
       if (isUsed) {
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       } else if (isInactive || isExpired) {
         inactive.push(code);
       } else {
-        // Active codes: not used, not inactive (is_active is true or NULL), not expired
+        // Active codes: not used, not inactive (is_active is true, 't', or NULL), not expired
         active.push(code);
       }
     });
