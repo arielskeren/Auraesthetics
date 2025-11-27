@@ -84,15 +84,56 @@ export async function GET(request: NextRequest) {
     `;
     const allCodes = normalizeRows(codesResult);
     
+    // Normalize is_active values immediately after fetching to ensure consistency
+    // PostgreSQL can return booleans in various formats, so normalize them all to boolean
+    const normalizedCodes = allCodes.map((code: any) => {
+      const rawIsActive = code.is_active;
+      let normalizedIsActive: boolean;
+      
+      // Normalize to boolean
+      if (
+        rawIsActive === false || 
+        rawIsActive === 'f' || 
+        rawIsActive === 'false' ||
+        rawIsActive === 0 ||
+        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase().trim() === 'false')
+      ) {
+        normalizedIsActive = false;
+      } else if (
+        rawIsActive === true || 
+        rawIsActive === 't' || 
+        rawIsActive === 'true' ||
+        rawIsActive === 1 ||
+        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase().trim() === 'true')
+      ) {
+        normalizedIsActive = true;
+      } else {
+        // null, undefined, or unknown value - default to true (active)
+        normalizedIsActive = true;
+      }
+      
+      // Log if normalization changed the value
+      if (rawIsActive !== normalizedIsActive && (rawIsActive === false || rawIsActive === 'f' || rawIsActive === 'false')) {
+        console.warn(`[Discount Codes API] Normalized is_active for code ${code.code}: ${rawIsActive} (${typeof rawIsActive}) -> ${normalizedIsActive} (boolean)`);
+      }
+      
+      return {
+        ...code,
+        is_active: normalizedIsActive, // Replace with normalized boolean
+        _original_is_active: rawIsActive, // Keep original for debugging
+      };
+    });
+    
     // Debug logging - only in development
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[Discount Codes API] Total codes fetched:', allCodes.length);
-      if (allCodes.length > 0) {
-        console.log('[Discount Codes API] Sample codes:', allCodes.slice(0, 5).map((c: any) => ({
+      console.log('[Discount Codes API] Total codes fetched:', normalizedCodes.length);
+      if (normalizedCodes.length > 0) {
+        console.log('[Discount Codes API] Sample codes:', normalizedCodes.slice(0, 5).map((c: any) => ({
           code: c.code,
           code_type: c.code_type,
           is_active: c.is_active,
           is_active_type: typeof c.is_active,
+          original_is_active: c._original_is_active,
           used: c.used,
           expires_at: c.expires_at,
           customer_id: c.customer_id ? 'has customer' : 'no customer'
@@ -102,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     // For used codes, fetch booking usage details
     const codesWithUsage = await Promise.all(
-      allCodes.map(async (code: any) => {
+      normalizedCodes.map(async (code: any) => {
         if (!code.used || !code.used_at) {
           return code;
         }
