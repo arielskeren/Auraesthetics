@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { normalizeIsActive, isCodeActive, isCodeInactive } from '@/app/_utils/discountCodeUtils';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -9,44 +10,6 @@ function normalizeRows(result: any): any[] {
     return (result as any).rows;
   }
   return [];
-}
-
-/**
- * Normalizes PostgreSQL boolean values to determine if a code is active.
- * Handles: true (boolean), 't' (string), false (boolean), 'f' (string), null (treated as active)
- * Also handles edge cases like string 'false', 0, etc.
- */
-function isCodeActive(code: any): boolean {
-  // Handle null/undefined - treat as active (default state)
-  if (code.is_active === null || code.is_active === undefined) {
-    return true;
-  }
-  
-  // Handle explicit false values - check multiple representations
-  // PostgreSQL can return: boolean false, string 'f', string 'false', number 0
-  if (
-    code.is_active === false || 
-    code.is_active === 'f' || 
-    code.is_active === 'false' ||
-    code.is_active === 0 ||
-    String(code.is_active).toLowerCase() === 'false'
-  ) {
-    return false;
-  }
-  
-  // Handle explicit true values
-  if (
-    code.is_active === true || 
-    code.is_active === 't' || 
-    code.is_active === 'true' ||
-    code.is_active === 1 ||
-    String(code.is_active).toLowerCase() === 'true'
-  ) {
-    return true;
-  }
-  
-  // Default to active for any other value (defensive)
-  return true;
 }
 
 export const dynamic = 'force-dynamic';
@@ -86,35 +49,18 @@ export async function GET(request: NextRequest) {
     
     // Normalize is_active values immediately after fetching to ensure consistency
     // PostgreSQL can return booleans in various formats, so normalize them all to boolean
+    // CRITICAL: NULL values are now treated as INACTIVE (not active) for data integrity
     const normalizedCodes = allCodes.map((code: any) => {
       const rawIsActive = code.is_active;
-      let normalizedIsActive: boolean;
+      const normalizedIsActive = normalizeIsActive(rawIsActive);
       
-      // Normalize to boolean
-      if (
-        rawIsActive === false || 
-        rawIsActive === 'f' || 
-        rawIsActive === 'false' ||
-        rawIsActive === 0 ||
-        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase().trim() === 'false')
-      ) {
-        normalizedIsActive = false;
-      } else if (
-        rawIsActive === true || 
-        rawIsActive === 't' || 
-        rawIsActive === 'true' ||
-        rawIsActive === 1 ||
-        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase().trim() === 'true')
-      ) {
-        normalizedIsActive = true;
-      } else {
-        // null, undefined, or unknown value - default to true (active)
-        normalizedIsActive = true;
-      }
-      
-      // Log if normalization changed the value
-      if (rawIsActive !== normalizedIsActive && (rawIsActive === false || rawIsActive === 'f' || rawIsActive === 'false')) {
-        console.warn(`[Discount Codes API] Normalized is_active for code ${code.code}: ${rawIsActive} (${typeof rawIsActive}) -> ${normalizedIsActive} (boolean)`);
+      // Log if normalization changed the value (especially NULL -> false)
+      if (rawIsActive !== normalizedIsActive) {
+        if (rawIsActive === null || rawIsActive === undefined) {
+          console.warn(`[Discount Codes API] Normalized NULL is_active for code ${code.code} to INACTIVE (false)`);
+        } else if (rawIsActive === false || rawIsActive === 'f' || rawIsActive === 'false') {
+          console.warn(`[Discount Codes API] Normalized is_active for code ${code.code}: ${rawIsActive} (${typeof rawIsActive}) -> ${normalizedIsActive} (boolean)`);
+        }
       }
       
       return {
@@ -205,57 +151,52 @@ export async function GET(request: NextRequest) {
     const inactive: any[] = [];
 
     codesWithUsage.forEach((code: any) => {
-      // CRITICAL SAFETY CHECK: Run FIRST before any other logic
-      // Since we've normalized is_active to boolean, we can do a simple check
-      // Handle used: explicitly true means used (handles both boolean true and string 't')
+      // CRITICAL: Check inactive status FIRST using normalized value
+      // This ensures inactive codes (including NULL) never go to active section
+      const isInactive = isCodeInactive(code);
       const isUsed = code.used === true || code.used === 't';
       
-      // If code is inactive (is_active === false) and not used, force it to inactive section immediately
-      // This MUST run before any other categorization logic
-      if (code.is_active === false && !isUsed) {
-        console.error(`[Discount Codes API] SAFETY CHECK: Code ${code.code} (${code.id}) has is_active=false. Forcing to inactive section.`, {
-          is_active: code.is_active,
-          is_active_type: typeof code.is_active,
-          original_is_active: code._original_is_active,
-          isUsed
-        });
-        inactive.push(code);
+      // If code is inactive (is_active === false or NULL), categorize appropriately
+      if (isInactive) {
+        // Inactive codes go to inactive section UNLESS they're used
+        // Used codes go to used section regardless of active status
+        if (isUsed) {
+          used.push(code);
+        } else {
+          inactive.push(code);
+        }
         return; // Skip all other logic for this code
       }
       
-      // Use PostgreSQL NOW() comparison for consistency with database queries
-      // Convert expires_at to Date and compare with current time
+      // At this point, code is active (is_active === true)
+      // Check expiration and usage status
       const expiresAtDate = code.expires_at ? new Date(code.expires_at) : null;
       const isExpired = expiresAtDate && expiresAtDate <= now;
-      
-      // Use helper function to normalize boolean values
-      const codeIsActive = isCodeActive(code);
-      const isInactive = !codeIsActive;
 
-      // Log each code's evaluation for debugging - especially for codes with is_active = false
-      if (process.env.NODE_ENV !== 'production' || code.is_active === false || code.is_active === 'f') {
+      // Log each code's evaluation for debugging
+      if (process.env.NODE_ENV !== 'production') {
         console.log(`[Code ${code.code}]`, {
           id: code.id,
           is_active: code.is_active,
           is_active_type: typeof code.is_active,
-          is_active_string: String(code.is_active),
-          isCodeActive: codeIsActive,
+          original_is_active: code._original_is_active,
           isInactive,
           isUsed,
           isExpired,
           expires_at: code.expires_at,
           expiresAtDate: expiresAtDate?.toISOString(),
           now: now.toISOString(),
-          finalStatus: isUsed ? 'used' : (isInactive || isExpired ? 'inactive' : 'active')
+          finalStatus: isUsed ? 'used' : (isExpired ? 'inactive' : 'active')
         });
       }
 
+      // Categorize active codes
       if (isUsed) {
         used.push(code);
-      } else if (isInactive || isExpired) {
+      } else if (isExpired) {
         inactive.push(code);
       } else {
-        // Active codes: not used, not inactive (is_active is true, 't', or NULL), not expired
+        // Active codes: is_active = true, not used, not expired
         active.push(code);
       }
     });

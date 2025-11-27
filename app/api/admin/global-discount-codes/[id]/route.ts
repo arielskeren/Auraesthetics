@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { normalizeIsActive, isCodeInactive } from '@/app/_utils/discountCodeUtils';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -107,8 +108,14 @@ export async function DELETE(
 
     const existingCode = codeRows[0];
 
-    // Check if already inactive
-    if (existingCode.is_active === false) {
+    // Check if already inactive using normalization utility for consistency
+    // NULL values are treated as INACTIVE (not active)
+    if (isCodeInactive(existingCode)) {
+      console.log(`[Delete Global Discount Code] Code ${existingCode.code} (ID: ${codeId}) is already inactive`, {
+        is_active: existingCode.is_active,
+        is_active_type: typeof existingCode.is_active,
+        normalized: normalizeIsActive(existingCode.is_active)
+      });
       return NextResponse.json({ error: 'Code is already inactive' }, { status: 400 });
     }
 

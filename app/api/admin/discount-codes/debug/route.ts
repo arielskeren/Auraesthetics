@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { normalizeIsActive, isCodeInactive } from '@/app/_utils/discountCodeUtils';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -114,11 +115,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Calculate status evaluation
+    // Calculate status evaluation using normalization utility for consistency
     const now = new Date();
     const expiresAtDate = codeData.expires_at ? new Date(codeData.expires_at) : null;
     const isExpired = expiresAtDate && expiresAtDate <= now;
-    const isInactive = codeData.is_active === false || codeData.is_active === 'f';
+    const isInactive = isCodeInactive(codeData); // Uses normalization utility (NULL = inactive)
     const isUsed = codeData.used === true || codeData.used === 't';
     
     // Determine expected status
@@ -142,7 +143,7 @@ export async function GET(request: NextRequest) {
             isString: typeof codeData.is_active === 'string',
             isNull: codeData.is_active === null,
             isUndefined: codeData.is_active === undefined,
-            normalized: codeData.is_active === false || codeData.is_active === 'f' ? false : true
+            normalized: normalizeIsActive(codeData.is_active) // Uses utility (NULL = inactive)
           },
           used: {
             value: codeData.used,

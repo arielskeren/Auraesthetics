@@ -198,13 +198,18 @@ export default function DiscountCodesManager() {
       setInactiveCodes([]);
       setUsageDetails({});
 
-      // Add timestamp to prevent caching
+      // Add timestamp and random value to prevent caching
+      // Use both query param and headers for maximum cache prevention
       const timestamp = Date.now();
-      const response = await fetch(`/api/admin/discount-codes?t=${timestamp}`, {
+      const random = Math.random().toString(36).substring(7);
+      const response = await fetch(`/api/admin/discount-codes?t=${timestamp}&r=${random}`, {
         cache: 'no-store',
+        method: 'GET',
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Request-ID': `${timestamp}-${random}`, // Additional cache-busting header
         },
       });
       if (!response.ok) {
@@ -240,6 +245,25 @@ export default function DiscountCodesManager() {
         });
       }
       
+      // Defensive check: Filter out any codes with is_active = false from active array
+      // This is a fail-safe in case API returns incorrect data
+      const filteredActive = active.filter((code: DiscountCode) => {
+        if (code.is_active === false || code.is_active === null || code.is_active === undefined) {
+          console.warn(`[DiscountCodesManager] Defensive filter: Removed inactive code ${code.code} from active array`, {
+            code: code.code,
+            id: code.id,
+            is_active: code.is_active
+          });
+          return false;
+        }
+        return true;
+      });
+      
+      // If filtering removed any codes, log warning
+      if (filteredActive.length !== active.length) {
+        console.warn(`[DiscountCodesManager] Defensive filter removed ${active.length - filteredActive.length} inactive code(s) from active array`);
+      }
+      
       // Log each code's status for debugging
       const allCodes = [...active, ...used, ...inactive];
       console.log('[DiscountCodesManager] Code status breakdown:', {
@@ -267,7 +291,7 @@ export default function DiscountCodesManager() {
         }))
       });
       
-      setActiveCodes(active);
+      setActiveCodes(filteredActive);
       setUsedCodes(used);
       setInactiveCodes(inactive);
       
@@ -496,47 +520,28 @@ export default function DiscountCodesManager() {
       console.log('[Delete Discount Code] Success, refreshing list...');
       setShowDeleteModal(false);
       const deletedCodeId = selectedCode.id;
-      const deletedCode = selectedCode.code;
       setSelectedCode(null);
       
-      // Aggressively clear all state
-      setUsageDetails({});
-      setActiveCodes([]);
-      setUsedCodes([]);
-      setInactiveCodes([]);
-      
-      // Longer delay to ensure database transaction is fully committed and propagated
-      // Also add timestamp to prevent any caching
-      await new Promise<void>((resolve) => {
-        setTimeout(async () => {
-          try {
-            // Force a hard refresh with timestamp to bypass any caching
-            const timestamp = Date.now();
-            await loadCodes();
-            
-            // Verify the code is no longer in active list
-            // Small delay to let state update, then check
-            setTimeout(() => {
-              const stillActive = activeCodes.some(c => c.id === deletedCodeId);
-              if (stillActive) {
-                console.error(`[Delete Discount Code] Code ${deletedCode} (${deletedCodeId}) still appears in active list after delete!`);
-                // Force remove from active list
-                setActiveCodes(prev => prev.filter(c => c.id !== deletedCodeId));
-              }
-            }, 100);
-            
-            resolve();
-          } catch (error) {
-            console.error('[Delete Discount Code] Error reloading codes:', error);
-            resolve(); // Still resolve to show success message
-          }
-        }, 500); // Increased from 200ms to 500ms
+      // Clear state immediately to prevent stale UI
+      setUsageDetails(prev => {
+        const updated = { ...prev };
+        delete updated[deletedCodeId];
+        return updated;
       });
-      
-      // Double-check: if the code still appears, filter it out
       setActiveCodes(prev => prev.filter(c => c.id !== deletedCodeId));
       setUsedCodes(prev => prev.filter(c => c.id !== deletedCodeId));
       setInactiveCodes(prev => prev.filter(c => c.id !== deletedCodeId));
+      
+      // Reload codes from API (with cache-busting) to get accurate state
+      // Small delay to ensure database transaction is committed
+      setTimeout(async () => {
+        try {
+          await loadCodes();
+        } catch (error) {
+          console.error('[Delete Discount Code] Error reloading codes:', error);
+          // Non-critical - UI already updated
+        }
+      }, 300); // Short delay for database commit
       
       alert('Discount code deleted successfully!');
     } catch (err: any) {
@@ -724,12 +729,13 @@ export default function DiscountCodesManager() {
         <div className="flex gap-2">
           <button
             onClick={async () => {
-              // Hard refresh: clear everything first
+              // Hard refresh: clear everything first, then reload with fresh cache-busting
               setActiveCodes([]);
               setUsedCodes([]);
               setInactiveCodes([]);
               setUsageDetails({});
               setError(null);
+              // Force reload with new cache-busting parameters
               await loadCodes();
             }}
             className="px-3 md:px-4 py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"

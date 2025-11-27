@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { normalizeIsActive, isCodeInactive } from '@/app/_utils/discountCodeUtils';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -127,20 +128,7 @@ export async function PATCH(
   }
 }
 
-/**
- * Helper function to check if a code is already inactive
- * Uses the same logic as the GET endpoint for consistency
- */
-function isCodeInactive(code: any): boolean {
-  const rawIsActive = code.is_active;
-  return (
-    rawIsActive === false || 
-    rawIsActive === 'f' || 
-    rawIsActive === 'false' ||
-    rawIsActive === 0 ||
-    (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase() === 'false')
-  );
-}
+// Note: isCodeInactive is now imported from discountCodeUtils for consistency
 
 // DELETE /api/admin/discount-codes/[id] - Mark discount code as inactive (soft delete)
 export async function DELETE(
@@ -165,11 +153,13 @@ export async function DELETE(
 
     const existingCode = codeRows[0];
 
-    // Check if already inactive - use same normalization logic as GET endpoint
+    // Check if already inactive - use normalization utility for consistency
+    // NULL values are treated as INACTIVE (not active)
     if (isCodeInactive(existingCode)) {
       console.log(`[Delete Discount Code] Code ${existingCode.code} (ID: ${codeId}) is already inactive`, {
         is_active: existingCode.is_active,
-        is_active_type: typeof existingCode.is_active
+        is_active_type: typeof existingCode.is_active,
+        normalized: normalizeIsActive(existingCode.is_active)
       });
       return NextResponse.json({ error: 'Code is already inactive' }, { status: 400 });
     }
@@ -193,11 +183,12 @@ export async function DELETE(
 
     const updatedCode = updatedRows[0];
     
-    // Verify the update actually set is_active to false
+    // Verify the update actually set is_active to false using normalization utility
     if (!isCodeInactive(updatedCode)) {
       console.error(`[Delete Discount Code] UPDATE succeeded but is_active is not false for code ${updatedCode.code} (ID: ${codeId})`, {
         is_active: updatedCode.is_active,
-        is_active_type: typeof updatedCode.is_active
+        is_active_type: typeof updatedCode.is_active,
+        normalized: normalizeIsActive(updatedCode.is_active)
       });
       return NextResponse.json(
         { error: 'Failed to properly deactivate discount code' },

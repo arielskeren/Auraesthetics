@@ -104,12 +104,14 @@ export async function finalizeBookingTransactional(args: {
       try {
         const codeUpper = discountCodeFromMetadata.toUpperCase();
         // CRITICAL: Use SELECT FOR UPDATE to lock the row and prevent concurrent usage
+        // CRITICAL: Require is_active = true explicitly (NULL values are treated as inactive)
         // First check if code exists and is valid (with row lock)
         const oneTimeCodeResult = await sql`
-          SELECT id, customer_id FROM discount_codes 
+          SELECT id, customer_id, is_active FROM discount_codes 
           WHERE code = ${codeUpper} 
             AND code_type = 'one_time'
             AND used = false
+            AND is_active = true
             AND (expires_at IS NULL OR expires_at > NOW())
           LIMIT 1
           FOR UPDATE
@@ -119,43 +121,55 @@ export async function finalizeBookingTransactional(args: {
           : (oneTimeCodeResult as any)?.rows || [];
         if (oneTimeRows.length > 0) {
           const codeRecord = oneTimeRows[0];
-          // If code is customer-specific, verify customer matches
-          if (codeRecord.customer_id) {
-            if (!emailFromPi) {
-              // No email in payment - log security issue but still mark as used to prevent reuse
-              console.error('[finalizeCore] One-time code used without email (customer-specific code):', {
-                code: codeUpper,
-                codeCustomerId: codeRecord.customer_id,
-              });
-              // Still mark as used to prevent code reuse, but log security issue
-              oneTimeCodeId = codeRecord.id;
-            } else {
-              const customerMatch = await sql`
-                SELECT id FROM customers 
-                WHERE id = ${codeRecord.customer_id} 
-                  AND LOWER(email) = LOWER(${emailFromPi})
-                LIMIT 1
-              `;
-              const customerRows = Array.isArray(customerMatch) 
-                ? customerMatch 
-                : (customerMatch as any)?.rows || [];
-              if (customerRows.length === 0) {
-                // Customer doesn't match - log security issue but still mark as used to prevent reuse
-                console.error('[finalizeCore] One-time code customer mismatch (security issue):', {
+          
+          // Defensive check: Verify is_active is actually true using normalization utility
+          const { normalizeIsActive } = await import('../app/_utils/discountCodeUtils');
+          if (!normalizeIsActive(codeRecord.is_active)) {
+            // Code is not active, skip marking as used
+            console.warn('[finalizeCore] One-time code is not active, skipping usage tracking:', {
+              code: codeUpper,
+              is_active: codeRecord.is_active,
+            });
+            oneTimeCodeId = null;
+          } else {
+            // If code is customer-specific, verify customer matches
+            if (codeRecord.customer_id) {
+              if (!emailFromPi) {
+                // No email in payment - log security issue but still mark as used to prevent reuse
+                console.error('[finalizeCore] One-time code used without email (customer-specific code):', {
                   code: codeUpper,
                   codeCustomerId: codeRecord.customer_id,
-                  paymentEmail: emailFromPi,
                 });
                 // Still mark as used to prevent code reuse, but log security issue
                 oneTimeCodeId = codeRecord.id;
               } else {
-                // Customer matches - safe to mark as used
-                oneTimeCodeId = codeRecord.id;
+                const customerMatch = await sql`
+                  SELECT id FROM customers 
+                  WHERE id = ${codeRecord.customer_id} 
+                    AND LOWER(email) = LOWER(${emailFromPi})
+                  LIMIT 1
+                `;
+                const customerRows = Array.isArray(customerMatch) 
+                  ? customerMatch 
+                  : (customerMatch as any)?.rows || [];
+                if (customerRows.length === 0) {
+                  // Customer doesn't match - log security issue but still mark as used to prevent reuse
+                  console.error('[finalizeCore] One-time code customer mismatch (security issue):', {
+                    code: codeUpper,
+                    codeCustomerId: codeRecord.customer_id,
+                    paymentEmail: emailFromPi,
+                  });
+                  // Still mark as used to prevent code reuse, but log security issue
+                  oneTimeCodeId = codeRecord.id;
+                } else {
+                  // Customer matches - safe to mark as used
+                  oneTimeCodeId = codeRecord.id;
+                }
               }
+            } else {
+              // Code is not customer-specific - safe to use
+              oneTimeCodeId = codeRecord.id;
             }
-          } else {
-            // Code is not customer-specific - safe to use
-            oneTimeCodeId = codeRecord.id;
           }
         }
       } catch (e) {
@@ -339,12 +353,22 @@ export async function finalizeBookingTransactional(args: {
         
         if (globalCodeRows.length > 0) {
           const codeRecord = globalCodeRows[0];
-          const currentUsage = codeRecord.usage_count || 0;
-          const newUsage = currentUsage + 1;
-          const maxUses = codeRecord.max_uses;
           
-          // Determine if code should be deactivated (reached max uses)
-          let newIsActive = codeRecord.is_active;
+          // Defensive check: Verify is_active is actually true using normalization utility
+          const { normalizeIsActive } = await import('../app/_utils/discountCodeUtils');
+          if (!normalizeIsActive(codeRecord.is_active)) {
+            // Code is not active, skip usage tracking
+            console.warn('[finalizeCore] Global code is not active, skipping usage tracking:', {
+              code: codeUpper,
+              is_active: codeRecord.is_active,
+            });
+          } else {
+            const currentUsage = codeRecord.usage_count || 0;
+            const newUsage = currentUsage + 1;
+            const maxUses = codeRecord.max_uses;
+            
+            // Determine if code should be deactivated (reached max uses)
+            let newIsActive = codeRecord.is_active;
           if (maxUses !== null && maxUses !== undefined && newUsage >= maxUses) {
             newIsActive = false;
             console.log('[finalizeCore] Global code reached max_uses limit, deactivating:', {
@@ -368,15 +392,15 @@ export async function finalizeBookingTransactional(args: {
             ? updateResult 
             : (updateResult as any)?.rows || [];
           
-          if (updatedRows.length > 0) {
-            console.log('[finalizeCore] Successfully updated global code usage:', {
-              code: updatedRows[0].code,
-              usage_count: updatedRows[0].usage_count,
-              is_active: updatedRows[0].is_active,
-            });
-            
-          } else {
-            console.warn('[finalizeCore] Failed to update global code usage - row may have been updated by another transaction');
+            if (updatedRows.length > 0) {
+              console.log('[finalizeCore] Successfully updated global code usage:', {
+                code: updatedRows[0].code,
+                usage_count: updatedRows[0].usage_count,
+                is_active: updatedRows[0].is_active,
+              });
+            } else {
+              console.warn('[finalizeCore] Failed to update global code usage - row may have been updated by another transaction');
+            }
           }
         }
       } catch (e) {

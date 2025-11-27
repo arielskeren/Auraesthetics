@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
+import { normalizeIsActive, isCodeInactive } from '@/app/_utils/discountCodeUtils';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -63,24 +64,28 @@ export async function GET(request: NextRequest) {
     const inactive: any[] = [];
 
     allCodes.forEach((code: any) => {
+      // CRITICAL: Use normalization utility for consistent boolean handling
+      // NULL values are treated as INACTIVE (not active)
+      const isInactive = isCodeInactive(code);
       const isExpired = code.expires_at && new Date(code.expires_at) <= now;
-      const isInactive = code.is_active === false || code.is_active === 'f';
       const usageCount = code.usage_count || 0;
       const maxUses = code.max_uses;
       
       // Check if max uses has been reached
       const maxUsesReached = maxUses !== null && maxUses !== undefined && usageCount >= maxUses;
 
-      // Inactive if: explicitly inactive, expired, or max uses reached
+      // Inactive if: explicitly inactive (including NULL), expired, or max uses reached
       if (isInactive || isExpired || maxUsesReached) {
         inactive.push({
           ...code,
+          is_active: normalizeIsActive(code.is_active), // Normalize for consistency
           times_redeemed: usageCount,
         });
       } else {
-        // Active: not inactive, not expired, and (no max_uses or hasn't reached max_uses)
+        // Active: is_active = true, not expired, and (no max_uses or hasn't reached max_uses)
         active.push({
           ...code,
+          is_active: normalizeIsActive(code.is_active), // Normalize for consistency
           times_redeemed: usageCount,
         });
       }

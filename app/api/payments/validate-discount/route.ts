@@ -312,21 +312,33 @@ export async function POST(request: NextRequest) {
     let isOneTime = false;
 
     // First check one-time discount codes
+    // CRITICAL: Require is_active = true explicitly (NULL values are treated as inactive)
     try {
       const oneTimeResult = await sql`
-        SELECT id, code, customer_id, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at, code_type
+        SELECT id, code, customer_id, discount_type, discount_value, discount_cap, stripe_coupon_id, used, expires_at, code_type, is_active
         FROM discount_codes 
         WHERE code = ${codeUpper}
           AND code_type = 'one_time'
           AND used = false
-          AND (is_active IS NULL OR is_active = true)
+          AND is_active = true
           AND (expires_at IS NULL OR expires_at > NOW())
       `;
       const oneTimeRows = normalizeRows(oneTimeResult);
       
       if (oneTimeRows.length > 0) {
-        // One-time code found
-        discountCode = oneTimeRows[0];
+        // One-time code found - verify is_active is actually true (defensive check)
+        const codeRecord = oneTimeRows[0];
+        // Double-check is_active using normalization utility for consistency
+        const { normalizeIsActive } = await import('@/app/_utils/discountCodeUtils');
+        if (!normalizeIsActive(codeRecord.is_active)) {
+          // Code is not active, reject it
+          return NextResponse.json(
+            { error: 'Invalid discount code', valid: false },
+            { status: 400 }
+          );
+        }
+        
+        discountCode = codeRecord;
         isOneTime = true;
         
         // CRITICAL: If code is customer-specific, require email for validation
@@ -363,6 +375,7 @@ export async function POST(request: NextRequest) {
     }
 
     // If no one-time code found, check global discount codes
+    // CRITICAL: Require is_active = true explicitly (NULL values are treated as inactive)
     if (!discountCode) {
       const dbResult = await sql`
         SELECT * FROM discount_codes 
@@ -380,7 +393,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      discountCode = discountRows[0];
+      // Double-check is_active using normalization utility for consistency
+      const { normalizeIsActive } = await import('@/app/_utils/discountCodeUtils');
+      const codeRecord = discountRows[0];
+      if (!normalizeIsActive(codeRecord.is_active)) {
+        // Code is not active, reject it
+        return NextResponse.json(
+          { error: 'Invalid discount code', valid: false },
+          { status: 400 }
+        );
+      }
+
+      discountCode = codeRecord;
       
       // Check max_uses limit (if set)
       if (discountCode.max_uses !== null && discountCode.max_uses !== undefined) {
