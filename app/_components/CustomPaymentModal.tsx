@@ -639,7 +639,7 @@ function ModernPaymentSection({
                   />
                   <div className="flex-1">
                     <div className="font-medium text-charcoal">Pay Full Amount</div>
-                    <div className="text-sm text-warm-gray">${finalAmount.toFixed(2)}</div>
+                    <div className="text-xs text-warm-gray">${finalAmount.toFixed(2)} due now</div>
                   </div>
                 </label>
                 <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
@@ -654,9 +654,7 @@ function ModernPaymentSection({
                   />
                   <div className="flex-1">
                     <div className="font-medium text-charcoal">Pay 50% Deposit</div>
-                    <div className="text-sm text-warm-gray">
-                      ${(finalAmount * 0.5).toFixed(2)} now, remainder later
-                    </div>
+                    <div className="text-xs text-warm-gray">${(finalAmount * 0.5).toFixed(2)} due now</div>
                   </div>
                 </label>
               </div>
