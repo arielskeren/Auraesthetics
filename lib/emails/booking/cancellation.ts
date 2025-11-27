@@ -6,13 +6,6 @@
 import { getEmailStyles, EMAIL_STYLES } from '../_shared/styles';
 import { escapeHtml, formatDateForEmail, generateEmailHead, generateEmailHeader, generateEmailFooterWithSocial } from '../_shared/utils';
 
-// SVG Icons for email compatibility
-const iconCalendar = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M6 2V4M14 2V4M3 6H17M4 4H16C16.5523 4 17 4.44772 17 5V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V5C3 4.44772 3.44772 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-const iconClock = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-
-const iconCheck = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M16.6667 5L7.50004 14.1667L3.33337 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
 export function generateBookingCancellationEmail(params: {
   serviceName: string;
   serviceImageUrl?: string | null;
@@ -95,7 +88,7 @@ ${generateEmailHeader(styles)}
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
                               <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconCalendar + `
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M6 2V4M14 2V4M3 6H17M4 4H16C16.5523 4 17 4.44772 17 5V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V5C3 4.44772 3.44772 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                               </td>
                               <td style="padding: 0; vertical-align: middle;">
                                 <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">${formattedDate}</p>
@@ -113,7 +106,7 @@ ${generateEmailHeader(styles)}
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
                               <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconClock + `
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                               </td>
                               <td style="padding: 0; vertical-align: middle;">
                                 <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">${escapeHtml(bookingTime)} EST</p>
@@ -139,7 +132,7 @@ ${generateEmailHeader(styles)}
                     <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: ${EMAIL_STYLES.spacing.sm};">
                       <tr>
                         <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconCheck + `
+                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M16.6667 5L7.50004 14.1667L3.33337 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </td>
                         <td style="padding: 0; vertical-align: middle;">
                           <h4 style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.h4}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">Refund Processed</h4>

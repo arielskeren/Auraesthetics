@@ -6,15 +6,6 @@
 import { getEmailStyles, EMAIL_STYLES } from '../_shared/styles';
 import { escapeHtml, formatDateForEmail, generateEmailHead, generateEmailHeader, generateEmailFooterWithSocial } from '../_shared/utils';
 
-// SVG Icons for email compatibility
-const iconCalendar = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M6 2V4M14 2V4M3 6H17M4 4H16C16.5523 4 17 4.44772 17 5V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V5C3 4.44772 3.44772 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-const iconClock = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-
-const iconLocation = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M10 10.5C11.3807 10.5 12.5 9.38071 12.5 8C12.5 6.61929 11.3807 5.5 10 5.5C8.61929 5.5 7.5 6.61929 7.5 8C7.5 9.38071 8.61929 10.5 10 10.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M10 18C13 14 17 10.4183 17 8C17 4.68629 14.3137 2 11 2C7.68629 2 5 4.68629 5 8C5 10.4183 9 14 10 18Z" stroke="currentColor" stroke-width="1.5"/></svg>';
-
-const iconArrow = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;"><path d="M12 5V19M12 5L19 12M12 5L5 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
 export function generateBookingRescheduleEmail(params: {
   serviceName: string;
   serviceImageUrl?: string | null;
@@ -102,7 +93,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconCalendar + `
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M6 2V4M14 2V4M3 6H17M4 4H16C16.5523 4 17 4.44772 17 5V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V5C3 4.44772 3.44772 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(formattedOldDate)}</strong></p>
@@ -112,7 +103,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconClock + `
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(oldBookingTime)} EST</strong></p>
@@ -123,7 +114,7 @@ ${generateEmailHeader(styles)}
 
               <!-- Arrow -->
               <div style="text-align: center; margin: ${EMAIL_STYLES.spacing.md} 0; color: ${EMAIL_STYLES.colors.primary};">
-` + iconArrow + `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;"><path d="M12 5V19M12 5L19 12M12 5L5 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
 
               <!-- New Date/Time -->
@@ -132,7 +123,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconCalendar + `
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M6 2V4M14 2V4M3 6H17M4 4H16C16.5523 4 17 4.44772 17 5V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V5C3 4.44772 3.44772 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(formattedNewDate)}</strong></p>
@@ -142,7 +133,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-` + iconClock + `
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(newBookingTime)} EST</strong></p>
@@ -157,7 +148,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: top; padding-top: 2px;">
-` + iconLocation + `
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M10 10.5C11.3807 10.5 12.5 9.38071 12.5 8C12.5 6.61929 11.3807 5.5 10 5.5C8.61929 5.5 7.5 6.61929 7.5 8C7.5 9.38071 8.61929 10.5 10 10.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M10 18C13 14 17 10.4183 17 8C17 4.68629 14.3137 2 11 2C7.68629 2 5 4.68629 5 8C5 10.4183 9 14 10 18Z" stroke="currentColor" stroke-width="1.5"/></svg>
                     </td>
                     <td style="padding: 0; vertical-align: top;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; line-height: 1.5;">${escapeHtml(address)}</p>
