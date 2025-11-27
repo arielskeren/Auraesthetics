@@ -55,6 +55,13 @@ export async function GET(request: NextRequest) {
         LIMIT 1
       `;
     } else {
+      // TypeScript doesn't know that code is non-null here, so we need to check
+      if (!code) {
+        return NextResponse.json(
+          { error: 'Code parameter is required when id is not provided' },
+          { status: 400 }
+        );
+      }
       codeResult = await sql`
         SELECT 
           id,
