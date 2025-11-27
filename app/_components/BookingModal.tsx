@@ -7,7 +7,7 @@ import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
 import CustomPaymentModal from './CustomPaymentModal';
 import Button from './Button';
 import { computeFiveDayWindow } from '@/lib/scheduling/suggestions';
-import { EST_TIMEZONE, getCurrentTimeEST, isPastDateEST, parseESTDateTime } from '@/lib/timezone';
+import { EST_TIMEZONE, getCurrentTimeEST, parseESTDateTime } from '@/lib/timezone';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -32,10 +32,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [requestedDate, setRequestedDate] = useState<string>(''); // YYYY-MM-DD
-  const [requestedTime, setRequestedTime] = useState<string>(''); // HH:MM
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
   const [daySlots, setDaySlots] = useState<AvailabilitySlot[]>([]);
-  const [timeValidationError, setTimeValidationError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [deferredSlot, setDeferredSlot] = useState<AvailabilitySlot | null>(null);
   const [availabilityTimezone, setAvailabilityTimezone] = useState<string | null>(null);
@@ -130,55 +128,6 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
   // Local session cache for availability window responses
   const availabilityCacheRef = useRef<Map<string, AvailabilityApiResponse>>(new Map());
 
-  // Generate every 15-minute time from 09:00 to 19:00 for the requested date
-  const timeOptionsForDay = useMemo(() => {
-    if (!requestedDate) return [] as Date[];
-    const start = parseESTDateTime(requestedDate, '09:00');
-    const end = parseESTDateTime(requestedDate, '19:00');
-    const result: Date[] = [];
-    const cursor = new Date(start);
-    const fifteenMinutesInMs = 15 * 60 * 1000; // 15 minutes in milliseconds
-    while (cursor.getTime() <= end.getTime()) {
-      result.push(new Date(cursor));
-      cursor.setTime(cursor.getTime() + fifteenMinutesInMs); // Use setTime with milliseconds (timezone-agnostic)
-    }
-    return result;
-  }, [requestedDate]);
-
-  // Default requested time to the first valid option (future if today), else 09:00
-  useEffect(() => {
-    if (!requestedDate) return;
-    const now = getCurrentTimeEST();
-    const today = parseESTDateTime(requestedDate, '00:00');
-    const isToday =
-      now.getFullYear() === today.getFullYear() &&
-      now.getMonth() === today.getMonth() &&
-      now.getDate() === today.getDate();
-    let firstValid: Date | null = null;
-    if (isToday) {
-      firstValid = timeOptionsForDay.find((d) => !isPastDateEST(d)) || null;
-    } else {
-      firstValid = timeOptionsForDay[0] || null;
-    }
-    if (firstValid) {
-      // Extract hour and minute from EST representation
-      const estParts = new Intl.DateTimeFormat('en-US', {
-        timeZone: EST_TIMEZONE,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).formatToParts(firstValid);
-      
-      const hh = estParts.find(p => p.type === 'hour')?.value || '09';
-      const mi = estParts.find(p => p.type === 'minute')?.value || '00';
-      setRequestedTime((prev) => prev || `${hh}:${mi}`);
-      setTimeValidationError(null);
-    } else {
-      setRequestedTime('');
-      setTimeValidationError(null);
-    }
-  }, [requestedDate, timeOptionsForDay]);
-
   // Recompute daySlots when requestedDate changes using already-fetched window slots
   useEffect(() => {
     if (!requestedDate || slots.length === 0) {
@@ -194,21 +143,6 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     });
     setDaySlots(dayAvail);
   }, [requestedDate, slots]);
-
-  // Validate that selected date+time is not in the past
-  useEffect(() => {
-    if (!requestedDate || !requestedTime) {
-      setTimeValidationError(null);
-      return;
-    }
-    const [hh, mm] = requestedTime.split(':').map((v) => Number(v));
-    const chosen = parseESTDateTime(requestedDate, `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
-    if (isPastDateEST(chosen)) {
-      setTimeValidationError('Please select a time in the future.');
-    } else {
-      setTimeValidationError(null);
-    }
-  }, [requestedDate, requestedTime]);
 
   const groupedAvailability = useMemo(() => {
     if (slots.length === 0) {
@@ -352,10 +286,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
   const handleSearchAvailability = async () => {
     if (!service?.slug) return;
-    // Require date and time before searching
-    if (!requestedDate || !requestedTime || timeValidationError) {
+    // Require date before searching
+    if (!requestedDate) {
       setAvailabilityStatus('error');
-      setAvailabilityError(timeValidationError || 'Please select a date and time to search.');
+      setAvailabilityError('Please select a date to search.');
       return;
     }
 
@@ -370,8 +304,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
     try {
       // Build a window covering the chosen day ± two working days (Mon–Fri).
-      const [hour, minute] = requestedTime.split(':').map((v) => Number(v));
-      const chosen = parseESTDateTime(requestedDate, `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+      // Use requestedDate at 00:00 EST as the reference point
+      const chosen = parseESTDateTime(requestedDate, '00:00');
 
       // Exclude only Saturdays (day 6). Sundays (day 0) are work days.
       const isWorkingDay = (d: Date) => {
@@ -580,8 +514,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                         </h4>
                       </div>
 
-                      {/* Step 1: Date + Time picklists (no prefetch) */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                      {/* Step 1: Date picker (no prefetch) */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Date</label>
                           <select
@@ -645,60 +579,14 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                           </select>
                         </div>
                         <div className="flex flex-col">
-                          <label className="text-xs text-warm-gray mb-1">Preferred time</label>
-                          <select
-                            className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-                            value={requestedTime}
-                            onChange={(e) => setRequestedTime(e.target.value)}
-                          >
-                            <option value="" disabled>
-                              Select time
-                            </option>
-                            {timeOptionsForDay.map((d) => {
-                              // Check if time is in the past using EST timezone
-                              const isPast = isPastDateEST(d);
-                              
-                              // Extract hour and minute from EST representation
-                              const estParts = new Intl.DateTimeFormat('en-US', {
-                                timeZone: EST_TIMEZONE,
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: false,
-                              }).formatToParts(d);
-                              
-                              const hh = estParts.find(p => p.type === 'hour')?.value || '00';
-                              const mi = estParts.find(p => p.type === 'minute')?.value || '00';
-                              const value = `${hh}:${mi}`;
-                              
-                              // Format label in EST timezone
-                              const label = new Intl.DateTimeFormat('en-US', {
-                                timeZone: EST_TIMEZONE,
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              }).format(d);
-                              
-                              return (
-                                <option key={value + d.toISOString()} value={value} disabled={isPast}>
-                                  {label}
-                                </option>
-                              );
-                            })}
-                          </select>
-                          {timeValidationError && (
-                            <span className="mt-1 text-xs text-red-600">{timeValidationError}</span>
-                          )}
-                        </div>
-                        <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1 opacity-0">Find times</label>
                           <Button
                             onClick={handleSearchAvailability}
                             className="w-full h-11"
-                            variant={timeValidationError || !requestedDate || !requestedTime ? 'disabled' : 'primary'}
+                            variant={!requestedDate ? 'disabled' : 'primary'}
                             tooltip={
-                              timeValidationError
-                                ? timeValidationError
-                                : !requestedDate || !requestedTime
-                                ? 'Choose a date and time'
+                              !requestedDate
+                                ? 'Choose a date'
                                 : undefined
                             }
                           >
