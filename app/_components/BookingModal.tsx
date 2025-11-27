@@ -160,8 +160,16 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
       firstValid = timeOptionsForDay[0] || null;
     }
     if (firstValid) {
-      const hh = String(firstValid.getHours()).padStart(2, '0');
-      const mi = String(firstValid.getMinutes()).padStart(2, '0');
+      // Extract hour and minute from EST representation
+      const estParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: EST_TIMEZONE,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(firstValid);
+      
+      const hh = estParts.find(p => p.type === 'hour')?.value || '09';
+      const mi = estParts.find(p => p.type === 'minute')?.value || '00';
       setRequestedTime((prev) => prev || `${hh}:${mi}`);
       setTimeValidationError(null);
     } else {
@@ -614,7 +622,9 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                                   
                                   if (!seen.has(value)) {
                                     seen.add(value);
-                                    const label = new Intl.DateTimeFormat(undefined, {
+                                    // Format date label in EST timezone
+                                    const label = new Intl.DateTimeFormat('en-US', {
+                                      timeZone: EST_TIMEZONE,
                                       weekday: 'short',
                                       month: 'short',
                                       day: 'numeric',
@@ -644,19 +654,28 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                               Select time
                             </option>
                             {timeOptionsForDay.map((d) => {
-                              const now = new Date();
-                              const isPast =
-                                d.getFullYear() === now.getFullYear() &&
-                                d.getMonth() === now.getMonth() &&
-                                d.getDate() === now.getDate() &&
-                                d.getTime() < now.getTime();
-                              const hh = String(d.getHours()).padStart(2, '0');
-                              const mi = String(d.getMinutes()).padStart(2, '0');
+                              // Check if time is in the past using EST timezone
+                              const isPast = isPastDateEST(d);
+                              
+                              // Extract hour and minute from EST representation
+                              const estParts = new Intl.DateTimeFormat('en-US', {
+                                timeZone: EST_TIMEZONE,
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false,
+                              }).formatToParts(d);
+                              
+                              const hh = estParts.find(p => p.type === 'hour')?.value || '00';
+                              const mi = estParts.find(p => p.type === 'minute')?.value || '00';
                               const value = `${hh}:${mi}`;
-                              const label = new Intl.DateTimeFormat(undefined, {
+                              
+                              // Format label in EST timezone
+                              const label = new Intl.DateTimeFormat('en-US', {
+                                timeZone: EST_TIMEZONE,
                                 hour: 'numeric',
                                 minute: '2-digit',
                               }).format(d);
+                              
                               return (
                                 <option key={value + d.toISOString()} value={value} disabled={isPast}>
                                   {label}
@@ -767,18 +786,20 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                           <div className="border border-sand rounded-lg p-3 bg-white">
                             <div className="text-sm font-medium text-charcoal mb-1">Selected time</div>
                             <div className="text-sm text-warm-gray">
-                              {new Date(selectedSlot.start).toLocaleString(undefined, {
+                              {new Intl.DateTimeFormat('en-US', {
+                                timeZone: EST_TIMEZONE,
                                 weekday: 'short',
                                 month: 'short',
                                 day: 'numeric',
                                 hour: 'numeric',
                                 minute: '2-digit',
-                              })}{' '}
+                              }).format(new Date(selectedSlot.start))}{' '}
                               –{' '}
-                              {new Date(selectedSlot.end).toLocaleTimeString(undefined, {
+                              {new Intl.DateTimeFormat('en-US', {
+                                timeZone: EST_TIMEZONE,
                                 hour: 'numeric',
                                 minute: '2-digit',
-                              })}
+                              }).format(new Date(selectedSlot.end))}
                             </div>
                           </div>
                           <div>
