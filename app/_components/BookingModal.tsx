@@ -137,9 +137,10 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
     const end = parseESTDateTime(requestedDate, '19:00');
     const result: Date[] = [];
     const cursor = new Date(start);
+    const fifteenMinutesInMs = 15 * 60 * 1000; // 15 minutes in milliseconds
     while (cursor.getTime() <= end.getTime()) {
       result.push(new Date(cursor));
-      cursor.setMinutes(cursor.getMinutes() + 15);
+      cursor.setTime(cursor.getTime() + fifteenMinutesInMs); // Use setTime with milliseconds (timezone-agnostic)
     }
     return result;
   }, [requestedDate]);
