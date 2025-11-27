@@ -385,7 +385,7 @@ function ModernPaymentSection({
   return (
     <form onSubmit={handlePayment} className="space-y-4">
       {/* Top Section: Client Info and Service Info */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {/* Left: Client Information */}
         <div className="border border-sand rounded-lg p-4 bg-white space-y-4">
           <h3 className="font-serif text-lg text-charcoal">Your Information</h3>
@@ -556,7 +556,7 @@ function ModernPaymentSection({
 
       {/* Bottom Section: Payment Info */}
       <div className="border border-sand rounded-lg p-4 bg-white space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {/* Left: Discount Code and Payment Option */}
           <div className="space-y-4">
             <div>
@@ -1031,24 +1031,22 @@ export default function CustomPaymentModal({
               </button>
 
               <div className="px-4 pt-6 pb-5 sm:px-8 sm:pb-8">
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)]">
-                  <div className="space-y-6">
-                    {!paymentSuccess ? (
-                      <Elements stripe={stripePromise}>
-                        <ModernPaymentSection
-                          service={service}
-                          onSuccess={handlePaymentSuccess}
-                          onClose={handleClose}
-                          onContactChange={setContactPrefill}
-                          pendingBooking={pendingBooking}
-                          primaryPhoto={primaryPhoto}
-                          slotSummary={slotSummary}
-                          hapioBookingReference={hapioBookingReference}
-                        />
-                      </Elements>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-5 text-sm text-charcoal">
+                {!paymentSuccess ? (
+                  <Elements stripe={stripePromise}>
+                    <ModernPaymentSection
+                      service={service}
+                      onSuccess={handlePaymentSuccess}
+                      onClose={handleClose}
+                      onContactChange={setContactPrefill}
+                      pendingBooking={pendingBooking}
+                      primaryPhoto={primaryPhoto}
+                      slotSummary={slotSummary}
+                      hapioBookingReference={hapioBookingReference}
+                    />
+                  </Elements>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-5 text-sm text-charcoal">
                           <div className="flex items-start gap-3">
                             <div className="mt-0.5">
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -1111,13 +1109,11 @@ export default function CustomPaymentModal({
                           </ul>
                         </div>
 
-                        <Button onClick={handleClose} className="w-full">
-                          Done
-                        </Button>
-                      </div>
-                    )}
+                    <Button onClick={handleClose} className="w-full">
+                      Done
+                    </Button>
                   </div>
-                </div>
+                )}
               </div>
             </motion.div>
           </div>
