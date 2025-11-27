@@ -35,12 +35,12 @@ export default function AboutClient() {
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto pt-16 md:pt-0"
+          className="text-center max-w-3xl mx-auto pt-8 md:pt-0"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-6">
+          <h1 className="text-2xl md:text-display font-serif text-charcoal mb-4 md:mb-6">
             About
           </h1>
-          <p className="text-lg text-warm-gray leading-relaxed">
+          <p className="text-sm md:text-lg text-warm-gray leading-relaxed">
             An aesthetician who believes in calm, customized care and the beauty of slowing down.
           </p>
         </motion.div>
@@ -77,8 +77,8 @@ export default function AboutClient() {
             transition={{ duration: 0.6 }}
             className="order-1 md:order-2"
           >
-            <h2 className="text-h2 font-serif text-charcoal mb-6">My Story</h2>
-            <div className="space-y-4 text-warm-gray leading-relaxed">
+            <h2 className="text-xl md:text-h2 font-serif text-charcoal mb-4 md:mb-6">My Story</h2>
+            <div className="space-y-3 md:space-y-4 text-sm md:text-base text-warm-gray leading-relaxed">
               <p>
                 Amy takes a thoughtful, intuitive approach to skin care, focusing on balance, calm, and long-term skin health. Her studio blends modern aesthetics with natural warmth — soft light, earthy tones, and a sense of calm that defines every treatment.
               </p>
@@ -111,8 +111,8 @@ export default function AboutClient() {
           transition={{ duration: 0.5 }}
           className="text-center mb-10"
         >
-          <h2 className="text-h1 font-serif text-charcoal mb-4">Philosophy & Approach</h2>
-          <p className="text-warm-gray max-w-2xl mx-auto leading-relaxed">
+          <h2 className="text-2xl md:text-h1 font-serif text-charcoal mb-4">Philosophy & Approach</h2>
+          <p className="text-sm md:text-base text-warm-gray max-w-2xl mx-auto leading-relaxed">
             Care, Calm, Craft — the principles that shape every experience at Aura Wellness Aesthetics.
           </p>
         </motion.div>
@@ -128,8 +128,8 @@ export default function AboutClient() {
               className="bg-white p-8 rounded-lg"
             >
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-dark-sage to-dark-sage/60 mb-6" />
-              <h3 className="text-h3 font-serif text-charcoal mb-4">{approach.title}</h3>
-              <p className="text-warm-gray leading-relaxed">{approach.description}</p>
+              <h3 className="text-lg md:text-h3 font-serif text-charcoal mb-3 md:mb-4">{approach.title}</h3>
+              <p className="text-sm md:text-base text-warm-gray leading-relaxed">{approach.description}</p>
             </motion.div>
           ))}
         </div>
@@ -140,7 +140,7 @@ export default function AboutClient() {
           transition={{ duration: 0.6 }}
           className="max-w-3xl mx-auto mt-12 text-center"
         >
-          <p className="text-warm-gray leading-relaxed">
+          <p className="text-sm md:text-base text-warm-gray leading-relaxed">
             You won&apos;t be rushed. You won&apos;t be upsold. You&apos;ll receive honest guidance, skilled hands, and a space designed to help you exhale.
           </p>
         </motion.div>

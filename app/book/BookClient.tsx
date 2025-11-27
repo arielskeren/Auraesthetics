@@ -155,7 +155,7 @@ const steps = [
   return (
     <>
       {/* Hero */}
-      <Section background="sand" className="relative !py-7 md:!py-12">
+      <Section background="sand" className="relative !py-8 md:!py-12">
         {/* Decorative green line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-dark-sage/40 to-transparent" />
         {/* Background accents */}
@@ -165,12 +165,12 @@ const steps = [
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto pt-5 md:pt-2 relative z-10"
+          className="text-center max-w-3xl mx-auto pt-2 md:pt-2 relative z-10"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-3">
+          <h1 className="text-2xl md:text-display font-serif text-charcoal mb-3">
             Book Your Treatment
           </h1>
-          <p className="text-base md:text-lg text-warm-gray leading-relaxed mb-4 md:mb-5">
+          <p className="text-xs md:text-lg text-warm-gray leading-relaxed mb-4 md:mb-5 px-4 md:px-0">
             Choose your service below and you&apos;ll be redirected to our secure booking system to select your time and complete your appointment.
           </p>
         </motion.div>

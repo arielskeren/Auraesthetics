@@ -14,12 +14,12 @@ export default function FAQClient() {
           initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-3xl mx-auto pt-16 md:pt-0"
+          className="text-center max-w-3xl mx-auto pt-8 md:pt-0"
         >
-          <h1 className="text-h1 md:text-display font-serif text-charcoal mb-6">
+          <h1 className="text-2xl md:text-display font-serif text-charcoal mb-4 md:mb-6">
             Frequently Asked Questions
           </h1>
-          <p className="text-lg text-warm-gray leading-relaxed">
+          <p className="text-sm md:text-lg text-warm-gray leading-relaxed">
             Common questions about booking, services, policies, and what to expect at aura aesthetics.
           </p>
         </motion.div>

@@ -85,16 +85,16 @@ export default function Nav() {
           </div>
 
           {/* Mobile Menu Links */}
-          <div className="md:hidden pb-2 flex flex-wrap gap-4">
+          <div className="md:hidden pb-2 flex flex-wrap gap-2">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-xs uppercase tracking-wider transition-colors ${
+                className={`text-[10px] uppercase tracking-wider transition-colors ${
                   pathname === link.href ? 'text-charcoal' : 'text-warm-gray'
                 }`}
               >
-                {link.label}
+                {link.href === '/manage-booking' ? 'Manage' : link.label}
               </Link>
             ))}
           </div>
@@ -102,7 +102,7 @@ export default function Nav() {
       </motion.nav>
       
       {/* Spacer to prevent content from hiding under fixed nav */}
-      <div className="h-16 md:h-20" />
+      <div className="h-20 md:h-20" />
     </>
   );
 }

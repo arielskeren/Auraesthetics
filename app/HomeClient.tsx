@@ -101,7 +101,7 @@ export default function HomeClient() {
       <SimpleAutoModal />
       <FloatingWelcomeOffer />
       {/* Hero Section */}
-      <Section className="relative overflow-hidden min-h-[45vh] md:min-h-[40vh] flex items-center pt-16 md:pt-8" background="sand">
+      <Section className="relative overflow-hidden min-h-[45vh] md:min-h-[40vh] flex items-center pt-8 md:pt-8" background="sand">
         <div className="absolute inset-0 bg-gradient-to-br from-dark-sage/15 via-sand via-dark-sage/10 to-taupe/20 opacity-60" />
         <div className="absolute top-20 right-10 w-40 h-40 bg-dark-sage/20 rounded-full blur-3xl" />
         <div className="absolute bottom-10 left-5 w-32 h-32 bg-sage-dark/15 rounded-full blur-2xl" />
@@ -111,10 +111,10 @@ export default function HomeClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-3xl md:text-4xl lg:text-display font-serif text-charcoal mb-4 md:mb-2 text-balance px-2">
+          <h1 className="text-3xl md:text-4xl lg:text-display font-serif text-charcoal mb-3 md:mb-2 text-balance px-2">
             Skin rituals, done gently.
           </h1>
-          <p className="text-base md:text-lg lg:text-xl text-warm-gray mb-5 md:mb-4 leading-relaxed max-w-2xl mx-auto px-4 md:px-0">
+          <p className="text-sm md:text-lg lg:text-xl text-warm-gray mb-4 md:mb-4 leading-relaxed max-w-2xl mx-auto px-4 md:px-0">
             At Aura Wellness Aesthetics, Amy blends modern technique with a calming touch to support healthy, luminous skin.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -142,8 +142,8 @@ export default function HomeClient() {
           transition={{ duration: 0.5 }}
           className="text-center mb-6"
         >
-          <h2 className="text-h1 font-serif text-charcoal mb-2">Why aura aesthetics</h2>
-          <p className="text-warm-gray max-w-2xl mx-auto">
+          <h2 className="text-2xl md:text-h1 font-serif text-charcoal mb-2">Why aura aesthetics</h2>
+          <p className="text-sm md:text-base text-warm-gray max-w-2xl mx-auto">
             Three pillars that guide every treatment and moment in our studio.
           </p>
         </motion.div>
@@ -163,8 +163,8 @@ export default function HomeClient() {
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
               </svg>
             </div>
-            <h3 className="text-h3 font-serif text-charcoal mb-3">Calm First</h3>
-            <p className="text-warm-gray leading-relaxed">A serene, sensory experience that lowers stress for happier skin.</p>
+            <h3 className="text-lg md:text-h3 font-serif text-charcoal mb-3">Calm First</h3>
+            <p className="text-xs md:text-base text-warm-gray leading-relaxed">A serene, sensory experience that lowers stress for happier skin.</p>
           </motion.div>
 
           {/* Skin-Health Focused - Harmonic Balance (2C) */}
@@ -183,8 +183,8 @@ export default function HomeClient() {
                 <line x1="8" y1="12" x2="16" y2="12" stroke="#B7C8B1" strokeWidth="3"/>
               </svg>
             </div>
-            <h3 className="text-h3 font-serif text-charcoal mb-3">Skin‑Health Focused</h3>
-            <p className="text-warm-gray leading-relaxed">Ingredient‑smart treatments tailored to your goals.</p>
+            <h3 className="text-lg md:text-h3 font-serif text-charcoal mb-3">Skin‑Health Focused</h3>
+            <p className="text-xs md:text-base text-warm-gray leading-relaxed">Ingredient‑smart treatments tailored to your goals.</p>
           </motion.div>
 
           {/* Thoughtful Craft - Knowledge Branch (3A) */}
@@ -202,8 +202,8 @@ export default function HomeClient() {
                 <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
               </svg>
             </div>
-            <h3 className="text-h3 font-serif text-charcoal mb-3">Thoughtful Craft</h3>
-            <p className="text-warm-gray leading-relaxed">Small‑studio care, never rushed.</p>
+            <h3 className="text-lg md:text-h3 font-serif text-charcoal mb-3">Thoughtful Craft</h3>
+            <p className="text-xs md:text-base text-warm-gray leading-relaxed">Small‑studio care, never rushed.</p>
             </motion.div>
         </div>
       </Section>
@@ -219,13 +219,13 @@ export default function HomeClient() {
           transition={{ duration: 0.5 }}
           className="text-center mb-6"
         >
-          <h2 className="text-h1 font-serif text-charcoal mb-4">Featured Services</h2>
-          <p className="text-warm-gray max-w-2xl mx-auto">
+          <h2 className="text-2xl md:text-h1 font-serif text-charcoal mb-4">Featured Services</h2>
+          <p className="text-sm md:text-base text-warm-gray max-w-2xl mx-auto">
             Thoughtfully curated treatments to restore, renew, and enhance your natural glow.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {featuredServices.map((service, index) => (
             <motion.div
               key={service.slug}
@@ -233,7 +233,7 @@ export default function HomeClient() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="h-full"
+              className="aspect-square md:aspect-auto md:h-full"
             >
               <div onClick={() => handleServiceClick(service)} className="cursor-pointer h-full">
                 <ServiceCard {...service} />
@@ -264,7 +264,7 @@ export default function HomeClient() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <div className="aspect-square rounded-lg overflow-hidden relative shadow-lg">
+            <div className="aspect-square rounded-lg overflow-hidden relative shadow-lg max-w-[300px] md:max-w-none mx-auto md:mx-0">
               <Image
                 src="/amy-photo.jpg"
                 alt="Amy - Aura Wellness Aesthetics"
@@ -281,11 +281,11 @@ export default function HomeClient() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-h1 font-serif text-charcoal mb-6">Meet Amy</h2>
-            <p className="text-warm-gray leading-relaxed mb-6">
+            <h2 className="text-2xl md:text-h1 font-serif text-charcoal mb-4 md:mb-6">Meet Amy</h2>
+            <p className="text-sm md:text-base text-warm-gray leading-relaxed mb-4 md:mb-6">
               Amy takes a thoughtful, intuitive approach to skin care, focusing on balance, calm, and long-term skin health. Her studio blends modern aesthetics with natural warmth — soft light, earthy tones, and a sense of calm that defines every treatment.
             </p>
-            <p className="text-warm-gray leading-relaxed mb-8">
+            <p className="text-sm md:text-base text-warm-gray leading-relaxed mb-6 md:mb-8">
               Sessions are tailored to your skin&apos;s needs with ingredient‑mindful products and gentle technique.
             </p>
             <Link href="/about">
@@ -308,8 +308,8 @@ export default function HomeClient() {
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <h2 className="text-h1 font-serif text-charcoal mb-4">Follow My Journey</h2>
-          <p className="text-warm-gray max-w-2xl mx-auto mb-8">
+          <h2 className="text-2xl md:text-h1 font-serif text-charcoal mb-4">Follow My Journey</h2>
+          <p className="text-sm md:text-base text-warm-gray max-w-2xl mx-auto mb-8">
             Stay connected on Instagram and TikTok for skincare tips, behind-the-scenes, and client transformations.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">

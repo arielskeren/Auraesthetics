@@ -44,7 +44,7 @@ export default function ServiceCard({ name, summary, duration, price, category, 
         }
       }}
     >
-      <div className="bg-white rounded-xl overflow-hidden shadow-sm sm:shadow-sm group-active:shadow-md sm:group-hover:shadow-lg transition-shadow duration-200 h-full flex flex-col">
+      <div className="bg-white rounded-xl overflow-hidden shadow-sm sm:shadow-sm group-active:shadow-md sm:group-hover:shadow-lg transition-shadow duration-200 h-full flex flex-col md:flex-col">
         {/* Service image or gradient placeholder */}
         <div className="relative">
           {image_url ? (
@@ -71,21 +71,21 @@ export default function ServiceCard({ name, summary, duration, price, category, 
             <div className={`h-1.5 sm:h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
           )}
           
-          {/* Badges */}
+          {/* Badges - Enhanced with elevation and styling */}
           {(featured || best_seller || most_popular) && (
-            <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+            <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               {featured && (
-                <span className="px-2 py-1 bg-dark-sage text-charcoal text-xs font-semibold rounded shadow-sm">
+                <span className="px-2.5 py-1 bg-dark-sage/95 backdrop-blur-sm text-charcoal text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md shadow-lg border border-dark-sage/30">
                   Featured
                 </span>
               )}
               {best_seller && (
-                <span className="px-2 py-1 bg-yellow-500 text-white text-xs font-semibold rounded shadow-sm">
+                <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500/95 to-yellow-500/95 backdrop-blur-sm text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md shadow-lg border border-amber-400/40">
                   Best Seller
                 </span>
               )}
               {most_popular && (
-                <span className="px-2 py-1 bg-blue-500 text-white text-xs font-semibold rounded shadow-sm">
+                <span className="px-2.5 py-1 bg-gradient-to-r from-sky-500/95 to-blue-500/95 backdrop-blur-sm text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md shadow-lg border border-sky-400/40">
                   Most Popular
                 </span>
               )}
@@ -94,23 +94,23 @@ export default function ServiceCard({ name, summary, duration, price, category, 
         </div>
         
         {/* Content - flex to fill remaining space */}
-        <div className="px-4 py-4 sm:p-6 flex flex-col flex-grow gap-3 sm:gap-4">
-          <div>
-            <h3 className="text-base font-semibold font-serif text-charcoal sm:text-h3 sm:font-normal mb-1 sm:mb-2 min-h-[38px] sm:min-h-0">
+        <div className="px-3 py-3 sm:p-6 flex flex-col flex-grow gap-2 sm:gap-4">
+          <div className="flex-grow">
+            <h3 className="text-sm font-semibold font-serif text-charcoal sm:text-h3 sm:font-normal mb-1 sm:mb-2 line-clamp-2">
               {name}
             </h3>
-            <p className="text-xs sm:text-sm text-warm-gray leading-relaxed">
+            <p className="text-[10px] sm:text-sm text-warm-gray leading-relaxed line-clamp-2 sm:line-clamp-none">
               {summary}
             </p>
           </div>
           
-          <div className="flex items-center justify-between text-xs sm:text-sm text-warm-gray pt-3 sm:pt-4 border-t border-sand mt-auto">
-            <span>{duration}</span>
-            <span className="font-medium text-charcoal">{price}</span>
+          <div className="flex items-center justify-between text-[10px] sm:text-sm text-warm-gray pt-2 sm:pt-4 border-t border-sand">
+            <span className="truncate">{duration}</span>
+            <span className="font-medium text-charcoal truncate ml-2">{price}</span>
           </div>
 
           <button
-            className="inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold bg-dark-sage text-charcoal rounded-lg transition-colors duration-200 hover:bg-sage-dark focus:outline-none focus:ring-2 focus:ring-dark-sage/60 focus:ring-offset-2 focus:ring-offset-white"
+            className="inline-flex items-center justify-center px-2 py-1.5 text-[10px] sm:text-sm font-semibold bg-dark-sage text-charcoal rounded-lg transition-colors duration-200 hover:bg-sage-dark focus:outline-none focus:ring-2 focus:ring-dark-sage/60 focus:ring-offset-2 focus:ring-offset-white"
             type="button"
             aria-label={`Book ${name}`}
           >
