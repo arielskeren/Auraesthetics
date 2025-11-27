@@ -550,8 +550,8 @@ function ModernPaymentSection({
           {/* Reference number at bottom, away from everything */}
           {hapioBookingReference && (
             <div className="border-t border-sand pt-3 mt-auto">
-              <div className="text-[10px] text-warm-gray/60 text-center">
-                Ref: <span className="font-mono">{hapioBookingReference.slice(0, 8)}...</span>
+              <div className="text-[10px] text-warm-gray/60 text-left break-words overflow-wrap-anywhere">
+                Ref: <span className="font-mono">{hapioBookingReference}</span>
               </div>
             </div>
           )}
