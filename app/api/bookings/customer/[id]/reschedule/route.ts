@@ -3,7 +3,7 @@ import { getSqlClient } from '@/app/_utils/db';
 import { updateBooking } from '@/lib/hapioClient';
 import { ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
-import { generateBookingRescheduleEmail } from '@/lib/emails/bookingReschedule';
+import { generateBookingRescheduleEmail } from '@/lib/emails';
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {

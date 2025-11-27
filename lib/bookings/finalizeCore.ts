@@ -2,7 +2,7 @@ import { stripe } from '@/lib/stripeClient';
 import { confirmBooking } from '@/lib/hapioClient';
 import { getSqlClient } from '@/app/_utils/db';
 import { upsertBrevoContact, sendBrevoEmail, syncCustomerToBrevo } from '@/lib/brevoClient';
-import { generateBookingConfirmationEmail, generateCalendarLinks } from '@/lib/emails/bookingConfirmation';
+import { generateBookingConfirmationEmail, generateCalendarLinks } from '@/lib/emails';
 import { ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 
 export type FinalizeResult = {

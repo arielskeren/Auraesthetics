@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
-import { generateBookingCancellationEmail } from '@/lib/emails/bookingCancellation';
+import { generateBookingCancellationEmail } from '@/lib/emails';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-10-29.clover',

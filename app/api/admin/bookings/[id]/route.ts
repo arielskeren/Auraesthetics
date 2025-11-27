@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking, ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
-import { generateBookingCancellationEmail } from '@/lib/emails/bookingCancellation';
+import { generateBookingCancellationEmail } from '@/lib/emails';
 // Note: Receipt PDF attachment removed - Stripe sends receipts automatically via email
 // when Customer emails → Successful payments / Refunds are enabled in Dashboard
 
@@ -491,7 +491,7 @@ export async function POST(
             });
 
             // Generate reschedule email
-            const { generateBookingRescheduleEmail } = await import('@/lib/emails/bookingReschedule');
+            const { generateBookingRescheduleEmail } = await import('@/lib/emails');
             const emailHtml = generateBookingRescheduleEmail({
               serviceName: bookingData.service_name || 'Service',
               serviceImageUrl,
