@@ -152,9 +152,23 @@ export async function GET(request: NextRequest) {
 
     codesWithUsage.forEach((code: any) => {
       // CRITICAL: Check inactive status FIRST using normalized value
-      // This ensures inactive codes (including NULL) never go to active section
-      const isInactive = isCodeInactive(code);
+      // Use direct check on normalized is_active value (should be boolean after normalization)
+      // This is more reliable than calling isCodeInactive which re-normalizes
+      const normalizedIsActive = code.is_active; // Already normalized in normalizedCodes step
+      const isInactive = normalizedIsActive === false;
       const isUsed = code.used === true || code.used === 't';
+      
+      // DEBUG: Log codes with is_active = false to track categorization
+      if (normalizedIsActive === false || code._original_is_active === false) {
+        console.log(`[CRITICAL DEBUG] Code ${code.code} (${code.id}) categorization:`, {
+          is_active: code.is_active,
+          normalizedIsActive,
+          original_is_active: code._original_is_active,
+          isInactive,
+          isUsed,
+          willGoTo: isInactive ? (isUsed ? 'used' : 'inactive') : 'ACTIVE (ERROR!)'
+        });
+      }
       
       // If code is inactive (is_active === false or NULL), categorize appropriately
       if (isInactive) {
@@ -162,8 +176,10 @@ export async function GET(request: NextRequest) {
         // Used codes go to used section regardless of active status
         if (isUsed) {
           used.push(code);
+          console.log(`[DEBUG] Code ${code.code} added to USED (was inactive but used)`);
         } else {
           inactive.push(code);
+          console.log(`[DEBUG] Code ${code.code} added to INACTIVE`);
         }
         return; // Skip all other logic for this code
       }
@@ -197,7 +213,19 @@ export async function GET(request: NextRequest) {
         inactive.push(code);
       } else {
         // Active codes: is_active = true, not used, not expired
-        active.push(code);
+        // CRITICAL: Double-check is_active before adding to active
+        if (code.is_active === false) {
+          console.error(`[CRITICAL ERROR] Code ${code.code} (${code.id}) has is_active=false but reached active section! Adding to inactive instead.`, {
+            is_active: code.is_active,
+            original_is_active: code._original_is_active,
+            isInactive,
+            isUsed,
+            isExpired
+          });
+          inactive.push(code);
+        } else {
+          active.push(code);
+        }
       }
     });
     
@@ -227,8 +255,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // FINAL SAFETY CHECK: Remove any codes with is_active = false from active array
+    // This is a fail-safe in case any inactive codes slipped through
+    const safeActive = active.filter((code: any) => {
+      if (code.is_active === false) {
+        console.error(`[CRITICAL] Removing inactive code ${code.code} (${code.id}) from active array in final safety check!`, {
+          is_active: code.is_active,
+          original_is_active: code._original_is_active
+        });
+        inactive.push(code); // Move to inactive
+        return false;
+      }
+      return true;
+    });
+
     return NextResponse.json({ 
-      active: cleanResponse(active),
+      active: cleanResponse(safeActive),
       used: cleanResponse(used),
       inactive: cleanResponse(inactive),
     });
