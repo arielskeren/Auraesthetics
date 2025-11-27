@@ -196,10 +196,22 @@ export async function GET(request: NextRequest) {
 
       // CRITICAL: Double-check that codes with is_active = false go to inactive
       // This is a safety check to catch any edge cases
-      if ((code.is_active === false || code.is_active === 'f') && !isUsed && !isExpired) {
+      // Use the same logic as isCodeActive to ensure consistency - check all possible false representations
+      const rawIsActive = code.is_active;
+      const shouldBeInactive = 
+        rawIsActive === false || 
+        rawIsActive === 'f' || 
+        rawIsActive === 'false' ||
+        rawIsActive === 0 ||
+        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase() === 'false');
+      
+      // Force to inactive if is_active indicates inactive, regardless of expiry
+      // Only skip if already used (used codes have their own section)
+      if (shouldBeInactive && !isUsed) {
         console.warn(`[Discount Codes API] Code ${code.code} (${code.id}) has is_active=false but was not marked as inactive. Forcing to inactive.`, {
           is_active: code.is_active,
           is_active_type: typeof code.is_active,
+          is_active_string: String(code.is_active),
           codeIsActive,
           isInactive,
           isUsed,
