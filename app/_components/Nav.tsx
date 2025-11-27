@@ -85,16 +85,16 @@ export default function Nav() {
           </div>
 
           {/* Mobile Menu Links */}
-          <div className="md:hidden pb-2 flex flex-wrap gap-2">
+          <div className="md:hidden pb-2 flex flex-wrap gap-x-2.5 gap-y-1 items-start">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-[10px] uppercase tracking-wider transition-colors ${
+                className={`text-[10px] uppercase tracking-wider transition-colors leading-tight ${
                   pathname === link.href ? 'text-charcoal' : 'text-warm-gray'
-                }`}
+                } ${link.href === '/manage-booking' ? 'break-words' : 'whitespace-nowrap'}`}
               >
-                {link.href === '/manage-booking' ? 'Manage' : link.label}
+                {link.label}
               </Link>
             ))}
           </div>
