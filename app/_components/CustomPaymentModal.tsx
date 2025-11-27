@@ -359,6 +359,7 @@ function ModernPaymentSection({
   );
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const disableSubmit =
     processing ||
@@ -432,9 +433,6 @@ function ModernPaymentSection({
             />
             {contactErrors.email && <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>}
           </div>
-        </div>
-
-        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div>
             <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
               Phone Number
@@ -457,22 +455,23 @@ function ModernPaymentSection({
             />
             {contactErrors.phone && <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>}
           </div>
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
-              Notes (Optional)
-            </label>
-            <textarea
-              id="booking-notes"
-              value={contactDetails.notes}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
-              }}
-              placeholder="Let us know any preferences or special requests."
-              rows={3}
-              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
-              disabled={processing || success}
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
+            Notes (Optional)
+          </label>
+          <textarea
+            id="booking-notes"
+            value={contactDetails.notes}
+            onChange={(event) => {
+              setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
+            }}
+            placeholder="Let us know any preferences or special requests."
+            rows={5}
+            className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
+            disabled={processing || success}
+          />
         </div>
       </div>
 
@@ -638,7 +637,7 @@ function ModernPaymentSection({
           )}
         </div>
 
-        <div className="bg-sand/20 rounded-lg p-3 space-y-2">
+        <div className="bg-sand/20 rounded-lg p-3">
           <div className="flex items-start gap-2">
             <input
               id="terms-accept"
@@ -649,19 +648,19 @@ function ModernPaymentSection({
               disabled={processing || success}
             />
             <label htmlFor="terms-accept" className="text-xs text-charcoal leading-relaxed">
-              I agree to the booking &amp; cancellation policy, refund policy, and consent to receive appointment and
-              promotional communications from Auraesthetics. By completing this booking, I authorize Auraesthetics to
-              charge my card according to the selected payment option and policies described on this page and on the
-              site.
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowTermsModal(true);
+                }}
+                className="text-dark-sage hover:text-sage-dark underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-dark-sage rounded"
+                disabled={processing || success}
+              >
+                I agree to the Booking, Cancellation, Refund, Communication &amp; Payment Authorization Terms
+              </button>
             </label>
           </div>
-          <p className="text-[11px] text-warm-gray leading-relaxed">
-            Policies (Florida): Please provide at least 24 hours&apos; notice to reschedule or cancel. Late
-            cancellations or no‑shows may incur a fee or forfeiture of your deposit. Services are cosmetic and wellness
-            treatments and do not constitute medical diagnosis or treatment. Refunds, when granted, are processed back
-            to the original form of payment and timing may vary by bank. All policies are applied in accordance with
-            applicable Florida law.
-          </p>
         </div>
 
         {error && (
@@ -721,6 +720,106 @@ function ModernPaymentSection({
           </Button>
         </div>
       </div>
+
+      {/* Terms Modal */}
+      <AnimatePresence>
+        {showTermsModal && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[70]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowTermsModal(false)}
+            />
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+              <motion.div
+                className="bg-white rounded-lg max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-xl relative"
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.3 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="absolute top-4 right-4 z-10 p-2 hover:bg-sand/30 rounded-full transition-colors"
+                  aria-label="Close modal"
+                >
+                  <X size={20} className="text-charcoal" />
+                </button>
+                <div className="overflow-y-auto max-h-[85vh]">
+                  <div className="p-8">
+                    <h3 className="text-2xl font-serif text-charcoal mb-6">
+                      Booking, Cancellation, Refund, Communication &amp; Payment Authorization Terms
+                    </h3>
+                    <div className="text-sm text-warm-gray leading-relaxed space-y-4">
+                      <p>
+                        By scheduling or completing a booking with Auraesthetics (&quot;we,&quot; &quot;our,&quot; &quot;us&quot;), you acknowledge and agree to the following terms:
+                      </p>
+                      <div>
+                        <h4 className="font-semibold text-charcoal mb-2">1. Appointment Policies</h4>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>You must provide at least 24 hours&apos; notice to reschedule or cancel an appointment.</li>
+                          <li>Late cancellations or no-shows may result in a fee or forfeiture of any required deposit.</li>
+                          <li>We reserve the right to refuse or discontinue service at our discretion.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-charcoal mb-2">2. Nature of Services</h4>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>All services are cosmetic and wellness-oriented.</li>
+                          <li>Services do not constitute medical diagnosis, medical treatment, or medical advice.</li>
+                          <li>No outcome is guaranteed, and individual results vary.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-charcoal mb-2">3. Payments &amp; Authorization</h4>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>By completing your booking, you authorize Auraesthetics to charge your card for the selected service, deposit, or any applicable cancellation/no-show fees in accordance with these terms.</li>
+                          <li>For deposits, the remaining balance (if any) is due at the time of service unless otherwise stated.</li>
+                          <li>Refunds, when granted, are issued back to the original form of payment. Processing time may vary by bank or payment provider.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-charcoal mb-2">4. Refund Policy</h4>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>Deposits may be non-refundable if you cancel late or do not show up.</li>
+                          <li>Full refunds are not guaranteed and are issued only at our discretion based on the circumstances and these policies.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-charcoal mb-2">5. Communications Consent</h4>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>By booking, you consent to receive appointment reminders, service-related notifications, and promotional communications from Auraesthetics via email or SMS.</li>
+                          <li>You may opt out of promotional messages at any time.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-charcoal mb-2">6. Liability &amp; Compliance</h4>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>You agree to provide accurate information and to follow pre- and post-care instructions as directed.</li>
+                          <li>Auraesthetics is not responsible for adverse reactions resulting from undisclosed conditions, allergies, or failure to follow care instructions.</li>
+                          <li>All policies are applied in accordance with Florida law.</li>
+                          <li>Your use of our services constitutes acceptance of these terms.</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <Button
+                        onClick={() => setShowTermsModal(false)}
+                        variant="primary"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </form>
   );
 }
@@ -841,67 +940,7 @@ export default function CustomPaymentModal({
                 <X size={20} className="text-charcoal" />
               </button>
 
-              <div className="px-4 pt-1 pb-5 sm:px-8 sm:pb-8">
-                <div className="flex flex-col gap-3 sm:gap-4 mb-5">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    {primaryPhoto ? (
-                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-sand/40 flex-shrink-0 shadow-sm">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={primaryPhoto}
-                          alt={`${service.name} preview`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg bg-sand/60 flex items-center justify-center text-xs text-warm-gray uppercase tracking-wide flex-shrink-0">
-                        {service.name.slice(0, 2)}
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      <span className="inline-block px-2.5 py-0.5 bg-dark-sage/20 text-dark-sage text-[11px] sm:text-xs font-medium rounded-full mb-2">
-                        {service.category}
-                      </span>
-                      <h2 className="text-xl sm:text-2xl font-serif text-charcoal mb-1 sm:mb-1.5">
-                        {service.name}
-                      </h2>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-warm-gray mb-2">
-                        <span>
-                          Duration:{' '}
-                          <span className="text-charcoal font-medium">{service.duration}</span>
-                        </span>
-                        <span>
-                          Base Price:{' '}
-                          <span className="text-charcoal font-medium">{service.price}</span>
-                        </span>
-                        {slotSummary && (
-                          <span>
-                            Selected:{' '}
-                            <span className="text-charcoal font-medium">
-                              {slotSummary.date} · {slotSummary.start} – {slotSummary.end}
-                            </span>
-                            {slotSummary.resource ? (
-                              <span className="text-warm-gray/70"> · with {slotSummary.resource}</span>
-                            ) : null}
-                          </span>
-                        )}
-                        {hapioBookingReference && (
-                          <span className="text-xs text-warm-gray/80">
-                            Hold ID:{' '}
-                            <span className="font-mono text-[11px] text-charcoal">
-                              {hapioBookingReference}
-                            </span>
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs sm:text-sm text-warm-gray">
-                        Complete your payment to finalize your appointment. Your selected time stays reserved while you pay.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="px-4 pt-6 pb-5 sm:px-8 sm:pb-8">
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)]">
                   <div className="space-y-6">
                     {!paymentSuccess ? (
