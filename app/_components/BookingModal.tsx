@@ -507,19 +507,19 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                   {/* Availability Section */}
                   <div className="mb-6">
                     <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg px-5 py-4 border-2 border-dark-sage/30">
-                      <div className="flex items-center gap-2 mb-3">
-                        <CalendarDays className="w-5 h-5 text-dark-sage" />
-                        <h4 className="text-lg font-semibold text-charcoal">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CalendarDays className="w-4 h-4 text-dark-sage" />
+                        <h4 className="text-base font-semibold text-charcoal">
                           Pick a day that works for you
                         </h4>
                       </div>
 
                       {/* Step 1: Date picker (no prefetch) */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                         <div className="flex flex-col">
                           <label className="text-xs text-warm-gray mb-1">Date</label>
                           <select
-                            className="h-11 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                            className="h-10 px-3 border border-sand rounded-lg bg-white hover:border-dark-sage focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
                             value={requestedDate}
                             onChange={(e) => {
                               setRequestedDate(e.target.value);
@@ -582,7 +582,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                           <label className="text-xs text-warm-gray mb-1 opacity-0">Find times</label>
                           <Button
                             onClick={handleSearchAvailability}
-                            className="w-full h-11"
+                            className="w-full h-10"
                             variant={!requestedDate ? 'disabled' : 'primary'}
                             tooltip={
                               !requestedDate
@@ -630,17 +630,17 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                       )}
 
                       {availabilityStatus === 'success' && hasAvailability && !collapseTimes && (
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                           {/* Five-day grid - always horizontal, shows 5-day window around chosen date */}
                           {displayDays.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                               {displayDays.slice(0, 5).map((day) => {
                                 const dayGroup = groupedAvailability.find((g) => g.key === day.key);
                                 return (
-                                  <div key={`grid-${day.key}`} className="border border-dark-sage/40 bg-sand/20 rounded-lg p-3">
-                                    <div className="text-sm font-semibold text-charcoal mb-2">{day.label}</div>
+                                  <div key={`grid-${day.key}`} className="border border-dark-sage/40 bg-sand/20 rounded-lg p-2">
+                                    <div className="text-xs font-semibold text-charcoal mb-1.5">{day.label}</div>
                                     {dayGroup ? (
-                                      <div className="flex flex-col gap-2">
+                                      <div className="flex flex-col gap-1.5">
                                         {dayGroup.slots.map(({ slot, startLabel, endLabel }) => {
                                           const isSelected =
                                             selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
@@ -649,7 +649,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                                               key={`grid-slot-${slot.start}-${slot.end}`}
                                               type="button"
                                               onClick={() => setSelectedSlot(isSelected ? null : slot)}
-                                              className={`w-full text-left px-3 py-2 rounded-md border text-xs font-semibold transition-colors shadow-sm ${
+                                              className={`w-full text-left px-2 py-1.5 rounded-md border text-[11px] font-semibold transition-colors shadow-sm ${
                                                 isSelected
                                                   ? 'bg-dark-sage text-charcoal border-dark-sage'
                                                   : 'bg-white/90 border-dark-sage/30 text-charcoal hover:bg-dark-sage/10 hover:border-dark-sage/60'
@@ -661,7 +661,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                                         })}
                                       </div>
                                     ) : (
-                                      <div className="text-xs text-warm-gray italic">No availability</div>
+                                      <div className="text-[11px] text-warm-gray italic">No availability</div>
                                     )}
                                   </div>
                                 );
@@ -671,8 +671,8 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                         </div>
                       )}
                       {availabilityStatus === 'success' && hasAvailability && collapseTimes && selectedSlot && (
-                        <div className="space-y-3">
-                          <div className="border border-sand rounded-lg p-3 bg-white">
+                        <div className="space-y-2">
+                          <div className="border border-sand rounded-lg p-2.5 bg-white">
                             <div className="text-sm font-medium text-charcoal mb-1">Selected time</div>
                             <div className="text-sm text-warm-gray">
                               {new Intl.DateTimeFormat('en-US', {
@@ -707,11 +707,11 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
 
                   {/* Time wheel overlay removed; using picklists above */}
                   {/* Booking CTA */}
-                  <div className="mb-6">
-                    <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-6 text-center border-2 border-dark-sage/30">
-                      <div className="flex items-center justify-center gap-2 mb-3">
+                  <div className="mb-4">
+                    <div className="bg-gradient-to-br from-dark-sage/10 to-sand rounded-lg p-4 text-center border-2 border-dark-sage/30">
+                      <div className="flex items-center justify-center gap-2 mb-2">
                         <svg
-                          className="w-6 h-6 text-dark-sage"
+                          className="w-5 h-5 text-dark-sage"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -723,9 +723,9 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                           />
                         </svg>
-                        <h4 className="text-lg font-semibold text-charcoal">Secure Your Booking</h4>
+                        <h4 className="text-base font-semibold text-charcoal">Secure Your Booking</h4>
                       </div>
-                      <p className="text-sm text-warm-gray mb-4">
+                      <p className="text-xs text-warm-gray mb-3">
                         Select a time above and complete payment to hold your appointment instantly.
                       </p>
                       <Button
@@ -758,7 +758,7 @@ export default function BookingModal({ isOpen, onClose, service }: BookingModalP
                   </div>
 
                   {/* Info */}
-                  <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-4 rounded">
+                  <div className="bg-dark-sage/5 border-l-4 border-dark-sage p-3 rounded">
                     <p className="text-xs text-warm-gray">
                       <strong className="text-dark-sage">Heads up:</strong> We’ll hold your selected slot
                       while you pay so no one else can book it.

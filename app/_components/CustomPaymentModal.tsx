@@ -539,38 +539,40 @@ function ModernPaymentSection({
           <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
             Payment Option
           </label>
-          <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
-            <input
-              type="radio"
-              name="paymentType"
-              value="full"
-              checked={paymentType === 'full'}
-              onChange={(event) => setPaymentType(event.target.value as PaymentType)}
-              className="mr-2.5"
-              disabled={processing || success}
-            />
-            <div className="flex-1">
-              <div className="font-medium text-charcoal">Pay Full Amount</div>
-              <div className="text-sm text-warm-gray">${finalAmount.toFixed(2)}</div>
-            </div>
-          </label>
-          <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
-            <input
-              type="radio"
-              name="paymentType"
-              value="deposit"
-              checked={paymentType === 'deposit'}
-              onChange={(event) => setPaymentType(event.target.value as PaymentType)}
-              className="mr-2.5"
-              disabled={processing || success}
-            />
-            <div className="flex-1">
-              <div className="font-medium text-charcoal">Pay 50% Deposit</div>
-              <div className="text-sm text-warm-gray">
-                ${(finalAmount * 0.5).toFixed(2)} now, remainder later
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+              <input
+                type="radio"
+                name="paymentType"
+                value="full"
+                checked={paymentType === 'full'}
+                onChange={(event) => setPaymentType(event.target.value as PaymentType)}
+                className="mr-2.5"
+                disabled={processing || success}
+              />
+              <div className="flex-1">
+                <div className="font-medium text-charcoal">Pay Full Amount</div>
+                <div className="text-sm text-warm-gray">${finalAmount.toFixed(2)}</div>
               </div>
-            </div>
-          </label>
+            </label>
+            <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+              <input
+                type="radio"
+                name="paymentType"
+                value="deposit"
+                checked={paymentType === 'deposit'}
+                onChange={(event) => setPaymentType(event.target.value as PaymentType)}
+                className="mr-2.5"
+                disabled={processing || success}
+              />
+              <div className="flex-1">
+                <div className="font-medium text-charcoal">Pay 50% Deposit</div>
+                <div className="text-sm text-warm-gray">
+                  ${(finalAmount * 0.5).toFixed(2)} now, remainder later
+                </div>
+              </div>
+            </label>
+          </div>
           {paymentType === 'deposit' && (
             <div className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
               <input
