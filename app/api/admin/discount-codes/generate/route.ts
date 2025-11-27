@@ -159,14 +159,21 @@ export async function POST(request: NextRequest) {
           ${code}, 'one_time', ${finalCustomerId}, ${discountType}, ${discountValue}, 
           ${discountCap || null}, ${expiresAt}, false, true, 'admin'
         )
-        RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at
+        RETURNING id, code, discount_type, discount_value, discount_cap, expires_at, created_at, is_active, used
       `;
       inserted = normalizeRows(insertResult)[0];
       
       if (!inserted || !inserted.id) {
         throw new Error('Database insert returned invalid result');
       }
-      console.log('[Generate Discount Code] Successfully inserted into discount_codes table:', inserted.id);
+      console.log('[Generate Discount Code] Successfully inserted into discount_codes table:', {
+        id: inserted.id,
+        code: inserted.code,
+        is_active: inserted.is_active,
+        is_active_type: typeof inserted.is_active,
+        used: inserted.used,
+        expires_at: inserted.expires_at
+      });
     } catch (dbError: any) {
       console.error('[Generate Discount Code] Database insert failed:', {
         error: dbError.message,

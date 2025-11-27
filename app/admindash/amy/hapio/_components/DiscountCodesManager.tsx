@@ -56,6 +56,10 @@ export default function DiscountCodesManager() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [loadingBooking, setLoadingBooking] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
+  const [debugData, setDebugData] = useState<any>(null);
+  const [loadingDebug, setLoadingDebug] = useState(false);
+  const [debugCodeInput, setDebugCodeInput] = useState('');
   
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -210,10 +214,58 @@ export default function DiscountCodesManager() {
 
       const data = await response.json();
       
+      // Debug logging: Log raw API response
+      console.log('[DiscountCodesManager] Raw API response:', {
+        hasActive: Array.isArray(data.active),
+        activeCount: Array.isArray(data.active) ? data.active.length : 0,
+        hasUsed: Array.isArray(data.used),
+        usedCount: Array.isArray(data.used) ? data.used.length : 0,
+        hasInactive: Array.isArray(data.inactive),
+        inactiveCount: Array.isArray(data.inactive) ? data.inactive.length : 0,
+        fullResponse: data
+      });
+      
       // Handle new grouped response structure
       const active = Array.isArray(data.active) ? data.active : [];
       const used = Array.isArray(data.used) ? data.used : [];
       const inactive = Array.isArray(data.inactive) ? data.inactive : [];
+      
+      // Log codes that don't match expected structure
+      if (!Array.isArray(data.active) || !Array.isArray(data.used) || !Array.isArray(data.inactive)) {
+        console.warn('[DiscountCodesManager] Unexpected API response structure:', {
+          activeType: typeof data.active,
+          usedType: typeof data.used,
+          inactiveType: typeof data.inactive,
+          data
+        });
+      }
+      
+      // Log each code's status for debugging
+      const allCodes = [...active, ...used, ...inactive];
+      console.log('[DiscountCodesManager] Code status breakdown:', {
+        total: allCodes.length,
+        active: active.map((c: DiscountCode) => ({
+          code: c.code,
+          id: c.id,
+          is_active: c.is_active,
+          is_active_type: typeof c.is_active,
+          used: c.used,
+          expires_at: c.expires_at
+        })),
+        used: used.map((c: DiscountCode) => ({
+          code: c.code,
+          id: c.id,
+          is_active: c.is_active,
+          used: c.used
+        })),
+        inactive: inactive.map((c: DiscountCode) => ({
+          code: c.code,
+          id: c.id,
+          is_active: c.is_active,
+          used: c.used,
+          expires_at: c.expires_at
+        }))
+      });
       
       setActiveCodes(active);
       setUsedCodes(used);
@@ -543,6 +595,44 @@ export default function DiscountCodesManager() {
     }
   };
 
+  const handleDebugCode = async () => {
+    if (!debugCodeInput.trim()) {
+      alert('Please enter a code or ID to debug');
+      return;
+    }
+
+    try {
+      setLoadingDebug(true);
+      setDebugData(null);
+      
+      // Try as ID first (UUID format), then as code
+      const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(debugCodeInput.trim());
+      const param = isId ? `id=${encodeURIComponent(debugCodeInput.trim())}` : `code=${encodeURIComponent(debugCodeInput.trim())}`;
+      
+      const response = await fetch(`/api/admin/discount-codes/debug?${param}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(errorData.error || 'Failed to load debug information');
+        return;
+      }
+      
+      const data = await response.json();
+      setDebugData(data);
+      setShowDebugModal(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to load debug information');
+    } finally {
+      setLoadingDebug(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -631,6 +721,19 @@ export default function DiscountCodesManager() {
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">Refresh</span>
             <span className="sm:hidden">Refresh</span>
+          </button>
+          <button
+            onClick={() => {
+              setDebugCodeInput('');
+              setDebugData(null);
+              setShowDebugModal(true);
+            }}
+            className="px-3 md:px-4 py-2 bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2 text-xs md:text-sm min-h-[44px]"
+            title="Debug a specific discount code"
+          >
+            <Eye className="w-4 h-4" />
+            <span className="hidden sm:inline">Debug</span>
+            <span className="sm:hidden">Debug</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -1642,6 +1745,81 @@ export default function DiscountCodesManager() {
                   Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Modal */}
+      {showDebugModal && (
+        <div className="fixed inset-0 z-[60] bg-charcoal/80 backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
+          <div className="bg-white h-full md:h-auto md:rounded-lg md:max-w-2xl md:w-full md:shadow-xl flex flex-col">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg md:text-xl font-semibold text-charcoal">Debug Discount Code</h3>
+                <button
+                  onClick={() => {
+                    setShowDebugModal(false);
+                    setDebugData(null);
+                    setDebugCodeInput('');
+                  }}
+                  className="p-1 hover:bg-sand/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-charcoal" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-charcoal mb-2">
+                    Code or ID <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={debugCodeInput}
+                      onChange={(e) => setDebugCodeInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleDebugCode();
+                        }
+                      }}
+                      className="flex-1 px-3 py-3 md:py-2 border border-sage-dark/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                      placeholder="Enter code (e.g., ABC12345) or ID"
+                    />
+                    <button
+                      onClick={handleDebugCode}
+                      disabled={loadingDebug || !debugCodeInput.trim()}
+                      className="px-4 py-3 md:py-2 bg-dark-sage text-white rounded-lg hover:bg-dark-sage/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm min-h-[44px]"
+                    >
+                      {loadingDebug ? 'Loading...' : 'Debug'}
+                    </button>
+                  </div>
+                </div>
+
+                {debugData && (
+                  <div className="space-y-4">
+                    <div className="bg-sage-light/20 border border-sage-dark/20 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-charcoal mb-2">Debug Information</h4>
+                      <pre className="text-xs bg-white p-3 rounded border border-sand overflow-x-auto max-h-96 overflow-y-auto">
+                        {JSON.stringify(debugData, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 md:p-6 border-t border-sand md:border-t-0">
+              <button
+                onClick={() => {
+                  setShowDebugModal(false);
+                  setDebugData(null);
+                  setDebugCodeInput('');
+                }}
+                className="w-full px-4 py-3 md:py-2 bg-sand/30 text-charcoal rounded-lg hover:bg-sand/50 transition-colors font-medium text-sm min-h-[44px]"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

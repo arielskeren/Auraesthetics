@@ -11,6 +11,19 @@ function normalizeRows(result: any): any[] {
   return [];
 }
 
+/**
+ * Normalizes PostgreSQL boolean values to determine if a code is active.
+ * Handles: true (boolean), 't' (string), false (boolean), 'f' (string), null (treated as active)
+ */
+function isCodeActive(code: any): boolean {
+  // Handle PostgreSQL boolean types: true, 't', false, 'f', null
+  if (code.is_active === false || code.is_active === 'f') {
+    return false;
+  }
+  // null, true, 't', or undefined should be treated as active
+  return true;
+}
+
 export const dynamic = 'force-dynamic';
 
 // GET /api/admin/discount-codes - List all discount codes with usage info
@@ -126,13 +139,33 @@ export async function GET(request: NextRequest) {
     const inactive: any[] = [];
 
     codesWithUsage.forEach((code: any) => {
-      const isExpired = code.expires_at && new Date(code.expires_at) <= now;
-      // Handle is_active: explicitly false means inactive, NULL/true means active (default)
-      // PostgreSQL booleans can be true/false/null or strings 't'/'f', ensure we check correctly
-      // Check for false explicitly (handles both boolean false and string 'f' from PostgreSQL)
-      const isInactive = code.is_active === false || code.is_active === 'f';
+      // Use PostgreSQL NOW() comparison for consistency with database queries
+      // Convert expires_at to Date and compare with current time
+      const expiresAtDate = code.expires_at ? new Date(code.expires_at) : null;
+      const isExpired = expiresAtDate && expiresAtDate <= now;
+      
+      // Use helper function to normalize boolean values
+      const isInactive = !isCodeActive(code);
+      
       // Handle used: explicitly true means used (handles both boolean true and string 't')
       const isUsed = code.used === true || code.used === 't';
+
+      // Log each code's evaluation for debugging
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Code ${code.code}]`, {
+          id: code.id,
+          is_active: code.is_active,
+          is_active_type: typeof code.is_active,
+          isCodeActive: isCodeActive(code),
+          isInactive,
+          isUsed,
+          isExpired,
+          expires_at: code.expires_at,
+          expiresAtDate: expiresAtDate?.toISOString(),
+          now: now.toISOString(),
+          finalStatus: isUsed ? 'used' : (isInactive || isExpired ? 'inactive' : 'active')
+        });
+      }
 
       if (isUsed) {
         used.push(code);
