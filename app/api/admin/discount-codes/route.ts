@@ -206,24 +206,17 @@ export async function GET(request: NextRequest) {
 
     codesWithUsage.forEach((code: any) => {
       // CRITICAL SAFETY CHECK: Run FIRST before any other logic
-      // Check all possible representations of false to ensure codes with is_active=false go to inactive
-      const rawIsActive = code.is_active;
-      const shouldBeInactive = 
-        rawIsActive === false || 
-        rawIsActive === 'f' || 
-        rawIsActive === 'false' ||
-        rawIsActive === 0 ||
-        (rawIsActive !== null && rawIsActive !== undefined && String(rawIsActive).toLowerCase() === 'false');
-      
+      // Since we've normalized is_active to boolean, we can do a simple check
       // Handle used: explicitly true means used (handles both boolean true and string 't')
       const isUsed = code.used === true || code.used === 't';
       
-      // If code should be inactive and not used, force it to inactive section immediately
-      if (shouldBeInactive && !isUsed) {
+      // If code is inactive (is_active === false) and not used, force it to inactive section immediately
+      // This MUST run before any other categorization logic
+      if (code.is_active === false && !isUsed) {
         console.error(`[Discount Codes API] SAFETY CHECK: Code ${code.code} (${code.id}) has is_active=false. Forcing to inactive section.`, {
           is_active: code.is_active,
           is_active_type: typeof code.is_active,
-          is_active_string: String(code.is_active),
+          original_is_active: code._original_is_active,
           isUsed
         });
         inactive.push(code);
@@ -267,29 +260,36 @@ export async function GET(request: NextRequest) {
       }
     });
     
+    // Clean up debug fields before sending response
+    const cleanResponse = (codes: any[]) => {
+      return codes.map(({ _original_is_active, ...code }) => code);
+    };
+
     // Debug logging - only in development
     if (process.env.NODE_ENV !== 'production') {
       console.log('[Discount Codes API] Grouped codes:', {
         active: active.length,
         used: used.length,
         inactive: inactive.length,
-        total: allCodes.length
+        total: normalizedCodes.length
       });
       // Log codes with is_active = false to verify they're being filtered correctly
-      const inactiveCodes = allCodes.filter((c: any) => c.is_active === false || c.is_active === 'f');
+      const inactiveCodes = normalizedCodes.filter((c: any) => c.is_active === false);
       if (inactiveCodes.length > 0) {
         console.log('[Discount Codes API] Codes with is_active=false:', inactiveCodes.map((c: any) => ({
           code: c.code,
+          id: c.id,
           is_active: c.is_active,
-          is_active_type: typeof c.is_active
+          is_active_type: typeof c.is_active,
+          original_is_active: c._original_is_active
         })));
       }
     }
 
     return NextResponse.json({ 
-      active,
-      used,
-      inactive,
+      active: cleanResponse(active),
+      used: cleanResponse(used),
+      inactive: cleanResponse(inactive),
     });
   } catch (error: any) {
     console.error('[Discount Codes API] Error:', error);
