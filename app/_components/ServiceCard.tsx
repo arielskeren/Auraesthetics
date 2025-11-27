@@ -71,26 +71,33 @@ export default function ServiceCard({ name, summary, duration, price, category, 
             <div className={`h-1.5 sm:h-48 flex-shrink-0 bg-gradient-to-br ${gradient}`} />
           )}
           
-          {/* Badges - Enhanced with elevation and styling */}
-          {(featured || best_seller || most_popular) && (
-            <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
-              {featured && (
-                <span className="px-2.5 py-1 bg-dark-sage/95 backdrop-blur-sm text-charcoal text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md shadow-lg border border-dark-sage/30">
-                  Featured
-                </span>
-              )}
-              {best_seller && (
-                <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500/95 to-yellow-500/95 backdrop-blur-sm text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md shadow-lg border border-amber-400/40">
-                  Best Seller
-                </span>
-              )}
-              {most_popular && (
-                <span className="px-2.5 py-1 bg-gradient-to-r from-sky-500/95 to-blue-500/95 backdrop-blur-sm text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md shadow-lg border border-sky-400/40">
-                  Most Popular
-                </span>
-              )}
-            </div>
-          )}
+          {/* Badge - Top banner strip, priority: Featured > Best Seller > Most Popular */}
+          {(() => {
+            // Determine which badge to show (priority order)
+            let badgeText = '';
+            let badgeClasses = '';
+            
+            if (featured) {
+              badgeText = 'Featured';
+              badgeClasses = 'bg-dark-sage/95 text-charcoal border-dark-sage/30';
+            } else if (best_seller) {
+              badgeText = 'Best Seller';
+              badgeClasses = 'bg-gradient-to-r from-amber-500/95 to-yellow-500/95 text-white border-amber-400/40';
+            } else if (most_popular) {
+              badgeText = 'Most Popular';
+              badgeClasses = 'bg-gradient-to-r from-sky-500/95 to-blue-500/95 text-white border-sky-400/40';
+            }
+            
+            if (!badgeText) return null;
+            
+            return (
+              <div className="absolute top-0 left-0 right-0 z-10">
+                <div className={`${badgeClasses} px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider shadow-md border-b backdrop-blur-sm text-center`}>
+                  {badgeText}
+                </div>
+              </div>
+            );
+          })()}
         </div>
         
         {/* Content - flex to fill remaining space */}
