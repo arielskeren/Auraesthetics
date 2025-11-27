@@ -14,13 +14,38 @@ function normalizeRows(result: any): any[] {
 /**
  * Normalizes PostgreSQL boolean values to determine if a code is active.
  * Handles: true (boolean), 't' (string), false (boolean), 'f' (string), null (treated as active)
+ * Also handles edge cases like string 'false', 0, etc.
  */
 function isCodeActive(code: any): boolean {
-  // Handle PostgreSQL boolean types: true, 't', false, 'f', null
-  if (code.is_active === false || code.is_active === 'f') {
+  // Handle null/undefined - treat as active (default state)
+  if (code.is_active === null || code.is_active === undefined) {
+    return true;
+  }
+  
+  // Handle explicit false values - check multiple representations
+  // PostgreSQL can return: boolean false, string 'f', string 'false', number 0
+  if (
+    code.is_active === false || 
+    code.is_active === 'f' || 
+    code.is_active === 'false' ||
+    code.is_active === 0 ||
+    String(code.is_active).toLowerCase() === 'false'
+  ) {
     return false;
   }
-  // null, true, 't', or undefined should be treated as active
+  
+  // Handle explicit true values
+  if (
+    code.is_active === true || 
+    code.is_active === 't' || 
+    code.is_active === 'true' ||
+    code.is_active === 1 ||
+    String(code.is_active).toLowerCase() === 'true'
+  ) {
+    return true;
+  }
+  
+  // Default to active for any other value (defensive)
   return true;
 }
 
@@ -145,18 +170,20 @@ export async function GET(request: NextRequest) {
       const isExpired = expiresAtDate && expiresAtDate <= now;
       
       // Use helper function to normalize boolean values
-      const isInactive = !isCodeActive(code);
+      const codeIsActive = isCodeActive(code);
+      const isInactive = !codeIsActive;
       
       // Handle used: explicitly true means used (handles both boolean true and string 't')
       const isUsed = code.used === true || code.used === 't';
 
-      // Log each code's evaluation for debugging
-      if (process.env.NODE_ENV !== 'production') {
+      // Log each code's evaluation for debugging - especially for codes with is_active = false
+      if (process.env.NODE_ENV !== 'production' || code.is_active === false || code.is_active === 'f') {
         console.log(`[Code ${code.code}]`, {
           id: code.id,
           is_active: code.is_active,
           is_active_type: typeof code.is_active,
-          isCodeActive: isCodeActive(code),
+          is_active_string: String(code.is_active),
+          isCodeActive: codeIsActive,
           isInactive,
           isUsed,
           isExpired,
@@ -165,6 +192,21 @@ export async function GET(request: NextRequest) {
           now: now.toISOString(),
           finalStatus: isUsed ? 'used' : (isInactive || isExpired ? 'inactive' : 'active')
         });
+      }
+
+      // CRITICAL: Double-check that codes with is_active = false go to inactive
+      // This is a safety check to catch any edge cases
+      if ((code.is_active === false || code.is_active === 'f') && !isUsed && !isExpired) {
+        console.warn(`[Discount Codes API] Code ${code.code} (${code.id}) has is_active=false but was not marked as inactive. Forcing to inactive.`, {
+          is_active: code.is_active,
+          is_active_type: typeof code.is_active,
+          codeIsActive,
+          isInactive,
+          isUsed,
+          isExpired
+        });
+        inactive.push(code);
+        return; // Skip the normal flow for this code
       }
 
       if (isUsed) {
