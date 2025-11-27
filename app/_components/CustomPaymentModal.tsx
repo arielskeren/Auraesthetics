@@ -35,11 +35,19 @@ interface ServiceSummary {
 }
 
 interface ModernPaymentSectionProps {
-  service: ServiceSummary;
+  service: ServiceSummary & { summary: string; category: string };
   onClose: () => void;
   onSuccess: (payload: PaymentSuccessPayload) => void;
   onContactChange: (contact: ContactDetails) => void;
   pendingBooking: PendingBooking | null;
+  primaryPhoto: string | null;
+  slotSummary: {
+    date: string;
+    start: string;
+    end: string;
+    resource: string | null;
+  } | null;
+  hapioBookingReference: string | null;
 }
 
 interface PaymentSuccessPayload {
@@ -106,6 +114,9 @@ function ModernPaymentSection({
   onClose,
   onContactChange,
   pendingBooking,
+  primaryPhoto,
+  slotSummary,
+  hapioBookingReference,
 }: ModernPaymentSectionProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -372,114 +383,186 @@ function ModernPaymentSection({
     !pendingBooking?.hapioBookingId;
 
   return (
-    <form onSubmit={handlePayment} className="space-y-6">
-      <div className="border border-sand rounded-lg p-4 bg-white space-y-4">
-        <h3 className="font-serif text-lg text-charcoal">Your Information</h3>
-        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-first-name">
-              First Name
-            </label>
-            <input
-              id="booking-first-name"
-              type="text"
-              value={contactDetails.firstName}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, firstName: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, firstName: undefined }));
-              }}
-              onBlur={validateContactDetails}
-              placeholder="Jane"
-              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing || success}
-            />
-            {contactErrors.firstName && <p className="text-xs text-red-600 mt-1">{contactErrors.firstName}</p>}
+    <form onSubmit={handlePayment} className="space-y-4">
+      {/* Top Section: Client Info and Service Info */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Left: Client Information */}
+        <div className="border border-sand rounded-lg p-4 bg-white space-y-4">
+          <h3 className="font-serif text-lg text-charcoal">Your Information</h3>
+          <div className="grid gap-3 md:gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-first-name">
+                First Name
+              </label>
+              <input
+                id="booking-first-name"
+                type="text"
+                value={contactDetails.firstName}
+                onChange={(event) => {
+                  setContactDetails((prev) => ({ ...prev, firstName: event.target.value }));
+                  setContactErrors((prev) => ({ ...prev, firstName: undefined }));
+                }}
+                onBlur={validateContactDetails}
+                placeholder="Jane"
+                className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                disabled={processing || success}
+              />
+              {contactErrors.firstName && <p className="text-xs text-red-600 mt-1">{contactErrors.firstName}</p>}
+            </div>
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-last-name">
+                Last Name
+              </label>
+              <input
+                id="booking-last-name"
+                type="text"
+                value={contactDetails.lastName}
+                onChange={(event) => {
+                  setContactDetails((prev) => ({ ...prev, lastName: event.target.value }));
+                  setContactErrors((prev) => ({ ...prev, lastName: undefined }));
+                }}
+                onBlur={validateContactDetails}
+                placeholder="Doe"
+                className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                disabled={processing || success}
+              />
+              {contactErrors.lastName && <p className="text-xs text-red-600 mt-1">{contactErrors.lastName}</p>}
+            </div>
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
+                Email Address
+              </label>
+              <input
+                id="booking-email"
+                type="email"
+                value={contactDetails.email}
+                onChange={(event) => {
+                  setContactDetails((prev) => ({ ...prev, email: event.target.value }));
+                  setContactErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+                onBlur={validateContactDetails}
+                placeholder="you@example.com"
+                className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                disabled={processing || success}
+              />
+              {contactErrors.email && <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>}
+            </div>
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
+                Phone Number
+              </label>
+              <input
+                id="booking-phone"
+                type="tel"
+                value={contactDetails.phone}
+                onChange={(event) => {
+                  setContactDetails((prev) => ({
+                    ...prev,
+                    phone: formatPhoneInput(event.target.value),
+                  }));
+                  setContactErrors((prev) => ({ ...prev, phone: undefined }));
+                }}
+                onBlur={validateContactDetails}
+                placeholder="(555) 123-4567"
+                className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                disabled={processing || success}
+              />
+              {contactErrors.phone && <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>}
+            </div>
           </div>
+
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-last-name">
-              Last Name
+            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
+              Notes (Optional)
             </label>
-            <input
-              id="booking-last-name"
-              type="text"
-              value={contactDetails.lastName}
+            <textarea
+              id="booking-notes"
+              value={contactDetails.notes}
               onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, lastName: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, lastName: undefined }));
+                setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
               }}
-              onBlur={validateContactDetails}
-              placeholder="Doe"
-              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+              placeholder="Let us know any preferences or special requests."
+              rows={4}
+              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
               disabled={processing || success}
             />
-            {contactErrors.lastName && <p className="text-xs text-red-600 mt-1">{contactErrors.lastName}</p>}
-          </div>
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-email">
-              Email Address
-            </label>
-            <input
-              id="booking-email"
-              type="email"
-              value={contactDetails.email}
-              onChange={(event) => {
-                setContactDetails((prev) => ({ ...prev, email: event.target.value }));
-                setContactErrors((prev) => ({ ...prev, email: undefined }));
-              }}
-              onBlur={validateContactDetails}
-              placeholder="you@example.com"
-              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing || success}
-            />
-            {contactErrors.email && <p className="text-xs text-red-600 mt-1">{contactErrors.email}</p>}
-          </div>
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-phone">
-              Phone Number
-            </label>
-            <input
-              id="booking-phone"
-              type="tel"
-              value={contactDetails.phone}
-              onChange={(event) => {
-                setContactDetails((prev) => ({
-                  ...prev,
-                  phone: formatPhoneInput(event.target.value),
-                }));
-                setContactErrors((prev) => ({ ...prev, phone: undefined }));
-              }}
-              onBlur={validateContactDetails}
-              placeholder="(555) 123-4567"
-              className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing || success}
-            />
-            {contactErrors.phone && <p className="text-xs text-red-600 mt-1">{contactErrors.phone}</p>}
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-1" htmlFor="booking-notes">
-            Notes (Optional)
-          </label>
-          <textarea
-            id="booking-notes"
-            value={contactDetails.notes}
-            onChange={(event) => {
-              setContactDetails((prev) => ({ ...prev, notes: event.target.value }));
-            }}
-            placeholder="Let us know any preferences or special requests."
-            rows={5}
-            className="w-full px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage resize-none text-sm"
-            disabled={processing || success}
-          />
+        {/* Right: Service Info */}
+        <div className="border border-sand rounded-lg p-4 bg-white space-y-3">
+          {/* Service header with image and details inline */}
+          <div className="flex items-start gap-3">
+            {/* Small square image */}
+            {primaryPhoto ? (
+              <div className="w-20 h-20 rounded-lg overflow-hidden bg-sand/40 flex-shrink-0 shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={primaryPhoto}
+                  alt={service.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className="w-20 h-20 rounded-lg bg-sand/60 flex items-center justify-center text-xs text-warm-gray uppercase tracking-wide flex-shrink-0">
+                {service.name.slice(0, 2)}
+              </div>
+            )}
+            {/* Service details inline */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-block px-2 py-0.5 bg-dark-sage/20 text-dark-sage text-[10px] font-medium rounded-full">
+                  {service.category}
+                </span>
+              </div>
+              <h4 className="text-base font-serif text-charcoal mb-1">{service.name}</h4>
+              <p className="text-xs text-warm-gray mb-2 line-clamp-2">{service.summary}</p>
+              <div className="flex items-center gap-3 text-xs text-charcoal">
+                <span className="font-medium">{service.duration}</span>
+                <span className="text-warm-gray">•</span>
+                <span className="font-medium">{service.price}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Booking details below */}
+          {slotSummary && (
+            <div className="border-t border-sand pt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-warm-gray">Scheduled for</span>
+                <span className="font-medium text-charcoal">{slotSummary.date}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-warm-gray">Time</span>
+                <span className="font-medium text-charcoal">
+                  {slotSummary.start} – {slotSummary.end}
+                </span>
+              </div>
+              {slotSummary.resource && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-warm-gray">Provider</span>
+                  <span className="font-medium text-charcoal">{slotSummary.resource}</span>
+                </div>
+              )}
+              {hapioBookingReference && (
+                <div className="text-[10px] text-warm-gray/80 pt-1">
+                  Ref: <span className="font-mono">{hapioBookingReference.slice(0, 8)}...</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Bottom Section: Payment Info */}
       <div className="border border-sand rounded-lg p-4 bg-white space-y-4">
-        <div>
-          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
-            Discount Code (Optional)
-          </label>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* Left: Discount Code and Payment Option */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
+                Discount Code (Optional)
+              </label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -532,13 +615,13 @@ function ModernPaymentSection({
               <AlertCircle size={16} />
               Invalid discount code
             </p>
-          )}
-        </div>
+            )}
+            </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
-            Payment Option
-          </label>
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
+                Payment Option
+              </label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
               <input
@@ -587,13 +670,16 @@ function ModernPaymentSection({
                 I understand the remaining balance will be due at the start of my appointment.
               </label>
             </div>
-          )}
-        </div>
+            )}
+          </div>
+          </div>
 
-        <div>
-          <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
-            Card Information
-          </label>
+          {/* Right: Card Info and Payment */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
+                Card Information
+              </label>
           <div className="p-3 border border-sage-dark rounded-lg bg-white">
             <CardElement
               options={{
@@ -610,116 +696,118 @@ function ModernPaymentSection({
               onChange={(event) => setCardComplete(event.complete)}
             />
           </div>
-        </div>
-
-        <div className="bg-dark-sage/10 p-3 rounded-lg space-y-1">
-          <div className="flex justify-between items-center">
-            <span className="font-medium text-charcoal text-sm">
-              {paymentType === 'deposit' ? 'Deposit Due Today' : 'Total Amount'}
-            </span>
-            <span className="text-xl font-serif font-bold text-charcoal">
-              ${amountDueToday.toFixed(2)}
-            </span>
-          </div>
-          <div className="text-xs text-warm-gray">
-            Original: ${baseAmount.toFixed(2)}
-            {discountValidation?.valid && (
-              <>
-                <span className="mx-1">-</span>
-                <span className="text-green-600">
-                  Discount: ${discountValidation.discountAmount.toFixed(2)}
-                </span>
-              </>
-            )}
-          </div>
-          {paymentType === 'deposit' && (
-            <div className="text-xs text-warm-gray">
-              Balance due at appointment: ${balanceDue.toFixed(2)}
             </div>
-          )}
-        </div>
 
-        <div className="bg-sand/20 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <input
-              id="terms-accept"
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              className="mt-1"
-              disabled={processing || success}
-            />
-            <label htmlFor="terms-accept" className="text-xs text-charcoal leading-relaxed">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setShowTermsModal(true);
-                }}
-                className="text-dark-sage hover:text-sage-dark underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-dark-sage rounded"
-                disabled={processing || success}
-              >
-                I agree to the Booking, Cancellation, Refund, Communication &amp; Payment Authorization Terms
-              </button>
-            </label>
-          </div>
-        </div>
+            <div className="bg-dark-sage/10 p-3 rounded-lg space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-charcoal text-sm">
+                  {paymentType === 'deposit' ? 'Deposit Due Today' : 'Total Amount'}
+                </span>
+                <span className="text-xl font-serif font-bold text-charcoal">
+                  ${amountDueToday.toFixed(2)}
+                </span>
+              </div>
+              <div className="text-xs text-warm-gray">
+                Original: ${baseAmount.toFixed(2)}
+                {discountValidation?.valid && (
+                  <>
+                    <span className="mx-1">-</span>
+                    <span className="text-green-600">
+                      Discount: ${discountValidation.discountAmount.toFixed(2)}
+                    </span>
+                  </>
+                )}
+              </div>
+              {paymentType === 'deposit' && (
+                <div className="text-xs text-warm-gray">
+                  Balance due at appointment: ${balanceDue.toFixed(2)}
+                </div>
+              )}
+            </div>
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2">
-            <AlertCircle size={16} />
-            {error}
-          </div>
-        )}
+            <div className="bg-sand/20 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <input
+                  id="terms-accept"
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-1"
+                  disabled={processing || success}
+                />
+                <label htmlFor="terms-accept" className="text-xs text-charcoal leading-relaxed">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowTermsModal(true);
+                    }}
+                    className="text-dark-sage hover:text-sage-dark underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-dark-sage rounded"
+                    disabled={processing || success}
+                  >
+                    I agree to the Booking, Cancellation, Refund, Communication &amp; Payment Authorization Terms
+                  </button>
+                </label>
+              </div>
+            </div>
 
-        {success && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm flex items-center gap-2">
-            <CheckCircle2 size={16} />
-            Payment successful! Scheduler unlocking…
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <Button
-            variant="secondary"
-            onClick={onClose}
-            className="flex-1"
-            tooltip={processing ? 'Processing payment' : undefined}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="flex-1"
-            variant={disableSubmit ? 'disabled' : 'primary'}
-            tooltip={
-              disableSubmit && !success
-                ? !cardComplete
-                  ? 'Enter your card details'
-                  : !contactInfoReady
-                  ? 'Complete your contact info'
-                  : paymentType === 'deposit' && !depositAcknowledged
-                  ? 'Acknowledge the remaining balance'
-                  : undefined
-                : undefined
-            }
-          >
-            {processing ? (
-              <>
-                <Loader2 className="animate-spin mr-2" size={18} />
-                Processing…
-              </>
-            ) : success ? (
-              <>
-                <CheckCircle2 className="mr-2" size={18} />
-                Success
-              </>
-            ) : paymentType === 'deposit' ? (
-              `Pay Deposit $${amountDueToday.toFixed(2)}`
-            ) : (
-              `Pay $${amountDueToday.toFixed(2)}`
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2">
+                <AlertCircle size={16} />
+                {error}
+              </div>
             )}
-          </Button>
+
+            {success && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                Payment successful! Scheduler unlocking…
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                onClick={onClose}
+                className="flex-1"
+                tooltip={processing ? 'Processing payment' : undefined}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                variant={disableSubmit ? 'disabled' : 'primary'}
+                tooltip={
+                  disableSubmit && !success
+                    ? !cardComplete
+                      ? 'Enter your card details'
+                      : !contactInfoReady
+                      ? 'Complete your contact info'
+                      : paymentType === 'deposit' && !depositAcknowledged
+                      ? 'Acknowledge the remaining balance'
+                      : undefined
+                    : undefined
+                }
+              >
+                {processing ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={18} />
+                    Processing…
+                  </>
+                ) : success ? (
+                  <>
+                    <CheckCircle2 className="mr-2" size={18} />
+                    Success
+                  </>
+                ) : paymentType === 'deposit' ? (
+                  `Pay Deposit $${amountDueToday.toFixed(2)}`
+                ) : (
+                  `Pay $${amountDueToday.toFixed(2)}`
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -928,7 +1016,7 @@ export default function CustomPaymentModal({
 
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              className="bg-white rounded-lg max-w-6xl w-[min(95vw,1180px)] max-h-[92vh] overflow-y-auto shadow-xl relative px-2 pt-2 pb-6 md:px-4"
+              className="bg-white rounded-lg max-w-5xl w-[min(95vw,900px)] max-h-[92vh] overflow-y-auto shadow-xl relative px-2 pt-2 pb-6 md:px-4"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -953,6 +1041,9 @@ export default function CustomPaymentModal({
                           onClose={handleClose}
                           onContactChange={setContactPrefill}
                           pendingBooking={pendingBooking}
+                          primaryPhoto={primaryPhoto}
+                          slotSummary={slotSummary}
+                          hapioBookingReference={hapioBookingReference}
                         />
                       </Elements>
                     ) : (
@@ -1025,78 +1116,6 @@ export default function CustomPaymentModal({
                         </Button>
                       </div>
                     )}
-                  </div>
-
-                  <div className="border border-sand rounded-lg bg-white overflow-hidden flex flex-col">
-                    {primaryPhoto ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={primaryPhoto}
-                        alt={service.name}
-                        className="h-48 w-full object-cover object-center"
-                      />
-                    ) : (
-                      <div className="h-48 w-full bg-gradient-to-br from-dark-sage/40 via-sand/30 to-ivory flex items-center justify-center">
-                        <span className="text-4xl opacity-40">✨</span>
-                      </div>
-                    )}
-                    <div className="p-5 space-y-4">
-                      <div>
-                        <h4 className="text-lg font-serif text-charcoal">{service.name}</h4>
-                        <p className="text-sm text-warm-gray leading-relaxed mt-1">{service.summary}</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 text-sm text-charcoal">
-                        <div className="rounded-lg bg-dark-sage/15 px-3 py-2">
-                          <span className="text-xs uppercase tracking-wide text-warm-gray">Duration</span>
-                          <div className="font-medium">{service.duration}</div>
-                        </div>
-                        <div className="rounded-lg bg-dark-sage/15 px-3 py-2">
-                          <span className="text-xs uppercase tracking-wide text-warm-gray">Price</span>
-                          <div className="font-medium">{service.price}</div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-dark-sage/30 bg-dark-sage/10 px-3 py-3 text-sm text-charcoal">
-                        {slotSummary ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-warm-gray">Scheduled for</span>
-                              <span className="font-medium text-charcoal">{slotSummary.date}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-warm-gray">Time</span>
-                              <span className="font-medium text-charcoal">
-                                {slotSummary.start} – {slotSummary.end}
-                              </span>
-                            </div>
-                            {slotSummary.resource && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-warm-gray">Provider</span>
-                                <span className="font-medium text-charcoal">{slotSummary.resource}</span>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-warm-gray">
-                            Your booking time will appear here once selected.
-                          </div>
-                        )}
-                      </div>
-
-                      {hapioBookingReference && (
-                        <div className="text-xs text-warm-gray/80">
-                          Booking reference:{' '}
-                          <span className="font-mono">{hapioBookingReference}</span>
-                        </div>
-                      )}
-
-                      {service.description && (
-                        <div className="border-t border-sand pt-4 text-sm text-warm-gray leading-relaxed">
-                          {service.description}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
