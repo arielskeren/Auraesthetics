@@ -94,7 +94,7 @@ export default function ServiceCard({ name, summary, duration, price, category, 
         </div>
         
         {/* Content - flex to fill remaining space */}
-        <div className={`px-3 py-3 sm:p-6 flex flex-col flex-grow gap-2 sm:gap-4 ${(featured || best_seller || most_popular) ? 'pt-10 sm:pt-6' : ''}`}>
+        <div className="px-3 pt-10 pb-3 sm:p-6 sm:pt-6 flex flex-col flex-grow gap-2 sm:gap-4">
           <div className="flex-grow min-h-0">
             <h3 className="text-sm font-semibold font-serif text-charcoal sm:text-h3 sm:font-normal mb-1 sm:mb-2 line-clamp-2">
               {name}
