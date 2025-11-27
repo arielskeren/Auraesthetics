@@ -490,7 +490,7 @@ function ModernPaymentSection({
         </div>
 
         {/* Right: Service Info */}
-        <div className="border border-sand rounded-lg p-4 bg-white space-y-3">
+        <div className="border border-sand rounded-lg p-4 bg-white space-y-3 flex flex-col">
           {/* Service header with image and details inline */}
           <div className="flex items-start gap-3">
             {/* Small square image */}
@@ -544,11 +544,15 @@ function ModernPaymentSection({
                   <span className="font-medium text-charcoal">{slotSummary.resource}</span>
                 </div>
               )}
-              {hapioBookingReference && (
-                <div className="text-[10px] text-warm-gray/80 pt-1">
-                  Ref: <span className="font-mono">{hapioBookingReference.slice(0, 8)}...</span>
-                </div>
-              )}
+            </div>
+          )}
+
+          {/* Reference number at bottom, away from everything */}
+          {hapioBookingReference && (
+            <div className="border-t border-sand pt-3 mt-auto">
+              <div className="text-[10px] text-warm-gray/60 text-center">
+                Ref: <span className="font-mono">{hapioBookingReference.slice(0, 8)}...</span>
+              </div>
             </div>
           )}
         </div>
@@ -557,146 +561,147 @@ function ModernPaymentSection({
       {/* Bottom Section: Payment Info */}
       <div className="border border-sand rounded-lg p-4 bg-white space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Left: Discount Code and Payment Option */}
+          {/* Left: Discount Code, Payment Option, and Card Information */}
           <div className="space-y-4">
             <div>
               <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
                 Discount Code (Optional)
               </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={discountCode}
-              onChange={(event) => {
-                setDiscountCode(event.target.value.toUpperCase());
-                setDiscountValidation(null);
-                setError(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  if (discountCode.trim() && !processing && !validatingDiscount) {
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={discountCode}
+                  onChange={(event) => {
+                    setDiscountCode(event.target.value.toUpperCase());
+                    setDiscountValidation(null);
+                    setError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      if (discountCode.trim() && !processing && !validatingDiscount) {
+                        void validateDiscount();
+                      }
+                    }
+                  }}
+                  placeholder="Enter code"
+                  className="flex-1 px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
+                  disabled={processing || validatingDiscount || success}
+                />
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
                     void validateDiscount();
-                  }
-                }
-              }}
-              placeholder="Enter code"
-              className="flex-1 px-3 py-2 border border-sage-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-dark-sage text-sm"
-              disabled={processing || validatingDiscount || success}
-            />
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void validateDiscount();
-              }}
-              disabled={processing || validatingDiscount || !discountCode.trim() || success}
-              className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg font-medium text-sm hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {validatingDiscount ? '...' : 'Apply'}
-            </button>
-          </div>
-          {discountValidation?.valid && (
-            <div className="mt-2 space-y-1">
-              <p className="text-sm text-green-600 flex items-center gap-1">
-                <CheckCircle2 size={16} />
-                Discount applied! ${discountValidation.discountAmount.toFixed(2)} off
-              </p>
-              {discountValidation.isOneTime && !contactDetails.email?.trim() && (
-                <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
-                  Please enter your email address to verify your eligibility for this discount code.
+                  }}
+                  disabled={processing || validatingDiscount || !discountCode.trim() || success}
+                  className="px-4 py-2 bg-dark-sage text-charcoal rounded-lg font-medium text-sm hover:bg-sage-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {validatingDiscount ? '...' : 'Apply'}
+                </button>
+              </div>
+              {discountValidation?.valid && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm text-green-600 flex items-center gap-1">
+                    <CheckCircle2 size={16} />
+                    Discount applied! ${discountValidation.discountAmount.toFixed(2)} off
+                  </p>
+                  {discountValidation.isOneTime && !contactDetails.email?.trim() && (
+                    <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
+                      Please enter your email address to verify your eligibility for this discount code.
+                    </p>
+                  )}
+                </div>
+              )}
+              {discountValidation && !discountValidation.valid && discountCode && (
+                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle size={16} />
+                  Invalid discount code
                 </p>
               )}
-            </div>
-          )}
-          {discountValidation && !discountValidation.valid && discountCode && (
-            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-              <AlertCircle size={16} />
-              Invalid discount code
-            </p>
-            )}
             </div>
 
             <div className="space-y-2">
               <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
                 Payment Option
               </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
-              <input
-                type="radio"
-                name="paymentType"
-                value="full"
-                checked={paymentType === 'full'}
-                onChange={(event) => setPaymentType(event.target.value as PaymentType)}
-                className="mr-2.5"
-                disabled={processing || success}
-              />
-              <div className="flex-1">
-                <div className="font-medium text-charcoal">Pay Full Amount</div>
-                <div className="text-sm text-warm-gray">${finalAmount.toFixed(2)}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+                  <input
+                    type="radio"
+                    name="paymentType"
+                    value="full"
+                    checked={paymentType === 'full'}
+                    onChange={(event) => setPaymentType(event.target.value as PaymentType)}
+                    className="mr-2.5"
+                    disabled={processing || success}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-charcoal">Pay Full Amount</div>
+                    <div className="text-sm text-warm-gray">${finalAmount.toFixed(2)}</div>
+                  </div>
+                </label>
+                <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
+                  <input
+                    type="radio"
+                    name="paymentType"
+                    value="deposit"
+                    checked={paymentType === 'deposit'}
+                    onChange={(event) => setPaymentType(event.target.value as PaymentType)}
+                    className="mr-2.5"
+                    disabled={processing || success}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-charcoal">Pay 50% Deposit</div>
+                    <div className="text-sm text-warm-gray">
+                      ${(finalAmount * 0.5).toFixed(2)} now, remainder later
+                    </div>
+                  </div>
+                </label>
               </div>
-            </label>
-            <label className="flex items-center p-3 border-2 rounded-lg cursor-pointer hover:bg-sand/20 transition-colors">
-              <input
-                type="radio"
-                name="paymentType"
-                value="deposit"
-                checked={paymentType === 'deposit'}
-                onChange={(event) => setPaymentType(event.target.value as PaymentType)}
-                className="mr-2.5"
-                disabled={processing || success}
-              />
-              <div className="flex-1">
-                <div className="font-medium text-charcoal">Pay 50% Deposit</div>
-                <div className="text-sm text-warm-gray">
-                  ${(finalAmount * 0.5).toFixed(2)} now, remainder later
+              {paymentType === 'deposit' && (
+                <div className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                  <input
+                    id="deposit-ack"
+                    type="checkbox"
+                    checked={depositAcknowledged}
+                    onChange={(event) => setDepositAcknowledged(event.target.checked)}
+                    className="mt-1"
+                    disabled={processing || success}
+                  />
+                  <label htmlFor="deposit-ack" className="text-xs text-yellow-700 leading-relaxed">
+                    I understand the remaining balance will be due at the start of my appointment.
+                  </label>
                 </div>
-              </div>
-            </label>
-          </div>
-          {paymentType === 'deposit' && (
-            <div className="mt-3 flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-              <input
-                id="deposit-ack"
-                type="checkbox"
-                checked={depositAcknowledged}
-                onChange={(event) => setDepositAcknowledged(event.target.checked)}
-                className="mt-1"
-                disabled={processing || success}
-              />
-              <label htmlFor="deposit-ack" className="text-xs text-yellow-700 leading-relaxed">
-                I understand the remaining balance will be due at the start of my appointment.
-              </label>
+              )}
             </div>
-            )}
-          </div>
-          </div>
 
-          {/* Right: Card Info and Payment */}
-          <div className="space-y-4">
             <div>
               <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
                 Card Information
               </label>
-          <div className="p-3 border border-sage-dark rounded-lg bg-white">
-            <CardElement
-              options={{
-                style: {
-                  base: {
-                    fontSize: '16px',
-                    color: '#3F3A37',
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    '::placeholder': { color: '#9CA3AF' },
-                  },
-                  invalid: { color: '#EF4444', iconColor: '#EF4444' },
-                },
-              }}
-              onChange={(event) => setCardComplete(event.complete)}
-            />
-          </div>
+              <div className="p-3 border border-sage-dark rounded-lg bg-white">
+                <CardElement
+                  options={{
+                    style: {
+                      base: {
+                        fontSize: '16px',
+                        color: '#3F3A37',
+                        fontFamily: 'Inter, system-ui, sans-serif',
+                        '::placeholder': { color: '#9CA3AF' },
+                      },
+                      invalid: { color: '#EF4444', iconColor: '#EF4444' },
+                    },
+                  }}
+                  onChange={(event) => setCardComplete(event.complete)}
+                />
+              </div>
             </div>
+          </div>
+
+          {/* Right: Total Amount, Terms, and Buttons */}
+          <div className="space-y-4">
 
             <div className="bg-dark-sage/10 p-3 rounded-lg space-y-1">
               <div className="flex justify-between items-center">
