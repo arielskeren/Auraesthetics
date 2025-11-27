@@ -60,14 +60,64 @@ export function generateEmailHead(title: string): string {
 }
 
 /**
- * Generate email header section
+ * Generate email header section with centered logo text
  */
 export function generateEmailHeader(styles: ReturnType<typeof import('./styles').getEmailStyles>): string {
   return `
           <!-- Header with Logo -->
           <tr>
             <td style="${styles.header}">
-              <h1 style="${styles.h1}">Aura Aesthetics</h1>
+              <h1 style="${styles.h1}">The Aura Esthetics</h1>
+            </td>
+          </tr>`;
+}
+
+/**
+ * Generate email footer with social links
+ */
+export function generateEmailFooterWithSocial(
+  address: string,
+  styles: ReturnType<typeof import('./styles').getEmailStyles>
+): string {
+  return `
+          <!-- Footer -->
+          <tr>
+            <td style="${styles.footer}">
+              <p style="margin: 0 0 ${EMAIL_STYLES.spacing.md} 0; ${styles.bodyText}">
+                If you have any questions or need to make changes, please don't hesitate to contact us.
+              </p>
+              <p style="margin: 0 0 ${EMAIL_STYLES.spacing.lg} 0; ${styles.bodyText}">
+                <strong style="font-family: ${EMAIL_STYLES.typography.fontFamilySerif}; color: ${EMAIL_STYLES.colors.primaryDark};">The Aura Esthetics</strong><br />
+                ${escapeHtml(address)}<br />
+                <a href="${EMAIL_STYLES.urls.base}" style="color: ${EMAIL_STYLES.colors.primary}; text-decoration: none;">www.theauraesthetics.com</a>
+              </p>
+              
+              <!-- Social Links -->
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.lg} 0 0 0;">
+                <tr>
+                  <td align="center" style="padding: 0;">
+                    <table role="presentation" style="border-collapse: collapse; margin: 0 auto;">
+                      <tr>
+                        <td style="padding: 0 ${EMAIL_STYLES.spacing.sm};">
+                          <a href="${EMAIL_STYLES.urls.instagram}" style="display: inline-block; color: ${EMAIL_STYLES.colors.primaryDark}; text-decoration: none; font-size: ${EMAIL_STYLES.typography.fontSize.small};">
+                            Instagram
+                          </a>
+                        </td>
+                        <td style="padding: 0 ${EMAIL_STYLES.spacing.sm};">
+                          <a href="${EMAIL_STYLES.urls.tiktok}" style="display: inline-block; color: ${EMAIL_STYLES.colors.primaryDark}; text-decoration: none; font-size: ${EMAIL_STYLES.typography.fontSize.small};">
+                            TikTok
+                          </a>
+                        </td>
+                        <td style="padding: 0 ${EMAIL_STYLES.spacing.sm};">
+                          <a href="${EMAIL_STYLES.urls.base}" style="display: inline-block; color: ${EMAIL_STYLES.colors.primaryDark}; text-decoration: none; font-size: ${EMAIL_STYLES.typography.fontSize.small};">
+                            Website
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>`;
 }
