@@ -35,6 +35,8 @@ export function generateBookingConfirmationEmail(params: {
   } = params;
 
   const styles = getEmailStyles();
+  const detailsColumnWidth = serviceImageUrl ? '55%' : '100%';
+  const dateTimeStyle = `margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};`;
 
   // Generate URLs with booking ID if provided
   const finalCancelUrl = cancelUrl || (bookingId ? `${EMAIL_STYLES.urls.manageBooking}?id=${encodeURIComponent(bookingId)}` : EMAIL_STYLES.urls.manageBooking);
@@ -85,7 +87,7 @@ ${generateEmailHeader(styles)}
                   ` : ''}
                   
                   <!-- Service Details Column (Right) -->
-                  <td style="${serviceImageUrl ? 'width: 55%;' : 'width: 100%;'} padding: ${EMAIL_STYLES.spacing.xl}; vertical-align: top; background-color: ${EMAIL_STYLES.colors.cardBackground};">
+                  <td style="width: ${detailsColumnWidth}; padding: ${EMAIL_STYLES.spacing.xl}; vertical-align: top; background-color: ${EMAIL_STYLES.colors.cardBackground};">
                     <h3 style="margin: 0 0 ${EMAIL_STYLES.spacing.lg} 0; ${styles.h3}">${escapeHtml(serviceName)}</h3>
                     
                     <!-- Date -->
@@ -94,11 +96,11 @@ ${generateEmailHeader(styles)}
                         <td style="padding: ${EMAIL_STYLES.spacing.md}; background-color: ${EMAIL_STYLES.colors.white}; border-radius: ${EMAIL_STYLES.layout.borderRadiusSmall};">
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
-                              <td style="width: 28px; padding: 0; vertical-align: middle;">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M6 2V4M14 2V4M3 6H17M4 4H16C16.5523 4 17 4.44772 17 5V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V5C3 4.44772 3.44772 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                              <td style="width: 28px; padding: 0; vertical-align: middle; text-align: center;">
+                                <span style="font-size: 18px;">•</span>
                               </td>
                               <td style="padding: 0; vertical-align: middle;">
-                                <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">${formattedDate}</p>
+                                <p style="${dateTimeStyle}">${escapeHtml(formattedDate)}</p>
                               </td>
                             </tr>
                           </table>
@@ -112,11 +114,11 @@ ${generateEmailHeader(styles)}
                         <td style="padding: ${EMAIL_STYLES.spacing.md}; background-color: ${EMAIL_STYLES.colors.white}; border-radius: ${EMAIL_STYLES.layout.borderRadiusSmall};">
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
-                              <td style="width: 28px; padding: 0; vertical-align: middle;">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                              <td style="width: 28px; padding: 0; vertical-align: middle; text-align: center;">
+                                <span style="font-size: 18px;">•</span>
                               </td>
                               <td style="padding: 0; vertical-align: middle;">
-                                <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">${escapeHtml(bookingTime)} EST</p>
+                                <p style="${dateTimeStyle}">${escapeHtml(bookingTime)} EST</p>
                               </td>
                             </tr>
                           </table>
@@ -130,8 +132,8 @@ ${generateEmailHeader(styles)}
                         <td style="padding: ${EMAIL_STYLES.spacing.md}; background-color: ${EMAIL_STYLES.colors.white}; border-radius: ${EMAIL_STYLES.layout.borderRadiusSmall};">
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
-                              <td style="width: 28px; padding: 0; vertical-align: top; padding-top: 2px;">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M10 10.5C11.3807 10.5 12.5 9.38071 12.5 8C12.5 6.61929 11.3807 5.5 10 5.5C8.61929 5.5 7.5 6.61929 7.5 8C7.5 9.38071 8.61929 10.5 10 10.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M10 18C13 14 17 10.4183 17 8C17 4.68629 14.3137 2 11 2C7.68629 2 5 4.68629 5 8C5 10.4183 9 14 10 18Z" stroke="currentColor" stroke-width="1.5"/></svg>
+                              <td style="width: 28px; padding: 0; vertical-align: top; padding-top: 2px; text-align: center;">
+                                <span style="font-size: 18px;">•</span>
                               </td>
                               <td style="padding: 0; vertical-align: top;">
                                 <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.small}; font-weight: ${EMAIL_STYLES.typography.fontWeight.medium}; line-height: 1.5;">${escapeHtml(address)}</p>
