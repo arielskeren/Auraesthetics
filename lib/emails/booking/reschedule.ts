@@ -102,7 +102,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-                      ${iconCalendar}
+` + iconCalendar + `
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(formattedOldDate)}</strong></p>
@@ -112,7 +112,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-                      ${iconClock}
+` + iconClock + `
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(oldBookingTime)} EST</strong></p>
@@ -123,7 +123,7 @@ ${generateEmailHeader(styles)}
 
               <!-- Arrow -->
               <div style="text-align: center; margin: ${EMAIL_STYLES.spacing.md} 0; color: ${EMAIL_STYLES.colors.primary};">
-                ${iconArrow}
+` + iconArrow + `
               </div>
 
               <!-- New Date/Time -->
@@ -132,7 +132,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-                      ${iconCalendar}
+` + iconCalendar + `
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(formattedNewDate)}</strong></p>
@@ -142,7 +142,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse; margin: ${EMAIL_STYLES.spacing.xs} 0 0 0;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: middle;">
-                      ${iconClock}
+` + iconClock + `
                     </td>
                     <td style="padding: 0; vertical-align: middle;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body};"><strong>${escapeHtml(newBookingTime)} EST</strong></p>
@@ -157,7 +157,7 @@ ${generateEmailHeader(styles)}
                 <table role="presentation" style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="width: 28px; padding: 0; vertical-align: top; padding-top: 2px;">
-                      ${iconLocation}
+` + iconLocation + `
                     </td>
                     <td style="padding: 0; vertical-align: top;">
                       <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; line-height: 1.5;">${escapeHtml(address)}</p>

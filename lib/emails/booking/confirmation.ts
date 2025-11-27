@@ -102,7 +102,7 @@ ${generateEmailHeader(styles)}
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
                               <td style="width: 28px; padding: 0; vertical-align: middle;">
-                                ${iconCalendar}
+` + iconCalendar + `
                               </td>
                               <td style="padding: 0; vertical-align: middle;">
                                 <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">${formattedDate}</p>
@@ -120,7 +120,7 @@ ${generateEmailHeader(styles)}
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
                               <td style="width: 28px; padding: 0; vertical-align: middle;">
-                                ${iconClock}
+` + iconClock + `
                               </td>
                               <td style="padding: 0; vertical-align: middle;">
                                 <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold;">${escapeHtml(bookingTime)} EST</p>
@@ -138,7 +138,7 @@ ${generateEmailHeader(styles)}
                           <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
                               <td style="width: 28px; padding: 0; vertical-align: top; padding-top: 2px;">
-                                ${iconLocation}
+` + iconLocation + `
                               </td>
                               <td style="padding: 0; vertical-align: top;">
                                 <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.small}; font-weight: ${EMAIL_STYLES.typography.fontWeight.medium}; line-height: 1.5;">${escapeHtml(address)}</p>
