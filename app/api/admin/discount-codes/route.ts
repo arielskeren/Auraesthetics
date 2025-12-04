@@ -151,26 +151,28 @@ export async function GET(request: NextRequest) {
     const inactive: any[] = [];
 
     codesWithUsage.forEach((code: any) => {
-      // CRITICAL: Check inactive status FIRST using normalized value
-      // Use direct check on normalized is_active value (should be boolean after normalization)
-      // This is more reliable than calling isCodeInactive which re-normalizes
-      const normalizedIsActive = code.is_active; // Already normalized in normalizedCodes step
-      const isInactive = normalizedIsActive === false;
+      // CRITICAL: Use utility function to check inactive status - handles all edge cases
+      // This is the SINGLE SOURCE OF TRUTH for checking if a code is inactive
+      const isInactive = isCodeInactive(code);
       const isUsed = code.used === true || code.used === 't';
       
-      // DEBUG: Log codes with is_active = false to track categorization
-      if (normalizedIsActive === false || code._original_is_active === false) {
+      // DEBUG: Log ALL codes with is_active issues to track categorization
+      const rawIsActive = code.is_active;
+      const normalizedCheck = normalizeIsActive(rawIsActive);
+      if (!normalizedCheck || rawIsActive === false || code._original_is_active === false) {
         console.log(`[CRITICAL DEBUG] Code ${code.code} (${code.id}) categorization:`, {
-          is_active: code.is_active,
-          normalizedIsActive,
+          raw_is_active: rawIsActive,
+          raw_is_active_type: typeof rawIsActive,
+          normalized_check: normalizedCheck,
+          isCodeInactive_result: isInactive,
           original_is_active: code._original_is_active,
-          isInactive,
           isUsed,
           willGoTo: isInactive ? (isUsed ? 'used' : 'inactive') : 'ACTIVE (ERROR!)'
         });
       }
       
-      // If code is inactive (is_active === false or NULL), categorize appropriately
+      // ABSOLUTE FIRST CHECK: If code is inactive, route it immediately
+      // This MUST happen before any other categorization logic
       if (isInactive) {
         // Inactive codes go to inactive section UNLESS they're used
         // Used codes go to used section regardless of active status
@@ -181,7 +183,7 @@ export async function GET(request: NextRequest) {
           inactive.push(code);
           console.log(`[DEBUG] Code ${code.code} added to INACTIVE`);
         }
-        return; // Skip all other logic for this code
+        return; // CRITICAL: Skip ALL other logic for this code
       }
       
       // At this point, code is active (is_active === true)
@@ -213,12 +215,14 @@ export async function GET(request: NextRequest) {
         inactive.push(code);
       } else {
         // Active codes: is_active = true, not used, not expired
-        // CRITICAL: Double-check is_active before adding to active
-        if (code.is_active === false) {
+        // CRITICAL: Triple-check using utility function before adding to active
+        // This catches any edge cases the first check might have missed
+        if (isCodeInactive(code)) {
           console.error(`[CRITICAL ERROR] Code ${code.code} (${code.id}) has is_active=false but reached active section! Adding to inactive instead.`, {
             is_active: code.is_active,
+            is_active_type: typeof code.is_active,
             original_is_active: code._original_is_active,
-            isInactive,
+            isCodeInactive_check: isCodeInactive(code),
             isUsed,
             isExpired
           });
@@ -256,12 +260,15 @@ export async function GET(request: NextRequest) {
     }
 
     // FINAL SAFETY CHECK: Remove any codes with is_active = false from active array
+    // Use utility function to catch ALL edge cases (string "false", null, etc.)
     // This is a fail-safe in case any inactive codes slipped through
     const safeActive = active.filter((code: any) => {
-      if (code.is_active === false) {
+      if (isCodeInactive(code)) {
         console.error(`[CRITICAL] Removing inactive code ${code.code} (${code.id}) from active array in final safety check!`, {
           is_active: code.is_active,
-          original_is_active: code._original_is_active
+          is_active_type: typeof code.is_active,
+          original_is_active: code._original_is_active,
+          isCodeInactive_result: isCodeInactive(code)
         });
         inactive.push(code); // Move to inactive
         return false;
