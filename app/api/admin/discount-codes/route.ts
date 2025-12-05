@@ -42,6 +42,30 @@ export async function GET(request: NextRequest) {
     `;
     const allOneTimeIds = normalizeRows(oneTimeIdsResult);
     
+    // DIAGNOSTIC: Test the specific query that the main query uses
+    const testQueryResult = await sql`
+      SELECT 
+        id,
+        code,
+        code_type,
+        customer_id,
+        discount_type,
+        discount_value,
+        discount_cap,
+        used,
+        used_at,
+        expires_at,
+        is_active,
+        created_at,
+        created_by
+      FROM discount_codes
+      WHERE (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
+      ORDER BY created_at DESC
+    `;
+    const testQueryCodes = normalizeRows(testQueryResult);
+    console.log('[Discount Codes API] Test query returned:', testQueryCodes.length, 'codes');
+    console.log('[Discount Codes API] Test query codes:', testQueryCodes.map((c: any) => ({ id: c.id, code: c.code })));
+    
     // DIAGNOSTIC: Get ALL codes in database to see what's missing
     const allCodesInDbResult = await sql`
       SELECT id, code, code_type, customer_id, is_active, created_at
@@ -83,6 +107,29 @@ export async function GET(request: NextRequest) {
       ORDER BY created_at DESC
     `;
     const rawCodes = normalizeRows(codesResult);
+    
+    // DIAGNOSTIC: Check if the missing code exists with the expected values
+    const missingCodeId = 'e97bd07b-e5fa-41bf-a501-c8b89d4091fd';
+    const missingCodeCheck = await sql`
+      SELECT id, code, code_type, customer_id, is_active
+      FROM discount_codes
+      WHERE id = ${missingCodeId}
+      LIMIT 1
+    `;
+    const missingCodeData = normalizeRows(missingCodeCheck)[0];
+    if (missingCodeData) {
+      const shouldMatch = missingCodeData.code_type === 'one_time' || 
+                         (missingCodeData.code_type === null && missingCodeData.customer_id !== null);
+      console.log('[Discount Codes API] Missing code check:', {
+        code: missingCodeData.code,
+        code_type: missingCodeData.code_type,
+        customer_id: missingCodeData.customer_id,
+        is_active: missingCodeData.is_active,
+        shouldMatch,
+        inRawCodes: rawCodes.some((c: any) => c.id === missingCodeId),
+        rawCodesCount: rawCodes.length
+      });
+    }
     
     // Fetch customer info separately to avoid JOIN issues
     const customerIds = Array.from(new Set(rawCodes.map((c: any) => c.customer_id).filter(Boolean)));
