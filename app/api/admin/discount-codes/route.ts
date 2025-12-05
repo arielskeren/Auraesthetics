@@ -45,31 +45,55 @@ export async function GET(request: NextRequest) {
     console.log('[Discount Codes API] DB Counts:', { totalInDb, oneTimeCount });
     console.log('[Discount Codes API] All one-time codes:', allOneTimeIds.map((c: any) => ({ id: c.id, code: c.code })));
 
-    // Fetch all one-time discount codes with customer info
+    // Fetch all one-time discount codes WITHOUT JOIN (to avoid potential Neon driver issues)
     // Handle both explicit 'one_time' codes and legacy codes (NULL code_type with customer_id)
     const codesResult = await sql`
       SELECT 
-        dc.id,
-        dc.code,
-        dc.code_type,
-        dc.customer_id,
-        dc.discount_type,
-        dc.discount_value,
-        dc.discount_cap,
-        dc.used,
-        dc.used_at,
-        dc.expires_at,
-        dc.is_active,
-        dc.created_at,
-        dc.created_by,
-        c.email AS customer_email,
-        TRIM(COALESCE(c.first_name || ' ', '') || COALESCE(c.last_name, '')) AS customer_name
-      FROM discount_codes dc
-      LEFT JOIN customers c ON dc.customer_id = c.id
-      WHERE (dc.code_type = 'one_time' OR (dc.code_type IS NULL AND dc.customer_id IS NOT NULL))
-      ORDER BY dc.created_at DESC
+        id,
+        code,
+        code_type,
+        customer_id,
+        discount_type,
+        discount_value,
+        discount_cap,
+        used,
+        used_at,
+        expires_at,
+        is_active,
+        created_at,
+        created_by
+      FROM discount_codes
+      WHERE (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
+      ORDER BY created_at DESC
     `;
-    const allCodes = normalizeRows(codesResult);
+    const rawCodes = normalizeRows(codesResult);
+    
+    // Fetch customer info separately to avoid JOIN issues
+    const customerIds = Array.from(new Set(rawCodes.map((c: any) => c.customer_id).filter(Boolean)));
+    let customerMap: Record<string, any> = {};
+    
+    if (customerIds.length > 0) {
+      const customersResult = await sql`
+        SELECT id, email, first_name, last_name
+        FROM customers
+        WHERE id = ANY(${customerIds})
+      `;
+      const customers = normalizeRows(customersResult);
+      customerMap = customers.reduce((acc: any, c: any) => {
+        acc[c.id] = c;
+        return acc;
+      }, {});
+    }
+    
+    // Merge customer info into codes
+    const allCodes = rawCodes.map((code: any) => {
+      const customer = code.customer_id ? customerMap[code.customer_id] : null;
+      return {
+        ...code,
+        customer_email: customer?.email || null,
+        customer_name: customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : null,
+      };
+    });
     
     // Normalize is_active values immediately after fetching to ensure consistency
     // PostgreSQL can return booleans in various formats, so normalize them all to boolean
