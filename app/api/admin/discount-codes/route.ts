@@ -21,6 +21,20 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
 
+    // DIAGNOSTIC: Count all codes in the database to detect filtering issues
+    const totalCountResult = await sql`
+      SELECT COUNT(*) as total_count FROM discount_codes
+    `;
+    const totalInDb = normalizeRows(totalCountResult)[0]?.total_count || 0;
+    
+    const oneTimeCountResult = await sql`
+      SELECT COUNT(*) as count FROM discount_codes 
+      WHERE (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
+    `;
+    const oneTimeCount = normalizeRows(oneTimeCountResult)[0]?.count || 0;
+    
+    console.log('[Discount Codes API] DB Counts:', { totalInDb, oneTimeCount });
+
     // Fetch all one-time discount codes with customer info
     // Handle both explicit 'one_time' codes and legacy codes (NULL code_type with customer_id)
     const codesResult = await sql`
@@ -278,13 +292,17 @@ export async function GET(request: NextRequest) {
 
     // Include diagnostic counts in response to help track missing codes
     const diagnostics = {
-      totalFetchedFromDb: normalizedCodes.length,
+      totalCodesInDatabase: parseInt(totalInDb),
+      totalOneTimeInDatabase: parseInt(oneTimeCount),
+      totalFetchedFromQuery: normalizedCodes.length,
       totalCategorized: safeActive.length + used.length + inactive.length,
       activeCount: safeActive.length,
       usedCount: used.length,
       inactiveCount: inactive.length,
       // If any codes were lost in categorization, this will be non-zero
       missingCodes: normalizedCodes.length - (safeActive.length + used.length + inactive.length),
+      // If query fetched fewer than expected
+      queryMismatch: parseInt(oneTimeCount) - normalizedCodes.length,
     };
     
     // Log warning if codes were lost

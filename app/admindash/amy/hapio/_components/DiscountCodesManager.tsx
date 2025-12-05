@@ -1844,10 +1844,17 @@ export default function DiscountCodesManager() {
                     
                     {/* Diagnostics */}
                     {rawApiResponse?._diagnostics && (
-                      <div className={`mb-2 p-2 rounded text-xs ${rawApiResponse._diagnostics.missingCodes > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                        <strong>DB Diagnostics:</strong> {rawApiResponse._diagnostics.totalFetchedFromDb} fetched from DB → {rawApiResponse._diagnostics.totalCategorized} categorized
+                      <div className={`mb-2 p-2 rounded text-xs ${(rawApiResponse._diagnostics.missingCodes > 0 || rawApiResponse._diagnostics.queryMismatch > 0) ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                        <div><strong>DB Diagnostics:</strong></div>
+                        <div>• Total codes in DB: {rawApiResponse._diagnostics.totalCodesInDatabase}</div>
+                        <div>• One-time codes (should match query): {rawApiResponse._diagnostics.totalOneTimeInDatabase}</div>
+                        <div>• Fetched by query: {rawApiResponse._diagnostics.totalFetchedFromQuery}</div>
+                        <div>• Categorized: {rawApiResponse._diagnostics.totalCategorized}</div>
+                        {rawApiResponse._diagnostics.queryMismatch > 0 && (
+                          <div className="font-bold text-red-700">⚠️ Query mismatch! {rawApiResponse._diagnostics.queryMismatch} codes not returned by query!</div>
+                        )}
                         {rawApiResponse._diagnostics.missingCodes > 0 && (
-                          <span className="font-bold"> ⚠️ {rawApiResponse._diagnostics.missingCodes} codes MISSING!</span>
+                          <div className="font-bold text-red-700">⚠️ Categorization lost {rawApiResponse._diagnostics.missingCodes} codes!</div>
                         )}
                       </div>
                     )}
