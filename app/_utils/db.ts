@@ -20,6 +20,19 @@ export function getSqlClient() {
   return sql_query;
 }
 
+// Get a fresh SQL client that bypasses connection caching
+// Use this for operations that need to see the most recent data
+// Creates a NEW client instance each time with cache-busting fetch options
+export function getFreshSqlClient() {
+  // Create a new client instance each time to avoid stale connection cache
+  // Using fetchOptions with cache: 'no-store' to bypass any HTTP caching
+  return neon(getDatabaseUrl(), {
+    fetchOptions: {
+      cache: 'no-store',
+    },
+  });
+}
+
 // Export sql client directly for use with template literals
 // Lazy initialization to avoid accessing env vars at module load time
 let _sqlQuery: ReturnType<typeof neon> | null = null;
@@ -57,4 +70,3 @@ export async function setupDatabase() {
     throw error;
   }
 }
-

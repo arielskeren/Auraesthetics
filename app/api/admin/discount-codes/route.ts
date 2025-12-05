@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSqlClient } from '@/app/_utils/db';
+import { getFreshSqlClient } from '@/app/_utils/db';
 import { normalizeIsActive, isCodeInactive } from '@/app/_utils/discountCodeUtils';
 
 function normalizeRows(result: any): any[] {
@@ -17,7 +17,9 @@ export const dynamic = 'force-dynamic';
 // GET /api/admin/discount-codes - List all discount codes with usage info
 export async function GET(request: NextRequest) {
   try {
-    const sql = getSqlClient();
+    // Use fresh SQL client to bypass Neon connection pooling cache
+    // This ensures we always see the most recent data
+    const sql = getFreshSqlClient();
     const now = new Date();
 
     // Use a single comprehensive query to get all one-time codes
