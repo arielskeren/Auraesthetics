@@ -117,17 +117,44 @@ export async function GET(request: NextRequest) {
       LIMIT 1
     `;
     const missingCodeData = normalizeRows(missingCodeCheck)[0];
+    
+    // DIAGNOSTIC: Try to fetch this specific code with the one-time filter
+    const directFilterCheck = await sql`
+      SELECT id, code, code_type, customer_id, is_active
+      FROM discount_codes
+      WHERE id = ${missingCodeId}
+        AND (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
+      LIMIT 1
+    `;
+    const directFilterResult = normalizeRows(directFilterCheck)[0];
+    
+    // DIAGNOSTIC: Check raw code_type value
+    const rawCodeTypeCheck = await sql`
+      SELECT id, code, code_type, 
+             code_type = 'one_time' as is_one_time_exact,
+             TRIM(code_type) = 'one_time' as is_one_time_trimmed,
+             LENGTH(code_type) as code_type_length,
+             code_type::text as code_type_text
+      FROM discount_codes
+      WHERE id = ${missingCodeId}
+      LIMIT 1
+    `;
+    const rawCodeTypeResult = normalizeRows(rawCodeTypeCheck)[0];
+    
     if (missingCodeData) {
       const shouldMatch = missingCodeData.code_type === 'one_time' || 
                          (missingCodeData.code_type === null && missingCodeData.customer_id !== null);
       console.log('[Discount Codes API] Missing code check:', {
         code: missingCodeData.code,
         code_type: missingCodeData.code_type,
+        code_type_typeof: typeof missingCodeData.code_type,
         customer_id: missingCodeData.customer_id,
         is_active: missingCodeData.is_active,
         shouldMatch,
         inRawCodes: rawCodes.some((c: any) => c.id === missingCodeId),
-        rawCodesCount: rawCodes.length
+        rawCodesCount: rawCodes.length,
+        directFilterFound: !!directFilterResult,
+        rawCodeTypeInfo: rawCodeTypeResult
       });
     }
     
@@ -460,6 +487,17 @@ export async function GET(request: NextRequest) {
                 (c.code_type === null && !c.customer_id ? 'code_type is NULL and no customer_id' : 
                  `Unknown: code_type=${c.code_type}, customer_id=${c.customer_id}`),
       })),
+      // Direct diagnostic for the missing code
+      missingCodeDiagnostic: missingCodeData ? {
+        code: missingCodeData.code,
+        code_type: missingCodeData.code_type,
+        code_type_typeof: typeof missingCodeData.code_type,
+        customer_id: missingCodeData.customer_id,
+        is_active: missingCodeData.is_active,
+        directFilterFound: !!directFilterResult,
+        rawCodeTypeInfo: rawCodeTypeResult,
+        inRawCodes: rawCodes.some((c: any) => c.id === missingCodeId),
+      } : null,
     };
     
     // Log warning if codes were lost
