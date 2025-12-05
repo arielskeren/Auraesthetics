@@ -222,30 +222,38 @@ function ModernPaymentSection({
     collectJsConfigured.current = true;
     
     // Brand colors for Collect.js field styling
+    // Note: These styles apply to the input element INSIDE the iframe
     const customCss = {
-      'font-family': 'Inter, system-ui, sans-serif',
+      'font-family': 'Inter, system-ui, -apple-system, sans-serif',
       'font-size': '16px',
-      'color': '#3F3A37',
-      'background-color': 'transparent',
+      'font-weight': '400',
+      'color': '#1f2937',
+      'background-color': '#ffffff',
       'border': 'none',
       'padding': '0',
+      'margin': '0',
       'outline': 'none',
+      'width': '100%',
+      'height': '24px',
+      'line-height': '24px',
     };
     
     const focusCss = {
       'outline': 'none',
+      'color': '#1f2937',
     };
     
     const invalidCss = {
-      'color': '#EF4444',
+      'color': '#dc2626',
     };
     
     const validCss = {
-      'color': '#3F3A37',
+      'color': '#1f2937',
     };
     
     const placeholderCss = {
-      'color': '#9CA3AF',
+      'color': '#9ca3af',
+      'font-weight': '400',
     };
     
     window.CollectJS.configure({
