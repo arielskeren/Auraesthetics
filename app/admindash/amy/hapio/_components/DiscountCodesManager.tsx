@@ -1860,6 +1860,26 @@ export default function DiscountCodesManager() {
                             )}
                           </div>
                         )}
+                        {rawApiResponse._diagnostics.codesNotMatchingQuery?.length > 0 && (
+                          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                            <strong className="text-yellow-800">Codes not matching one-time query:</strong>
+                            <ul className="mt-1 space-y-1">
+                              {rawApiResponse._diagnostics.codesNotMatchingQuery.map((c: any) => (
+                                <li key={c.id} className="text-yellow-700">
+                                  {c.code}: {c.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {rawApiResponse._diagnostics.allCodesInDatabase && (
+                          <details className="mt-2 text-xs">
+                            <summary className="cursor-pointer text-blue-600 hover:text-blue-800">Show all codes in database</summary>
+                            <pre className="mt-2 bg-white p-2 rounded border border-blue-200 overflow-x-auto max-h-40 overflow-y-auto">
+                              {JSON.stringify(rawApiResponse._diagnostics.allCodesInDatabase, null, 2)}
+                            </pre>
+                          </details>
+                        )}
                         {rawApiResponse._diagnostics.missingCodes > 0 && (
                           <div className="font-bold text-red-700">⚠️ Categorization lost {rawApiResponse._diagnostics.missingCodes} codes!</div>
                         )}

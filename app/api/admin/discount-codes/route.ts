@@ -42,8 +42,24 @@ export async function GET(request: NextRequest) {
     `;
     const allOneTimeIds = normalizeRows(oneTimeIdsResult);
     
+    // DIAGNOSTIC: Get ALL codes in database to see what's missing
+    const allCodesInDbResult = await sql`
+      SELECT id, code, code_type, customer_id, is_active, created_at
+      FROM discount_codes
+      ORDER BY created_at DESC
+    `;
+    const allCodesInDb = normalizeRows(allCodesInDbResult);
+    
     console.log('[Discount Codes API] DB Counts:', { totalInDb, oneTimeCount });
     console.log('[Discount Codes API] All one-time codes:', allOneTimeIds.map((c: any) => ({ id: c.id, code: c.code })));
+    console.log('[Discount Codes API] ALL codes in DB:', allCodesInDb.map((c: any) => ({ 
+      id: c.id, 
+      code: c.code, 
+      code_type: c.code_type, 
+      has_customer_id: !!c.customer_id,
+      is_active: c.is_active,
+      created_at: c.created_at
+    })));
 
     // Fetch all one-time discount codes WITHOUT JOIN (to avoid potential Neon driver issues)
     // Handle both explicit 'one_time' codes and legacy codes (NULL code_type with customer_id)
@@ -350,6 +366,12 @@ export async function GET(request: NextRequest) {
     const fetchedIds = new Set(normalizedCodes.map((c: any) => c.id));
     const missingFromMainQuery = allOneTimeIds.filter((c: any) => !fetchedIds.has(c.id));
     
+    // Find codes that are in DB but don't match the one-time query criteria
+    const allOneTimeIdsSet = new Set(allOneTimeIds.map((c: any) => c.id));
+    const codesNotMatchingQuery = allCodesInDb.filter((c: any) => 
+      !allOneTimeIdsSet.has(c.id) && c.code_type !== 'global'
+    );
+    
     // Include diagnostic counts in response to help track missing codes
     const diagnostics = {
       totalCodesInDatabase: parseInt(totalInDb),
@@ -370,6 +392,26 @@ export async function GET(request: NextRequest) {
         code_type: c.code_type,
         customer_id: c.customer_id,
         is_active: c.is_active,
+      })),
+      // All codes in database (for debugging)
+      allCodesInDatabase: allCodesInDb.map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        code_type: c.code_type,
+        has_customer_id: !!c.customer_id,
+        is_active: c.is_active,
+        created_at: c.created_at,
+        matchesOneTimeQuery: allOneTimeIdsSet.has(c.id),
+      })),
+      // Codes that don't match one-time query criteria
+      codesNotMatchingQuery: codesNotMatchingQuery.map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        code_type: c.code_type,
+        has_customer_id: !!c.customer_id,
+        reason: c.code_type === 'global' ? 'Is global code' : 
+                (c.code_type === null && !c.customer_id ? 'code_type is NULL and no customer_id' : 
+                 `Unknown: code_type=${c.code_type}, customer_id=${c.customer_id}`),
       })),
     };
     
