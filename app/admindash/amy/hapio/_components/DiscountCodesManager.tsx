@@ -60,6 +60,7 @@ export default function DiscountCodesManager() {
   const [debugData, setDebugData] = useState<any>(null);
   const [loadingDebug, setLoadingDebug] = useState(false);
   const [debugCodeInput, setDebugCodeInput] = useState('');
+  const [rawApiResponse, setRawApiResponse] = useState<any>(null);
   
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -218,6 +219,9 @@ export default function DiscountCodesManager() {
       }
 
       const data = await response.json();
+      
+      // Save raw API response for diagnostics
+      setRawApiResponse(data);
       
       // Debug logging: Log raw API response
       console.log('[DiscountCodesManager] Raw API response:', {
@@ -1820,10 +1824,77 @@ export default function DiscountCodesManager() {
                   </div>
                 </div>
 
+                {/* Raw API Response Section */}
+                {rawApiResponse && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-blue-800">
+                        Raw API Response ({rawApiResponse?.active?.length || 0} active, {rawApiResponse?.used?.length || 0} used, {rawApiResponse?.inactive?.length || 0} inactive)
+                      </h4>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(rawApiResponse, null, 2));
+                          alert('Copied to clipboard!');
+                        }}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    
+                    {/* Diagnostics */}
+                    {rawApiResponse?._diagnostics && (
+                      <div className={`mb-2 p-2 rounded text-xs ${rawApiResponse._diagnostics.missingCodes > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                        <strong>DB Diagnostics:</strong> {rawApiResponse._diagnostics.totalFetchedFromDb} fetched from DB → {rawApiResponse._diagnostics.totalCategorized} categorized
+                        {rawApiResponse._diagnostics.missingCodes > 0 && (
+                          <span className="font-bold"> ⚠️ {rawApiResponse._diagnostics.missingCodes} codes MISSING!</span>
+                        )}
+                      </div>
+                    )}
+                    
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">Show full response</summary>
+                      <pre className="mt-2 bg-white p-3 rounded border border-blue-200 overflow-x-auto max-h-60 overflow-y-auto">
+                        {JSON.stringify(rawApiResponse, null, 2)}
+                      </pre>
+                    </details>
+                    {/* Quick search in API response */}
+                    {debugCodeInput && rawApiResponse && (
+                      <div className="mt-2 text-xs">
+                        <p className="text-blue-800 font-medium">
+                          Searching for &quot;{debugCodeInput.toUpperCase()}&quot; in API response:
+                        </p>
+                        <ul className="mt-1 space-y-1">
+                          <li>
+                            In Active: {rawApiResponse?.active?.find((c: any) => c.code === debugCodeInput.toUpperCase() || c.id === debugCodeInput) ? '✅ Found' : '❌ Not found'}
+                          </li>
+                          <li>
+                            In Used: {rawApiResponse?.used?.find((c: any) => c.code === debugCodeInput.toUpperCase() || c.id === debugCodeInput) ? '✅ Found' : '❌ Not found'}
+                          </li>
+                          <li>
+                            In Inactive: {rawApiResponse?.inactive?.find((c: any) => c.code === debugCodeInput.toUpperCase() || c.id === debugCodeInput) ? '✅ Found' : '❌ Not found'}
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {debugData && (
                   <div className="space-y-4">
                     <div className="bg-sage-light/20 border border-sage-dark/20 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold text-charcoal mb-2">Debug Information</h4>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-charcoal">Debug Information</h4>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
+                            alert('Copied to clipboard!');
+                          }}
+                          className="px-3 py-1 text-xs bg-dark-sage text-white rounded hover:bg-dark-sage/80 transition-colors"
+                        >
+                          Copy
+                        </button>
+                      </div>
                       <pre className="text-xs bg-white p-3 rounded border border-sand overflow-x-auto max-h-96 overflow-y-auto">
                         {JSON.stringify(debugData, null, 2)}
                       </pre>

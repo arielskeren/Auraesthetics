@@ -276,10 +276,27 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
+    // Include diagnostic counts in response to help track missing codes
+    const diagnostics = {
+      totalFetchedFromDb: normalizedCodes.length,
+      totalCategorized: safeActive.length + used.length + inactive.length,
+      activeCount: safeActive.length,
+      usedCount: used.length,
+      inactiveCount: inactive.length,
+      // If any codes were lost in categorization, this will be non-zero
+      missingCodes: normalizedCodes.length - (safeActive.length + used.length + inactive.length),
+    };
+    
+    // Log warning if codes were lost
+    if (diagnostics.missingCodes > 0) {
+      console.error('[CRITICAL] Some codes were lost during categorization!', diagnostics);
+    }
+
     return NextResponse.json({ 
       active: cleanResponse(safeActive),
       used: cleanResponse(used),
       inactive: cleanResponse(inactive),
+      _diagnostics: diagnostics,
     });
   } catch (error: any) {
     console.error('[Discount Codes API] Error:', error);
