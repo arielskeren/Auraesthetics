@@ -204,10 +204,12 @@ export async function GET(request: NextRequest) {
       const isInactive = isCodeInactive(code);
       const isUsed = code.used === true || code.used === 't';
       
-      // DEBUG: Log ALL codes with is_active issues to track categorization
+      // DEBUG: Log ALL codes with is_active = false to track categorization
       const rawIsActive = code.is_active;
       const normalizedCheck = normalizeIsActive(rawIsActive);
-      if (!normalizedCheck || rawIsActive === false || code._original_is_active === false) {
+      
+      // Always log codes that should be inactive
+      if (rawIsActive === false || code._original_is_active === false || !normalizedCheck) {
         console.log(`[CRITICAL DEBUG] Code ${code.code} (${code.id}) categorization:`, {
           raw_is_active: rawIsActive,
           raw_is_active_type: typeof rawIsActive,
@@ -215,13 +217,18 @@ export async function GET(request: NextRequest) {
           isCodeInactive_result: isInactive,
           original_is_active: code._original_is_active,
           isUsed,
-          willGoTo: isInactive ? (isUsed ? 'used' : 'inactive') : 'ACTIVE (ERROR!)'
+          willGoTo: isInactive ? (isUsed ? 'used' : 'inactive') : 'ACTIVE (ERROR!)',
+          code_is_active_value: code.is_active,
+          code_is_active_type: typeof code.is_active
         });
       }
       
       // ABSOLUTE FIRST CHECK: If code is inactive, route it immediately
       // This MUST happen before any other categorization logic
-      if (isInactive) {
+      // Double-check with explicit false check as well
+      const explicitlyInactive = code.is_active === false || code._original_is_active === false || !normalizeIsActive(code.is_active);
+      
+      if (isInactive || explicitlyInactive) {
         // Inactive codes go to inactive section UNLESS they're used
         // Used codes go to used section regardless of active status
         if (isUsed) {
@@ -229,7 +236,7 @@ export async function GET(request: NextRequest) {
           console.log(`[DEBUG] Code ${code.code} added to USED (was inactive but used)`);
         } else {
           inactive.push(code);
-          console.log(`[DEBUG] Code ${code.code} added to INACTIVE`);
+          console.log(`[DEBUG] Code ${code.code} added to INACTIVE (isInactive=${isInactive}, explicitlyInactive=${explicitlyInactive})`);
         }
         return; // CRITICAL: Skip ALL other logic for this code
       }
@@ -263,14 +270,21 @@ export async function GET(request: NextRequest) {
         inactive.push(code);
       } else {
         // Active codes: is_active = true, not used, not expired
-        // CRITICAL: Triple-check using utility function before adding to active
+        // CRITICAL: Triple-check using utility function AND explicit false check before adding to active
         // This catches any edge cases the first check might have missed
-        if (isCodeInactive(code)) {
+        const stillInactive = isCodeInactive(code) || 
+                              code.is_active === false || 
+                              code._original_is_active === false ||
+                              !normalizeIsActive(code.is_active);
+        
+        if (stillInactive) {
           console.error(`[CRITICAL ERROR] Code ${code.code} (${code.id}) has is_active=false but reached active section! Adding to inactive instead.`, {
             is_active: code.is_active,
             is_active_type: typeof code.is_active,
             original_is_active: code._original_is_active,
             isCodeInactive_check: isCodeInactive(code),
+            normalizeIsActive_check: normalizeIsActive(code.is_active),
+            stillInactive,
             isUsed,
             isExpired
           });
@@ -282,8 +296,16 @@ export async function GET(request: NextRequest) {
     });
     
     // Clean up debug fields before sending response
+    // But keep _original_is_active temporarily for debugging inactive codes
     const cleanResponse = (codes: any[]) => {
-      return codes.map(({ _original_is_active, ...code }) => code);
+      return codes.map((code) => {
+        const { _original_is_active, ...rest } = code;
+        // Include original value if it differs from normalized (helps debug)
+        if (_original_is_active !== code.is_active) {
+          return { ...rest, _debug_original_is_active: _original_is_active };
+        }
+        return rest;
+      });
     };
 
     // Debug logging - only in development
