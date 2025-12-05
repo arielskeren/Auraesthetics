@@ -106,7 +106,43 @@ export async function GET(request: NextRequest) {
       WHERE (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
       ORDER BY created_at DESC
     `;
-    const rawCodes = normalizeRows(codesResult);
+    let rawCodes = normalizeRows(codesResult);
+    
+    // FIX: Neon connection pooling can cause some codes to be missed in bulk queries
+    // Check allCodesInDb for any one_time codes that weren't returned by the main query
+    const rawCodeIds = new Set(rawCodes.map((c: any) => c.id));
+    const missingOneTimeCodes = allCodesInDb.filter((c: any) => {
+      const isOneTimeCode = c.code_type === 'one_time' || (c.code_type === null && c.customer_id);
+      const notInRawCodes = !rawCodeIds.has(c.id);
+      return isOneTimeCode && notInRawCodes;
+    });
+    
+    // Fetch full details for any missing codes and add them
+    if (missingOneTimeCodes.length > 0) {
+      console.log('[Discount Codes API] Found missing one-time codes, fetching individually:', 
+        missingOneTimeCodes.map((c: any) => c.code));
+      
+      for (const missingCode of missingOneTimeCodes) {
+        const fullCodeResult = await sql`
+          SELECT 
+            id, code, code_type, customer_id, discount_type, discount_value, discount_cap,
+            used, used_at, expires_at, is_active, created_at, created_by
+          FROM discount_codes
+          WHERE id = ${missingCode.id}
+          LIMIT 1
+        `;
+        const fullCode = normalizeRows(fullCodeResult)[0];
+        if (fullCode) {
+          rawCodes.push(fullCode);
+          console.log('[Discount Codes API] Added missing code:', fullCode.code);
+        }
+      }
+      
+      // Re-sort by created_at DESC after adding missing codes
+      rawCodes.sort((a: any, b: any) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    }
     
     // DIAGNOSTIC: Check if the missing code exists with the expected values
     const missingCodeId = 'e97bd07b-e5fa-41bf-a501-c8b89d4091fd';
@@ -498,6 +534,8 @@ export async function GET(request: NextRequest) {
         rawCodeTypeInfo: rawCodeTypeResult,
         inRawCodes: rawCodes.some((c: any) => c.id === missingCodeId),
       } : null,
+      // Codes that were recovered from connection pooling issues
+      recoveredCodes: missingOneTimeCodes.map((c: any) => c.code),
     };
     
     // Log warning if codes were lost
