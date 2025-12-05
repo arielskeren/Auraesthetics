@@ -33,7 +33,8 @@ interface Booking {
   refund_date?: string | null;
   refunds?: Array<{
     id: string;
-    stripe_refund_id: string;
+    stripe_refund_id?: string;
+    magicpay_refund_id?: string;
     amount_cents: number;
     requested_amount_cents?: number | null;
     reason: string | null;
@@ -1118,9 +1119,9 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                                 <strong>Reason:</strong> {refund.reason}
                               </p>
                             )}
-                            {refund.stripe_refund_id && (
+                            {(refund.stripe_refund_id || refund.magicpay_refund_id) && (
                               <p className="text-xs text-yellow-800 font-mono break-all">
-                                <strong>Refund ID:</strong> {refund.stripe_refund_id}
+                                <strong>Refund ID:</strong> {refund.magicpay_refund_id || refund.stripe_refund_id}
                               </p>
                             )}
                             {refund.status && (

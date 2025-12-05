@@ -8,6 +8,19 @@ Migrations should be run manually against the Neon database using the Neon conso
 
 ## Migration Scripts
 
+### add-magicpay-columns.sql
+- **Purpose**: Add columns to support MagicPay payment gateway
+- **Changes**:
+  - `customers.magicpay_customer_vault_id` - For stored payment methods
+  - `payments.magicpay_transaction_id` - MagicPay transaction reference
+  - `payments.magicpay_auth_code` - Authorization code
+  - `payments.payment_provider` - Track which gateway was used (stripe/magicpay)
+  - `bookings.magicpay_transaction_id` - Transaction reference on booking
+  - `bookings.magicpay_auth_code` - Authorization code on booking
+  - Creates indexes for query performance
+- **Run Date**: Before deploying MagicPay integration
+- **Note**: Existing Stripe columns are preserved for historical data
+
 ### add-discount-codes-is-active-constraints.sql
 - **Purpose**: Adds CHECK constraint and indexes on `discount_codes.is_active` column
 - **Changes**:

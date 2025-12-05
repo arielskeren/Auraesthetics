@@ -1,46 +1,27 @@
+/**
+ * @deprecated Stripe integration has been replaced with MagicPay
+ * 
+ * This file is a stub to prevent import errors. The original implementation
+ * has been moved to scripts/archive/stripe/lib/stripeSync.ts
+ * 
+ * MagicPay does not require service/product synchronization since payments
+ * are processed with amount and description directly.
+ */
+
 import type { Service } from './types/services';
-import { upsertProduct, createStandardPrice } from './stripeClient';
 
 export type StripeSyncResult = {
   productId: string;
   priceId: string;
 };
 
-export async function syncServiceToStripe(params: {
+export async function syncServiceToStripe(_params: {
   service: Pick<Service, 'id' | 'slug' | 'name' | 'category' | 'description' | 'price'>;
   existingProductId?: string | null;
-  currency?: string; // default 'usd'
-}): Promise<StripeSyncResult> {
-  const { service, existingProductId, currency = 'usd' } = params;
-  const product = await upsertProduct({
-    id: existingProductId ?? undefined,
-    name: service.name,
-    description: service.description ?? undefined,
-    active: true,
-    metadata: {
-      service_id: service.id,
-      service_slug: service.slug,
-      category: service.category ?? '',
-    },
-  });
-
-  const unitAmount =
-    typeof service.price === 'number' && Number.isFinite(service.price)
-      ? Math.round(service.price * 100)
-      : 0;
-
-  const price = await createStandardPrice({
-    productId: product.id,
-    unitAmount,
-    currency,
-    nickname: `Standard`,
-    metadata: {
-      service_id: service.id,
-      service_slug: service.slug,
-    },
-  });
-
-  return { productId: product.id, priceId: price.id };
+  currency?: string;
+}): Promise<never> {
+  throw new Error(
+    'Stripe sync is deprecated. MagicPay does not require product synchronization. ' +
+    'Services are charged by amount directly at payment time.'
+  );
 }
-
-

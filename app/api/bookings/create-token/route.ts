@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import Stripe from 'stripe';
 import crypto from 'crypto';
 import { rateLimit, getClientIp } from '@/app/_utils/rateLimit';
 
+// Stripe SDK - kept for historical booking verification
+// New bookings use MagicPay via /api/magicpay/charge
+import Stripe from 'stripe';
+
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-if (!STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
-}
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-10-29.clover',
-});
+const stripe = STRIPE_SECRET_KEY 
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' as any })
+  : null;
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_CLIENTS_LIST_ID =
@@ -210,6 +210,18 @@ async function upsertBrevoBookingContact(attendee: {
 const limiter = rateLimit({ windowMs: 60 * 1000, maxRequests: 10 });
 
 export async function POST(request: NextRequest) {
+  // This endpoint is deprecated for new bookings (use /api/magicpay/charge)
+  // Only kept for verifying historical Stripe bookings
+  if (!stripe) {
+    return NextResponse.json(
+      { 
+        error: 'Stripe payment verification is deprecated. Use /api/magicpay/charge for new bookings.',
+        deprecated: true,
+      },
+      { status: 410 }
+    );
+  }
+  
   // Check rate limit
   const clientIp = getClientIp(request);
   const rateLimitCheck = limiter.check(clientIp);

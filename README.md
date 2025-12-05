@@ -6,7 +6,7 @@ A modern, elegant website for Aura Wellness Aesthetics — a serene skincare stu
 
 **Design:** Complete with green color scheme and dark sage accents  
 **Services:** 17 services configured with correct pricing  
-**Booking:** Hapio + Stripe flow live (availability lock, payment, confirmation)  
+**Booking:** Hapio + MagicPay flow live (availability lock, payment, confirmation)  
 **Email:** Brevo integration active  
 **Dev Server:** Running at http://localhost:5555
 
@@ -15,7 +15,7 @@ A modern, elegant website for Aura Wellness Aesthetics — a serene skincare stu
 - ✅ 17 services with detailed treatment information
 - ✅ Responsive design with bohemian aesthetic + green accents
 - ✅ Email capture with Brevo integration
-- ✅ Booking system (Hapio services + Stripe webhooks)
+- ✅ Booking system (Hapio services + MagicPay payments)
 - ✅ Fast, modern Next.js architecture
 
 ## 🛠 Tech Stack
@@ -47,9 +47,14 @@ HAPIO_API_TOKEN=your_hapio_api_token
 HAPIO_BASE_URL=https://eu-central-1.hapio.net/v1
 HAPIO_SECRET=your_hapio_webhook_secret
 
-# Stripe
-STRIPE_SECRET_KEY=sk_live_...
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+# MagicPay Payment Gateway
+MAGICPAY_API_SECURITY_KEY=your_magicpay_security_key
+NEXT_PUBLIC_MAGICPAY_TOKENIZATION_KEY=your_magicpay_tokenization_key
+MAGICPAY_MODE=test  # "test" or "live"
+
+# Stripe (ARCHIVED - kept for historical transaction reference only)
+# STRIPE_SECRET_KEY=sk_live_...
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 
 # Outlook Calendar Sync
 OUTLOOK_CLIENT_ID=your_azure_app_id
@@ -106,11 +111,12 @@ The site is deployed to Vercel and automatically updates on push to `main` branc
 ## 📅 Booking Integration
 
 - **Provider:** Hapio (services/resources/locations mapped in `app/_content/hapio-service-map.json`)
-- **Payment:** Stripe (PaymentIntents + webhooks)
-- **Workflow:** Availability → temporary booking lock → payment → Hapio confirm/cancel via webhooks
-- **Webhooks:** `/api/webhooks/stripe` (Stripe) and `/api/webhooks/hapio` (Hapio booking events)
+- **Payment:** MagicPay (Collect.js inline tokenization + Customer Vault)
+- **Workflow:** Availability → temporary booking lock → Collect.js tokenization → MagicPay charge → Hapio confirm
+- **API:** `/api/magicpay/charge` (payments) and `/api/webhooks/hapio` (Hapio booking events)
 - **Management:** Admin dashboard uses Hapio IDs; legacy Cal.com data archived in `docs/archive/cal-com/`
 - **Calendar Sync:** OAuth once via `/api/auth/outlook/start`, tokens stored in Postgres (`integration_tokens`), events created/cancelled automatically, and Outlook busy blocks removed from availability.
+- **Archived:** Stripe integration code archived in `scripts/archive/stripe/` for historical reference.
 
 ## 💻 Project Structure
 

@@ -231,7 +231,7 @@ ${generateEmailHeader(styles)}
           <tr>
             <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg};">
               <p style="margin: 0; ${styles.xsmallText} font-style: italic; text-align: center; color: ${EMAIL_STYLES.colors.secondary};">
-                <strong>Note:</strong> You will receive a separate payment receipt email from Stripe with your official receipt.
+                <strong>Note:</strong> Your payment has been securely processed. This email serves as your booking confirmation.
               </p>
             </td>
           </tr>

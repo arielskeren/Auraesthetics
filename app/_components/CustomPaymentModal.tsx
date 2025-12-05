@@ -1,19 +1,56 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
-import {
-  Elements,
-  CardElement,
-  useStripe,
-  useElements,
-} from '@stripe/react-stripe-js';
+import { X, Loader2, CheckCircle2, AlertCircle, CreditCard, Lock } from 'lucide-react';
+import Script from 'next/script';
 
 import Button from './Button';
 import { useBodyScrollLock } from '../_hooks/useBodyScrollLock';
-// Removed getServicePhotoPaths import - now using only blob storage image_url
+
+// Declare CollectJS global type
+declare global {
+  interface Window {
+    CollectJS?: {
+      configure: (config: CollectJSConfig) => void;
+      startPaymentRequest: () => void;
+    };
+  }
+}
+
+interface CollectJSConfig {
+  variant: 'inline';
+  paymentSelector?: string;
+  paymentType?: 'cc';
+  callback: (response: CollectJSResponse) => void;
+  validationCallback?: (field: string, valid: boolean, message: string) => void;
+  timeoutDuration?: number;
+  timeoutCallback?: () => void;
+  fieldsAvailableCallback?: () => void;
+  customCss?: Record<string, string>;
+  focusCss?: Record<string, string>;
+  invalidCss?: Record<string, string>;
+  validCss?: Record<string, string>;
+  placeholderCss?: Record<string, string>;
+  fields?: {
+    ccnumber?: { placeholder?: string };
+    ccexp?: { placeholder?: string };
+    cvv?: { placeholder?: string };
+  };
+}
+
+interface CollectJSResponse {
+  token?: string;
+  card?: {
+    number?: string;
+    type?: string;
+    exp?: string;
+    bin?: string;
+    hash?: string;
+  };
+  check?: any;
+  wallet?: any;
+}
 
 type PaymentType = 'full' | 'deposit';
 
@@ -34,6 +71,14 @@ interface ServiceSummary {
   image_url?: string | null;
 }
 
+interface PaymentSuccessPayload {
+  transactionId: string;
+  paymentType: PaymentType;
+  amountPaid: number;
+  discountCode?: string;
+  contact: ContactDetails;
+}
+
 interface ModernPaymentSectionProps {
   service: ServiceSummary & { summary: string; category: string };
   onClose: () => void;
@@ -48,17 +93,11 @@ interface ModernPaymentSectionProps {
     resource: string | null;
   } | null;
   hapioBookingReference: string | null;
+  collectJsReady: boolean;
 }
 
-interface PaymentSuccessPayload {
-  paymentIntentId: string;
-  paymentType: PaymentType;
-  amountPaid: number;
-  discountCode?: string;
-  contact: ContactDetails;
-}
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+// Get tokenization key from environment
+const TOKENIZATION_KEY = process.env.NEXT_PUBLIC_MAGICPAY_TOKENIZATION_KEY;
 
 function formatPhoneInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 15);
@@ -117,10 +156,8 @@ function ModernPaymentSection({
   primaryPhoto,
   slotSummary,
   hapioBookingReference,
+  collectJsReady,
 }: ModernPaymentSectionProps) {
-  const stripe = useStripe();
-  const elements = useElements();
-
   const [paymentType, setPaymentType] = useState<PaymentType>('full');
   const [discountCode, setDiscountCode] = useState('');
   const [discountValidation, setDiscountValidation] = useState<{
@@ -136,7 +173,17 @@ function ModernPaymentSection({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [depositAcknowledged, setDepositAcknowledged] = useState(false);
-  const [cardComplete, setCardComplete] = useState(false);
+  
+  // Card field states
+  const [fieldsReady, setFieldsReady] = useState(false);
+  const [cardFieldsValid, setCardFieldsValid] = useState({
+    ccnumber: false,
+    ccexp: false,
+    cvv: false,
+  });
+  const [cardFieldErrors, setCardFieldErrors] = useState<Record<string, string>>({});
+  const [paymentToken, setPaymentToken] = useState<string | null>(null);
+  
   const [contactDetails, setContactDetails] = useState<ContactDetails>({
     firstName: '',
     lastName: '',
@@ -144,6 +191,11 @@ function ModernPaymentSection({
     phone: '',
     notes: '',
   });
+  
+  const collectJsConfigured = useRef(false);
+  const tokenizationInProgress = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  
   useEffect(() => {
     onContactChange(contactDetails);
   }, [contactDetails, onContactChange]);
@@ -160,6 +212,92 @@ function ModernPaymentSection({
       setDepositAcknowledged(false);
     }
   }, [paymentType]);
+
+  // Configure Collect.js when ready
+  useEffect(() => {
+    if (!collectJsReady || collectJsConfigured.current || !window.CollectJS) {
+      return;
+    }
+    
+    collectJsConfigured.current = true;
+    
+    // Brand colors for Collect.js field styling
+    const customCss = {
+      'font-family': 'Inter, system-ui, sans-serif',
+      'font-size': '16px',
+      'color': '#3F3A37',
+      'background-color': 'transparent',
+      'border': 'none',
+      'padding': '0',
+      'outline': 'none',
+    };
+    
+    const focusCss = {
+      'outline': 'none',
+    };
+    
+    const invalidCss = {
+      'color': '#EF4444',
+    };
+    
+    const validCss = {
+      'color': '#3F3A37',
+    };
+    
+    const placeholderCss = {
+      'color': '#9CA3AF',
+    };
+    
+    window.CollectJS.configure({
+      variant: 'inline',
+      paymentType: 'cc',
+      callback: (response) => {
+        tokenizationInProgress.current = false;
+        if (response.token) {
+          setPaymentToken(response.token);
+          // Submit the form programmatically after getting token
+          if (formRef.current) {
+            formRef.current.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          }
+        } else {
+          setError('Failed to process card. Please check your details and try again.');
+          setProcessing(false);
+        }
+      },
+      validationCallback: (field, valid, message) => {
+        setCardFieldsValid(prev => ({ ...prev, [field]: valid }));
+        setCardFieldErrors(prev => {
+          if (valid) {
+            const next = { ...prev };
+            delete next[field];
+            return next;
+          }
+          return { ...prev, [field]: message };
+        });
+      },
+      timeoutDuration: 15000,
+      timeoutCallback: () => {
+        tokenizationInProgress.current = false;
+        setError('Payment service timed out. Please check your connection and try again.');
+        setProcessing(false);
+      },
+      fieldsAvailableCallback: () => {
+        setFieldsReady(true);
+      },
+      customCss,
+      focusCss,
+      invalidCss,
+      validCss,
+      placeholderCss,
+      fields: {
+        ccnumber: { placeholder: '4111 1111 1111 1111' },
+        ccexp: { placeholder: 'MM/YY' },
+        cvv: { placeholder: 'CVV' },
+      },
+    });
+  }, [collectJsReady]);
+
+  const cardComplete = cardFieldsValid.ccnumber && cardFieldsValid.ccexp && cardFieldsValid.cvv;
 
   const validateContactDetails = useCallback(() => {
     const errors: Partial<Record<keyof ContactDetails, string>> = {};
@@ -194,19 +332,17 @@ function ModernPaymentSection({
       return;
     }
 
-    // For customer-specific codes, require email before validation
-    // We'll check this on the server, but also validate here for better UX
     if (!contactDetails.email?.trim() || !isValidEmail(contactDetails.email)) {
-        setDiscountValidation({
-          valid: false,
-          discountAmount: 0,
-          finalAmount: baseAmount,
-          originalAmount: baseAmount,
-          isOneTime: false,
-          requiresEmail: true,
-        });
-        setError('Please enter your email address to verify your eligibility for discount codes');
-        return;
+      setDiscountValidation({
+        valid: false,
+        discountAmount: 0,
+        finalAmount: baseAmount,
+        originalAmount: baseAmount,
+        isOneTime: false,
+        requiresEmail: true,
+      });
+      setError('Please enter your email address to verify your eligibility for discount codes');
+      return;
     }
 
     setValidatingDiscount(true);
@@ -229,10 +365,6 @@ function ModernPaymentSection({
       const data = await response.json();
       if (data.valid) {
         setDiscountValidation(data);
-        // If it's a one-time code, show message about email verification
-        if (data.isOneTime && data.requiresEmail === false) {
-          // Email was verified - no additional message needed
-        }
       } else {
         setDiscountValidation({
           valid: false,
@@ -255,8 +387,79 @@ function ModernPaymentSection({
   const handlePayment = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (!stripe || !elements) {
-        setError('Stripe is not loaded. Please refresh the page.');
+      
+      // If we have a token, submit to backend
+      if (paymentToken) {
+        if (!validateContactDetails()) {
+          setError('Please correct the highlighted contact information.');
+          return;
+        }
+
+        if (paymentType === 'deposit' && !depositAcknowledged) {
+          setError('Please acknowledge that the remaining balance will be due at the appointment.');
+          return;
+        }
+
+        const trimmedContact: ContactDetails = {
+          firstName: contactDetails.firstName.trim(),
+          lastName: contactDetails.lastName.trim(),
+          email: contactDetails.email.trim(),
+          phone: normalizePhoneForSubmit(contactDetails.phone),
+          notes: contactDetails.notes.trim(),
+        };
+
+        if (!pendingBooking?.hapioBookingId) {
+          setError('Unable to locate booking reference. Please close and reselect your time.');
+          return;
+        }
+
+        setProcessing(true);
+        setError(null);
+
+        try {
+          const chargeResponse = await fetch('/api/magicpay/charge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentToken,
+              serviceSlug: service.slug ?? deriveServiceSlug(service),
+              slotStart: pendingBooking.startsAt,
+              slotEnd: pendingBooking.endsAt,
+              timezone: pendingBooking.timezone,
+              bookingId: pendingBooking.hapioBookingId,
+              amountCents: Math.max(1, Math.round(amountDueToday * 100)),
+              discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
+              customer: trimmedContact,
+              paymentType,
+            }),
+          });
+
+          const chargeResult = await chargeResponse.json();
+
+          if (!chargeResponse.ok || !chargeResult.success) {
+            throw new Error(chargeResult.error || 'Payment failed');
+          }
+
+          setSuccess(true);
+          onSuccess({
+            transactionId: chargeResult.transactionId,
+            paymentType,
+            amountPaid: amountDueToday,
+            discountCode: discountValidation?.valid ? discountCode.toUpperCase() : undefined,
+            contact: trimmedContact,
+          });
+        } catch (err: any) {
+          setError(err.message || 'Payment failed. Please try again.');
+          setPaymentToken(null); // Clear token to allow retry
+        } finally {
+          setProcessing(false);
+        }
+        return;
+      }
+      
+      // No token yet - trigger Collect.js tokenization
+      if (!fieldsReady || !window.CollectJS) {
+        setError('Payment form is not ready. Please wait a moment and try again.');
         return;
       }
 
@@ -270,102 +473,48 @@ function ModernPaymentSection({
         return;
       }
 
-      const trimmedContact: ContactDetails = {
-        firstName: contactDetails.firstName.trim(),
-        lastName: contactDetails.lastName.trim(),
-        email: contactDetails.email.trim(),
-        phone: normalizePhoneForSubmit(contactDetails.phone),
-        notes: contactDetails.notes.trim(),
-      };
+      if (!cardComplete) {
+        setError('Please enter valid card details.');
+        return;
+      }
 
       if (!pendingBooking?.hapioBookingId) {
         setError('Unable to locate booking reference. Please close and reselect your time.');
         return;
       }
 
+      // Prevent double submission
+      if (tokenizationInProgress.current) {
+        return;
+      }
+
+      tokenizationInProgress.current = true;
       setProcessing(true);
       setError(null);
 
+      // Trigger Collect.js tokenization
       try {
-        const intentResponse = await fetch('/api/payments/create-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            serviceSlug: service.slug ?? deriveServiceSlug(service),
-            slotStart: pendingBooking.startsAt,
-            slotEnd: pendingBooking.endsAt,
-            timezone: pendingBooking.timezone,
-            email: trimmedContact.email,
-            amountCents: Math.max(1, Math.round(amountDueToday * 100)),
-            bookingId: pendingBooking.hapioBookingId,
-            discountCode: discountValidation?.valid ? discountCode.toUpperCase() : null,
-          }),
-        });
-
-        if (!intentResponse.ok) {
-          const errorData = await intentResponse.json();
-          throw new Error(errorData.error || 'Failed to create payment intent');
-        }
-
-        const intentJson = await intentResponse.json();
-        const { clientSecret, paymentIntentId } = intentJson;
-
-        const cardElement = elements.getElement(CardElement);
-        if (!cardElement) {
-          throw new Error('Card element not found');
-        }
-
-        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-          payment_method: {
-            card: cardElement,
-            billing_details: {
-              name: `${trimmedContact.firstName} ${trimmedContact.lastName}`.trim(),
-              email: trimmedContact.email,
-              phone: trimmedContact.phone || undefined,
-            },
-          },
-        });
-
-        if (confirmError) {
-          throw new Error(confirmError.message || 'Payment failed');
-        }
-
-        if (
-          paymentIntent?.status === 'succeeded' ||
-          paymentIntent?.status === 'requires_capture' ||
-          paymentIntent?.status === 'processing'
-        ) {
-          setSuccess(true);
-          onSuccess({
-            paymentIntentId,
-            paymentType,
-            amountPaid: amountDueToday,
-            discountCode: discountValidation?.valid ? discountCode.toUpperCase() : undefined,
-            contact: trimmedContact,
-          });
-        } else {
-          throw new Error(`Payment status: ${paymentIntent?.status}. Please try again.`);
-        }
-      } catch (err: any) {
-        setError(err.message || 'Payment failed. Please try again.');
-      } finally {
+        window.CollectJS!.startPaymentRequest();
+      } catch (e) {
+        tokenizationInProgress.current = false;
+        setError('Failed to start payment process. Please try again.');
         setProcessing(false);
       }
     },
     [
-      stripe,
-      elements,
+      paymentToken,
       validateContactDetails,
       paymentType,
       depositAcknowledged,
       contactDetails,
       service,
-      baseAmount,
       discountValidation,
       discountCode,
       amountDueToday,
       pendingBooking,
       onSuccess,
+      fieldsReady,
+      cardComplete,
     ]
   );
 
@@ -375,7 +524,7 @@ function ModernPaymentSection({
   const disableSubmit =
     processing ||
     success ||
-    !stripe ||
+    !fieldsReady ||
     !cardComplete ||
     !contactInfoReady ||
     (paymentType === 'deposit' && !depositAcknowledged) ||
@@ -383,7 +532,7 @@ function ModernPaymentSection({
     !pendingBooking?.hapioBookingId;
 
   return (
-    <form onSubmit={handlePayment} className="space-y-4">
+    <form ref={formRef} onSubmit={handlePayment} className="space-y-4">
       {/* Top Section: Client Info and Service Info */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Left: Client Information */}
@@ -675,26 +824,68 @@ function ModernPaymentSection({
               )}
             </div>
 
+            {/* Card Information - Collect.js Inline Fields */}
             <div>
               <label className="block text-xs sm:text-sm font-medium text-charcoal mb-2">
-                Card Information
+                <span className="flex items-center gap-2">
+                  <CreditCard size={16} />
+                  Card Information
+                  <Lock size={12} className="text-green-600" />
+                </span>
               </label>
-              <div className="p-3 border border-sage-dark rounded-lg bg-white">
-                <CardElement
-                  options={{
-                    style: {
-                      base: {
-                        fontSize: '16px',
-                        color: '#3F3A37',
-                        fontFamily: 'Inter, system-ui, sans-serif',
-                        '::placeholder': { color: '#9CA3AF' },
-                      },
-                      invalid: { color: '#EF4444', iconColor: '#EF4444' },
-                    },
-                  }}
-                  onChange={(event) => setCardComplete(event.complete)}
-                />
+              
+              {!fieldsReady && (
+                <div className="p-4 border border-sage-dark rounded-lg bg-sand/10 flex items-center justify-center gap-2 text-sm text-warm-gray">
+                  <Loader2 className="animate-spin" size={16} />
+                  Loading secure payment fields...
+                </div>
+              )}
+              
+              <div className={`space-y-3 ${!fieldsReady ? 'hidden' : ''}`}>
+                {/* Card Number */}
+                <div>
+                  <div 
+                    id="ccnumber" 
+                    className={`p-3 border rounded-lg bg-white min-h-[44px] ${
+                      cardFieldErrors.ccnumber ? 'border-red-400' : 'border-sage-dark'
+                    } focus-within:ring-2 focus-within:ring-dark-sage`}
+                  />
+                  {cardFieldErrors.ccnumber && (
+                    <p className="text-xs text-red-600 mt-1">{cardFieldErrors.ccnumber}</p>
+                  )}
+                </div>
+                
+                {/* Exp and CVV side by side */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div 
+                      id="ccexp" 
+                      className={`p-3 border rounded-lg bg-white min-h-[44px] ${
+                        cardFieldErrors.ccexp ? 'border-red-400' : 'border-sage-dark'
+                      } focus-within:ring-2 focus-within:ring-dark-sage`}
+                    />
+                    {cardFieldErrors.ccexp && (
+                      <p className="text-xs text-red-600 mt-1">{cardFieldErrors.ccexp}</p>
+                    )}
+                  </div>
+                  <div>
+                    <div 
+                      id="cvv" 
+                      className={`p-3 border rounded-lg bg-white min-h-[44px] ${
+                        cardFieldErrors.cvv ? 'border-red-400' : 'border-sage-dark'
+                      } focus-within:ring-2 focus-within:ring-dark-sage`}
+                    />
+                    {cardFieldErrors.cvv && (
+                      <p className="text-xs text-red-600 mt-1">{cardFieldErrors.cvv}</p>
+                    )}
+                  </div>
+                </div>
               </div>
+              
+              <p className="text-[10px] text-warm-gray/70 mt-2 flex items-center gap-1">
+                <Lock size={10} />
+                Your card details are securely processed. We never store your card number.
+              </p>
             </div>
           </div>
 
@@ -764,7 +955,7 @@ function ModernPaymentSection({
             {success && (
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm flex items-center gap-2">
                 <CheckCircle2 size={16} />
-                Payment successful! Scheduler unlocking…
+                Payment successful! Your appointment is confirmed.
               </div>
             )}
 
@@ -783,12 +974,16 @@ function ModernPaymentSection({
                 variant={disableSubmit ? 'disabled' : 'primary'}
                 tooltip={
                   disableSubmit && !success
-                    ? !cardComplete
+                    ? !fieldsReady
+                      ? 'Loading payment fields...'
+                      : !cardComplete
                       ? 'Enter your card details'
                       : !contactInfoReady
                       ? 'Complete your contact info'
                       : paymentType === 'deposit' && !depositAcknowledged
                       ? 'Acknowledge the remaining balance'
+                      : !acceptedTerms
+                      ? 'Accept the terms to continue'
                       : undefined
                     : undefined
                 }
@@ -936,41 +1131,23 @@ export default function CustomPaymentModal({
 
   const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessPayload | null>(null);
   const [contactPrefill, setContactPrefill] = useState<ContactDetails | null>(null);
+  const [collectJsReady, setCollectJsReady] = useState(false);
 
-  const serviceSlug = deriveServiceSlug(service);
   // ONLY use image_url from blob storage - no fallback to public folder
   const primaryPhoto = useMemo(() => {
     return service?.image_url || null;
   }, [service?.image_url]);
 
-  const handlePaymentSuccess = useCallback(async (payload: PaymentSuccessPayload) => {
+  const handlePaymentSuccess = useCallback((payload: PaymentSuccessPayload) => {
     setPaymentSuccess(payload);
     setContactPrefill(payload.contact);
-    try {
-      if (pendingBooking?.hapioBookingId) {
-        const resp = await fetch('/api/bookings/finalize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            paymentIntentId: payload.paymentIntentId,
-            bookingId: pendingBooking.hapioBookingId,
-          }),
-        });
-        if (!resp.ok) {
-          // Non-blocking: show console error, UI already shows success
-          // eslint-disable-next-line no-console
-          console.error('Finalize booking failed', await resp.json().catch(() => ({})));
-        }
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Finalize booking error', e);
-    }
-  }, [pendingBooking?.hapioBookingId]);
+    // Note: The charge endpoint handles all finalization now
+  }, []);
 
   const handleClose = useCallback(() => {
     setPaymentSuccess(null);
     setContactPrefill(null);
+    setCollectJsReady(false);
     onClose();
   }, [onClose]);
 
@@ -999,6 +1176,7 @@ export default function CustomPaymentModal({
       resource: selectedSlot.resources?.[0]?.name ?? null,
     };
   }, [selectedSlot]);
+  
   const hapioBookingReference = pendingBooking?.hapioBookingId ?? null;
 
   if (!service) {
@@ -1009,6 +1187,17 @@ export default function CustomPaymentModal({
     <AnimatePresence>
       {isOpen && (
         <>
+          {/* Load Collect.js script */}
+          {TOKENIZATION_KEY && (
+            <Script
+              src="https://secure.magicpaygateway.com/token/Collect.js"
+              data-tokenization-key={TOKENIZATION_KEY}
+              data-variant="inline"
+              onReady={() => setCollectJsReady(true)}
+              onError={() => console.error('Failed to load Collect.js')}
+            />
+          )}
+          
           <motion.div
             className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-50"
             initial={{ opacity: 0 }}
@@ -1035,82 +1224,81 @@ export default function CustomPaymentModal({
 
               <div className="px-4 pt-6 pb-5 sm:px-8 sm:pb-8">
                 {!paymentSuccess ? (
-                  <Elements stripe={stripePromise}>
-                    <ModernPaymentSection
-                      service={service}
-                      onSuccess={handlePaymentSuccess}
-                      onClose={handleClose}
-                      onContactChange={setContactPrefill}
-                      pendingBooking={pendingBooking}
-                      primaryPhoto={primaryPhoto}
-                      slotSummary={slotSummary}
-                      hapioBookingReference={hapioBookingReference}
-                    />
-                  </Elements>
+                  <ModernPaymentSection
+                    service={service}
+                    onSuccess={handlePaymentSuccess}
+                    onClose={handleClose}
+                    onContactChange={setContactPrefill}
+                    pendingBooking={pendingBooking}
+                    primaryPhoto={primaryPhoto}
+                    slotSummary={slotSummary}
+                    hapioBookingReference={hapioBookingReference}
+                    collectJsReady={collectJsReady}
+                  />
                 ) : (
                   <div className="space-y-4">
                     <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-5 text-sm text-charcoal">
-                          <div className="flex items-start gap-3">
-                            <div className="mt-0.5">
-                              <CheckCircle2 className="h-5 w-5 text-green-600" />
-                            </div>
-                            <div className="space-y-2">
-                              <div>
-                                <p className="text-base font-semibold text-charcoal">Payment received</p>
-                                <p className="text-sm text-warm-gray">
-                                  A confirmation email is on the way. We’ll share all visit details and reminders.
-                                </p>
-                              </div>
-                              <div className="grid gap-2 text-xs sm:text-sm text-charcoal">
-                                <span className="font-mono break-all">
-                                  Stripe reference: {paymentSuccess.paymentIntentId}
-                                </span>
-                                {paymentSuccess.discountCode && (
-                                  <span>
-                                    Discount applied: <span className="font-medium">{paymentSuccess.discountCode}</span>
-                                  </span>
-                                )}
-                                {contactPrefill?.email && (
-                                  <span>
-                                    Receipt sent to <span className="font-medium">{contactPrefill.email}</span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-base font-semibold text-charcoal">Payment received</p>
+                            <p className="text-sm text-warm-gray">
+                              A confirmation email is on the way. We&apos;ll share all visit details and reminders.
+                            </p>
+                          </div>
+                          <div className="grid gap-2 text-xs sm:text-sm text-charcoal">
+                            <span className="font-mono break-all">
+                              Payment reference: {paymentSuccess.transactionId}
+                            </span>
+                            {paymentSuccess.discountCode && (
+                              <span>
+                                Discount applied: <span className="font-medium">{paymentSuccess.discountCode}</span>
+                              </span>
+                            )}
+                            {contactPrefill?.email && (
+                              <span>
+                                Receipt sent to <span className="font-medium">{contactPrefill.email}</span>
+                              </span>
+                            )}
                           </div>
                         </div>
+                      </div>
+                    </div>
 
-                        <div className="rounded-lg border border-sand bg-white px-4 py-4 text-sm text-charcoal">
-                          <h4 className="font-semibold text-charcoal mb-2">Appointment summary</h4>
-                          <ul className="space-y-1">
-                            <li>
-                              <span className="text-warm-gray">Service:</span>{' '}
-                              <span className="font-medium">{service.name}</span>
-                            </li>
-                            {slotSummary && (
-                              <li>
-                                <span className="text-warm-gray">When:</span>{' '}
-                                <span className="font-medium">
-                                  {slotSummary.date} · {slotSummary.start}–{slotSummary.end}
-                                </span>
-                              </li>
-                            )}
-                            {hapioBookingReference && (
-                              <li>
-                                <span className="text-warm-gray">Hapio booking:</span>{' '}
-                                <span className="font-mono text-xs">{hapioBookingReference}</span>
-                              </li>
-                            )}
-                            <li>
-                              <span className="text-warm-gray">Amount paid:</span>{' '}
-                              <span className="font-medium">
-                                $
-                                {paymentSuccess.amountPaid.toFixed(2)}
-                                {paymentSuccess.paymentType === 'deposit' ? ' (deposit)' : ''}
-                              </span>
-                            </li>
-                          </ul>
-                        </div>
+                    <div className="rounded-lg border border-sand bg-white px-4 py-4 text-sm text-charcoal">
+                      <h4 className="font-semibold text-charcoal mb-2">Appointment summary</h4>
+                      <ul className="space-y-1">
+                        <li>
+                          <span className="text-warm-gray">Service:</span>{' '}
+                          <span className="font-medium">{service.name}</span>
+                        </li>
+                        {slotSummary && (
+                          <li>
+                            <span className="text-warm-gray">When:</span>{' '}
+                            <span className="font-medium">
+                              {slotSummary.date} · {slotSummary.start}–{slotSummary.end}
+                            </span>
+                          </li>
+                        )}
+                        {hapioBookingReference && (
+                          <li>
+                            <span className="text-warm-gray">Booking reference:</span>{' '}
+                            <span className="font-mono text-xs">{hapioBookingReference}</span>
+                          </li>
+                        )}
+                        <li>
+                          <span className="text-warm-gray">Amount paid:</span>{' '}
+                          <span className="font-medium">
+                            $
+                            {paymentSuccess.amountPaid.toFixed(2)}
+                            {paymentSuccess.paymentType === 'deposit' ? ' (deposit)' : ''}
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
 
                     <Button onClick={handleClose} className="w-full">
                       Done
@@ -1149,5 +1337,3 @@ type PendingBooking = {
   isTemporary: boolean;
   timezone: string | null;
 };
-
-

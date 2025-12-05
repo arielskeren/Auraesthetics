@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,9 +14,12 @@ function normalizeRows(result: any): any[] {
   return [];
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-10-29.clover',
-});
+// Stripe SDK - kept for historical booking verification
+import Stripe from 'stripe';
+
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' as any })
+  : null;
 
 // Verify booking token and return booking details
 // This endpoint can be used to validate tokens before allowing Cal.com access
@@ -36,19 +38,21 @@ export async function GET(request: NextRequest) {
 
     const sql = getSqlClient();
 
-    // Find booking by token or payment intent
+    // Find booking by token, payment intent, or transaction ID
     let booking;
     if (token) {
       const result = await sql`
-        SELECT * FROM bookings 
+        SELECT *, magicpay_transaction_id, magicpay_auth_code FROM bookings 
         WHERE metadata->>'bookingToken' = ${token}
         LIMIT 1
       `;
       booking = normalizeRows(result)[0];
     } else if (paymentIntentId) {
+      // Check if paymentIntentId is a Stripe PI ID or MagicPay transaction ID
       const result = await sql`
-        SELECT * FROM bookings 
+        SELECT *, magicpay_transaction_id, magicpay_auth_code FROM bookings 
         WHERE payment_intent_id = ${paymentIntentId}
+           OR magicpay_transaction_id = ${paymentIntentId}
         LIMIT 1
       `;
       booking = normalizeRows(result)[0];
@@ -67,13 +71,19 @@ export async function GET(request: NextRequest) {
 
     // Verify payment status
     let paymentValid = false;
-    if (booking.payment_intent_id) {
+    
+    // Check if this is a MagicPay booking
+    if (booking.magicpay_transaction_id) {
+      // MagicPay bookings are already paid (payment happens synchronously)
+      paymentValid = ['succeeded', 'paid'].includes(booking.payment_status);
+    } else if (booking.payment_intent_id && stripe) {
+      // Legacy Stripe booking - verify with Stripe
       try {
         const paymentIntent = await stripe.paymentIntents.retrieve(booking.payment_intent_id);
         const validStatuses = ['succeeded', 'requires_capture', 'processing'];
         paymentValid = validStatuses.includes(paymentIntent.status);
       } catch (error) {
-        console.error('Error verifying payment:', error);
+        console.error('Error verifying Stripe payment:', error);
       }
     }
 

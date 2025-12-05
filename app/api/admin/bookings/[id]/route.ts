@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking, ensureOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
 import { generateBookingCancellationEmail } from '@/lib/emails';
-// Note: Receipt PDF attachment removed - Stripe sends receipts automatically via email
-// when Customer emails → Successful payments / Refunds are enabled in Dashboard
+import { refund as magicpayRefund } from '@/lib/magicpayClient';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-10-29.clover',
-});
+// Stripe SDK - kept for historical booking refunds
+// New payments use MagicPay
+import Stripe from 'stripe';
+
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' as any })
+  : null;
 
 const OUTLOOK_SYNC_ENABLED = process.env.OUTLOOK_SYNC_ENABLED !== 'false';
 
@@ -583,13 +585,14 @@ export async function POST(
       let outlookError = existingOutlookMeta.error ?? null;
 
       // If booking is paid and NOT already refunded, process refund first (check both 'paid' and 'succeeded')
-      const isPaid = (bookingData.payment_status === 'paid' || bookingData.payment_status === 'succeeded') && bookingData.payment_intent_id;
+      // Check if it's a Stripe payment (has payment_intent_id and stripe is available)
+      const isPaid = (bookingData.payment_status === 'paid' || bookingData.payment_status === 'succeeded') && bookingData.payment_intent_id && stripe;
       const isAlreadyRefunded = bookingData.payment_status === 'refunded';
       if (isPaid && !isAlreadyRefunded) {
         // CRITICAL: Wrap refund logic in transaction to prevent race conditions
         await sql`BEGIN`;
         try {
-          const paymentIntent = await stripe.paymentIntents.retrieve(bookingData.payment_intent_id);
+          const paymentIntent = await stripe!.paymentIntents.retrieve(bookingData.payment_intent_id);
           
           if (paymentIntent.status === 'succeeded') {
             // CRITICAL: Use SELECT FOR UPDATE to lock payment rows and prevent race conditions
@@ -629,7 +632,7 @@ export async function POST(
             // Use remaining refundable amount (full refund on cancellation)
             const requestedRefundAmount = remainingRefundable;
             
-            const refund = await stripe.refunds.create({
+            const refund = await stripe!.refunds.create({
               payment_intent: bookingData.payment_intent_id,
               amount: requestedRefundAmount,
               reason: 'requested_by_customer',
@@ -865,7 +868,7 @@ export async function POST(
 
           // Get refund amount in dollars
           let refundAmount: number | null = null;
-          if (refundProcessed && refundId) {
+          if (refundProcessed && refundId && stripe) {
             try {
               const refund = await stripe.refunds.retrieve(refundId);
               refundAmount = refund.amount ? refund.amount / 100 : null;
@@ -918,7 +921,15 @@ export async function POST(
     }
 
     if (action === 'refund') {
-      // Process refund via Stripe
+      // Process refund via Stripe (for historical Stripe bookings)
+      // MagicPay refunds use /api/magicpay/refund
+      if (!stripe) {
+        return NextResponse.json(
+          { error: 'Stripe refunds require STRIPE_SECRET_KEY. For MagicPay bookings, use /api/magicpay/refund' },
+          { status: 400 }
+        );
+      }
+      
       const sql = getSqlClient();
       const bookingInternalId = await getBookingInternalId(sql, bookingId);
       if (!bookingInternalId) {

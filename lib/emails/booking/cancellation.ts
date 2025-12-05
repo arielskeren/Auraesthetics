@@ -15,7 +15,7 @@ export function generateBookingCancellationEmail(params: {
   refundProcessed: boolean;
   refundAmount?: number | null; // in dollars
   refundId?: string | null;
-  receiptUrl?: string | null; // Stripe receipt URL
+  receiptUrl?: string | null; // Payment receipt URL
   refundReason?: string | null; // Reason for refund
   address?: string;
   bookingId?: string; // Internal booking ID or Hapio booking ID
@@ -161,7 +161,7 @@ ${generateEmailHeader(styles)}
                       Your refund has been processed and should appear in your account within 5-10 business days, depending on your bank's processing time.
                     </p>
                     <p style="margin: ${EMAIL_STYLES.spacing.sm} 0 0 0; ${styles.xsmallText} font-style: italic;">
-                      <strong>Note:</strong> You will receive a separate refund receipt email from Stripe with your official receipt.
+                      <strong>Note:</strong> Your refund has been processed. Please allow 3-5 business days for it to appear on your statement.
                     </p>
                   </td>
                 </tr>

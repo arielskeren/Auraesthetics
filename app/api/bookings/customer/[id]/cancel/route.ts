@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSqlClient } from '@/app/_utils/db';
-import Stripe from 'stripe';
 import { cancelBooking as hapioCancelBooking } from '@/lib/hapioClient';
 import { deleteOutlookEventForBooking } from '@/lib/outlookBookingSync';
 import { sendBrevoEmail } from '@/lib/brevoClient';
 import { generateBookingCancellationEmail } from '@/lib/emails';
+import { refund as magicpayRefund } from '@/lib/magicpayClient';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-10-29.clover',
-});
+// Stripe SDK - kept for historical booking refunds
+import Stripe from 'stripe';
+
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' as any })
+  : null;
 
 function normalizeRows(result: any): any[] {
   if (Array.isArray(result)) {
@@ -35,6 +38,7 @@ export async function POST(
     const bookingResult = await sql`
       SELECT 
         id, hapio_booking_id, payment_status, payment_intent_id,
+        magicpay_transaction_id, magicpay_auth_code,
         client_email, client_name, service_name, booking_date,
         outlook_event_id, outlook_sync_status, metadata, service_id
       FROM bookings
@@ -76,10 +80,37 @@ export async function POST(
     let refundId = null;
 
     // If booking is paid, process refund
-    const isPaid = (bookingData.payment_status === 'paid' || bookingData.payment_status === 'succeeded') && bookingData.payment_intent_id;
+    // Check if it's a MagicPay booking or Stripe booking
+    const hasMagicPayTransaction = !!bookingData.magicpay_transaction_id;
+    const hasStripePayment = !!bookingData.payment_intent_id && stripe;
+    const isPaid = (bookingData.payment_status === 'paid' || bookingData.payment_status === 'succeeded') && (hasMagicPayTransaction || hasStripePayment);
     const isAlreadyRefunded = bookingData.payment_status === 'refunded';
     
-    if (isPaid && !isAlreadyRefunded) {
+    if (isPaid && !isAlreadyRefunded && hasMagicPayTransaction) {
+      // Process MagicPay refund
+      try {
+        const refundResult = await magicpayRefund({
+          transactionId: bookingData.magicpay_transaction_id,
+          orderId: bookingData.hapio_booking_id || bookingData.id,
+        });
+        
+        if (refundResult.success) {
+          refundProcessed = true;
+          refundId = refundResult.transactionId;
+          
+          // Update payment record
+          await sql`
+            UPDATE payments 
+            SET status = 'refunded', updated_at = NOW()
+            WHERE booking_id = ${bookingData.id} AND magicpay_transaction_id = ${bookingData.magicpay_transaction_id}
+          `;
+        } else {
+          console.error('[Customer Cancel] MagicPay refund failed:', refundResult.responseText);
+        }
+      } catch (error: any) {
+        console.error('[Customer Cancel] MagicPay refund processing failed:', error);
+      }
+    } else if (isPaid && !isAlreadyRefunded && hasStripePayment) {
       // Wrap refund logic in transaction
       await sql`BEGIN`;
       try {
@@ -313,7 +344,7 @@ export async function POST(
 
         // Get refund amount
         let refundAmount: number | null = null;
-        if (refundProcessed && refundId) {
+        if (refundProcessed && refundId && stripe) {
           try {
             const refund = await stripe.refunds.retrieve(refundId);
             refundAmount = refund.amount ? refund.amount / 100 : null;

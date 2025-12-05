@@ -43,8 +43,7 @@ export default function ServicesManager() {
   const [linkedHapioIds, setLinkedHapioIds] = useState<Set<string>>(new Set());
   const [deletingHapio, setDeletingHapio] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [syncingStripeAll, setSyncingStripeAll] = useState(false);
-  const [syncingStripeId, setSyncingStripeId] = useState<string | null>(null);
+  // Stripe sync removed - MagicPay does not require product synchronization
 
   useEffect(() => {
     loadServices();
@@ -282,54 +281,7 @@ export default function ServicesManager() {
     }
   };
 
-  const handleStripeSyncAll = async () => {
-    if (!confirm('This will sync all services to Stripe as Products and Prices. Continue?')) {
-      return;
-    }
-    try {
-      setSyncingStripeAll(true);
-      setError(null);
-      const response = await fetch('/api/admin/stripe/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to sync all to Stripe');
-      }
-      const data = await response.json();
-      alert(data.message || 'Synced all services to Stripe');
-    } catch (err: any) {
-      setError(err);
-      alert(`Stripe sync failed: ${err.message}`);
-    } finally {
-      setSyncingStripeAll(false);
-    }
-  };
-
-  const handleStripeSyncOne = async (serviceId: string) => {
-    try {
-      setSyncingStripeId(serviceId);
-      setError(null);
-      const response = await fetch('/api/admin/stripe/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceIds: [serviceId] }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to sync to Stripe');
-      }
-      const data = await response.json();
-      alert(data.message || 'Synced to Stripe');
-    } catch (err: any) {
-      setError(err);
-      alert(`Stripe sync failed: ${err.message}`);
-    } finally {
-      setSyncingStripeId(null);
-    }
-  };
+  // Stripe sync functions removed - MagicPay does not require product synchronization
 
   const loadHapioServices = async () => {
     try {
@@ -543,14 +495,7 @@ export default function ServicesManager() {
                 <RefreshCw className={`w-4 h-4 ${syncingAll ? 'animate-spin' : ''}`} />
                 {syncingAll ? 'Syncing All...' : 'Sync All to Hapio'}
               </button>
-              <button
-                onClick={handleStripeSyncAll}
-                disabled={syncingStripeAll}
-                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs md:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
-              >
-                <RefreshCw className={`w-4 h-4 ${syncingStripeAll ? 'animate-spin' : ''}`} />
-                {syncingStripeAll ? 'Syncing All…' : 'Sync All to Stripe'}
-              </button>
+              {/* Stripe sync button removed - MagicPay does not require product synchronization */}
             </>
           )}
           <button
@@ -897,14 +842,7 @@ export default function ServicesManager() {
                                         >
                                           <RefreshCw className="w-4 h-4" />
                                         </button>
-                                        <button
-                                          onClick={() => handleStripeSyncOne(service.id)}
-                                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors disabled:opacity-50"
-                                          disabled={syncingStripeId === service.id}
-                                          title="Sync to Stripe"
-                                        >
-                                          <RefreshCw className={`w-4 h-4 ${syncingStripeId === service.id ? 'animate-spin' : ''}`} />
-                                        </button>
+                                        {/* Individual Stripe sync button removed - MagicPay does not require product sync */}
                                         <button
                                           onClick={() => handleEdit(service)}
                                           className="p-1.5 text-dark-sage hover:bg-sage-light rounded transition-colors"
@@ -1250,17 +1188,7 @@ export default function ServicesManager() {
                         <RefreshCw className="w-4 h-4" />
                         Sync Hapio
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStripeSyncOne(viewingService.id);
-                        }}
-                        disabled={syncingStripeId === viewingService.id}
-                        className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2 text-sm min-h-[44px] disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${syncingStripeId === viewingService.id ? 'animate-spin' : ''}`} />
-                        Sync Stripe
-                      </button>
+                      {/* Stripe sync button removed - MagicPay does not require product sync */}
                     </div>
                     <button
                       onClick={async (e) => {

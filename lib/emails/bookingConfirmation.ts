@@ -273,7 +273,7 @@ export function generateBookingConfirmationEmail(params: {
           <tr>
             <td style="padding: 0 20px 20px 20px;">
               <p style="margin: 0; color: #5A5A5A; font-size: 13px; line-height: 1.6; font-style: italic; text-align: center;">
-                <strong>Note:</strong> You will receive a separate payment receipt email from Stripe with your official receipt.
+                <strong>Note:</strong> Your payment has been securely processed. This email serves as your booking confirmation.
               </p>
             </td>
           </tr>

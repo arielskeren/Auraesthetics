@@ -26,7 +26,7 @@ export default function HapioOverview({ onNavigate }: HapioOverviewProps) {
             </li>
             <li className="flex items-start">
               <span className="text-dark-sage mr-2">•</span>
-              <span><strong>Services:</strong> Manage your service catalog, sync with Hapio and Stripe, and control pricing</span>
+              <span><strong>Services:</strong> Manage your service catalog, sync with Hapio, and control pricing</span>
             </li>
             <li className="flex items-start">
               <span className="text-dark-sage mr-2">•</span>
