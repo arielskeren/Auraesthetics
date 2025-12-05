@@ -1,6 +1,6 @@
 /**
  * Booking confirmation email template
- * Warm & Modern design with hero image left, details right layout
+ * Compact design: Receipt on top, appointment details with image, side-by-side calendar buttons
  */
 
 import { getEmailStyles, EMAIL_STYLES } from '../_shared/styles';
@@ -14,12 +14,16 @@ export function generateBookingConfirmationEmail(params: {
   serviceImageUrl?: string | null;
   clientName?: string | null;
   bookingDate: Date;
-  bookingTime: string; // Formatted time string
+  bookingTime: string;
   address?: string;
-  bookingId?: string; // Internal booking ID or Hapio booking ID
+  bookingId?: string;
   cancelUrl?: string;
   rescheduleUrl?: string;
   calendarLinks?: ReturnType<typeof generateCalendarLinks>;
+  // Payment receipt details
+  amountPaid?: number | null;
+  transactionId?: string | null;
+  paymentDate?: Date | null;
 }) {
   const {
     serviceName,
@@ -32,222 +36,248 @@ export function generateBookingConfirmationEmail(params: {
     cancelUrl,
     rescheduleUrl,
     calendarLinks,
+    amountPaid,
+    transactionId,
+    paymentDate,
   } = params;
 
   const styles = getEmailStyles();
-  const detailsColumnWidth = serviceImageUrl ? '55%' : '100%';
-  const dateTimeStyle = `margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.body}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};`;
-
-  // Generate URLs with booking ID if provided
+  
   const finalCancelUrl = cancelUrl || (bookingId ? `${EMAIL_STYLES.urls.manageBooking}?id=${encodeURIComponent(bookingId)}` : EMAIL_STYLES.urls.manageBooking);
   const finalRescheduleUrl = rescheduleUrl || (bookingId ? `${EMAIL_STYLES.urls.manageBooking}?id=${encodeURIComponent(bookingId)}` : EMAIL_STYLES.urls.manageBooking);
 
-  const formattedDate = formatDateForEmail(bookingDate);
+  const shortDate = bookingDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
-  // Generate calendar links if not provided
+  const paymentDateFormatted = paymentDate?.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  // Generate calendar links with payment details
   const links = calendarLinks || (() => {
     const endDate = new Date(bookingDate);
-    endDate.setHours(endDate.getHours() + 1); // Assume 1 hour default
-    return generateCalendarLinks(serviceName, bookingDate, endDate, address);
+    endDate.setHours(endDate.getHours() + 1);
+    return generateCalendarLinks(serviceName, bookingDate, endDate, address, {
+      amountPaid,
+      transactionId,
+      bookingId,
+      clientName,
+    });
   })();
+
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(address)}`;
 
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-${generateEmailHead('Booking Confirmation - The Aura Esthetics')}
+${generateEmailHead('Booking Confirmation - Aura Aesthetics')}
 </head>
 <body style="${styles.body}">
-  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: ${EMAIL_STYLES.colors.background}; padding: 0;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: ${EMAIL_STYLES.colors.background};">
     <tr>
-      <td align="center" style="padding: ${EMAIL_STYLES.spacing.xxl} ${EMAIL_STYLES.spacing.sm};">
-        <table role="presentation" style="${styles.container}">
+      <td align="center" style="padding: 16px 8px;">
+        <table role="presentation" style="max-width: 520px; width: 100%; border-collapse: collapse; background-color: ${EMAIL_STYLES.colors.white}; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08);">
           
-${generateEmailHeader(styles)}
-
-          <!-- Thank You Message -->
+          <!-- Header -->
           <tr>
-            <td style="padding: ${EMAIL_STYLES.spacing.xxl} ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg}; text-align: center;">
-              <h2 style="${styles.h2}">Thank You for Your Booking!</h2>
-              ${clientName ? `<p style="margin: ${EMAIL_STYLES.spacing.sm} 0 ${EMAIL_STYLES.spacing.md} 0; ${styles.bodyText}">Dear ${escapeHtml(clientName)},</p>` : ''}
-              <p style="margin: 0; ${styles.bodyText}">We're excited to welcome you to The Aura Esthetics. Your appointment has been confirmed!</p>
+            <td style="background: linear-gradient(135deg, ${EMAIL_STYLES.colors.primary} 0%, #7A9A7E 100%); padding: 16px; text-align: center;">
+              <h1 style="margin: 0; color: ${EMAIL_STYLES.colors.white}; font-size: 20px; font-weight: 600; letter-spacing: 0.5px;">Aura Aesthetics</h1>
             </td>
           </tr>
 
-          <!-- Hero Image & Service Details - Two Column Layout -->
+          <!-- Greeting -->
           <tr>
-            <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.xl} ${EMAIL_STYLES.spacing.lg};">
-              <table role="presentation" style="width: 100%; border-collapse: collapse; ${styles.card}">
+            <td style="padding: 20px 16px 12px 16px; text-align: center;">
+              <h2 style="margin: 0 0 6px 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: 18px; font-weight: 600;">Booking Confirmed!</h2>
+              ${clientName ? `<p style="margin: 0; color: #666; font-size: 14px;">Thank you, ${escapeHtml(clientName)}</p>` : ''}
+            </td>
+          </tr>
+
+          <!-- Payment Receipt (TOP) -->
+          ${amountPaid ? `
+          <tr>
+            <td style="padding: 0 16px 16px 16px;">
+              <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #fafaf8; border: 1px solid ${EMAIL_STYLES.colors.border}; border-radius: 6px;">
                 <tr>
-                  ${serviceImageUrl ? `
-                  <!-- Hero Image Column (Left) -->
-                  <td style="width: 45%; padding: 0; vertical-align: top; background-color: ${EMAIL_STYLES.colors.white};">
-                    <img src="${escapeHtml(serviceImageUrl)}" alt="${escapeHtml(serviceName)}" style="width: 100%; height: auto; display: block; border-radius: ${EMAIL_STYLES.layout.borderRadius} 0 0 ${EMAIL_STYLES.layout.borderRadius};" />
+                  <td style="padding: 12px; border-bottom: 1px solid ${EMAIL_STYLES.colors.border};">
+                    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600;">Payment Receipt</span>
                   </td>
-                  ` : ''}
-                  
-                  <!-- Service Details Column (Right) -->
-                  <td style="width: ${detailsColumnWidth}; padding: ${EMAIL_STYLES.spacing.xl}; vertical-align: top; background-color: ${EMAIL_STYLES.colors.cardBackground};">
-                    <h3 style="margin: 0 0 ${EMAIL_STYLES.spacing.lg} 0; ${styles.h3}">${escapeHtml(serviceName)}</h3>
-                    
-                    <!-- Date -->
-                    <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: ${EMAIL_STYLES.spacing.md};">
+                </tr>
+                <tr>
+                  <td style="padding: 12px;">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse; font-size: 13px;">
                       <tr>
-                        <td style="padding: ${EMAIL_STYLES.spacing.md}; background-color: ${EMAIL_STYLES.colors.white}; border-radius: ${EMAIL_STYLES.layout.borderRadiusSmall};">
-                          <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                              <td style="width: 28px; padding: 0; vertical-align: middle; text-align: center;">
-                                <span style="font-size: 18px;">•</span>
-                              </td>
-                              <td style="padding: 0; vertical-align: middle;">
-                                <p style="${dateTimeStyle}">${escapeHtml(formattedDate)}</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
+                        <td style="color: #666; padding: 3px 0;">Amount</td>
+                        <td style="color: ${EMAIL_STYLES.colors.primaryDark}; font-weight: 600; text-align: right; padding: 3px 0; font-size: 15px;">$${amountPaid.toFixed(2)}</td>
                       </tr>
-                    </table>
-                    
-                    <!-- Time -->
-                    <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: ${EMAIL_STYLES.spacing.md};">
+                      ${paymentDateFormatted ? `
                       <tr>
-                        <td style="padding: ${EMAIL_STYLES.spacing.md}; background-color: ${EMAIL_STYLES.colors.white}; border-radius: ${EMAIL_STYLES.layout.borderRadiusSmall};">
-                          <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                              <td style="width: 28px; padding: 0; vertical-align: middle; text-align: center;">
-                                <span style="font-size: 18px;">•</span>
-                              </td>
-                              <td style="padding: 0; vertical-align: middle;">
-                                <p style="${dateTimeStyle}">${escapeHtml(bookingTime)} EST</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
+                        <td style="color: #666; padding: 3px 0;">Date</td>
+                        <td style="color: #444; text-align: right; padding: 3px 0;">${paymentDateFormatted}</td>
                       </tr>
-                    </table>
-                    
-                    <!-- Location -->
-                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      ` : ''}
+                      ${transactionId ? `
                       <tr>
-                        <td style="padding: ${EMAIL_STYLES.spacing.md}; background-color: ${EMAIL_STYLES.colors.white}; border-radius: ${EMAIL_STYLES.layout.borderRadiusSmall};">
-                          <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                              <td style="width: 28px; padding: 0; vertical-align: top; padding-top: 2px; text-align: center;">
-                                <span style="font-size: 18px;">•</span>
-                              </td>
-                              <td style="padding: 0; vertical-align: top;">
-                                <p style="margin: 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.small}; font-weight: ${EMAIL_STYLES.typography.fontWeight.medium}; line-height: 1.5;">${escapeHtml(address)}</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
+                        <td style="color: #666; padding: 3px 0;">Ref</td>
+                        <td style="color: ${EMAIL_STYLES.colors.primary}; text-align: right; padding: 3px 0; font-family: monospace; font-size: 11px;">${escapeHtml(transactionId)}</td>
                       </tr>
+                      ` : ''}
                     </table>
                   </td>
                 </tr>
               </table>
-            </td>
-          </tr>
-
-          <!-- Add to Calendar Buttons -->
-          <tr>
-            <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.xl} ${EMAIL_STYLES.spacing.lg}; text-align: center;">
-              <p style="margin: 0 0 ${EMAIL_STYLES.spacing.md} 0; color: ${EMAIL_STYLES.colors.secondary}; font-size: ${EMAIL_STYLES.typography.fontSize.small}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};">Add to Calendar</p>
-              <table role="presentation" style="width: 100%; border-collapse: collapse; max-width: 400px; margin: 0 auto;">
-                <tr>
-                  <td align="center" style="padding: ${EMAIL_STYLES.spacing.xs};">
-                    <a href="${links.google}" style="${styles.button.calendar} background-color: #4285F4; margin: 0 auto;">Google Calendar</a>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding: ${EMAIL_STYLES.spacing.xs};">
-                    <a href="${links.outlook}" style="${styles.button.calendar} background-color: #0078D4; margin: 0 auto;">Outlook</a>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding: ${EMAIL_STYLES.spacing.xs};">
-                    <a href="${links.ical}" style="${styles.button.calendar} background-color: ${EMAIL_STYLES.colors.primaryDark}; margin: 0 auto;">iCal</a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- To-Dos and Don'ts -->
-          <tr>
-            <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.xl} ${EMAIL_STYLES.spacing.lg};">
-              <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="padding-bottom: ${EMAIL_STYLES.spacing.md}; vertical-align: top;">
-                    <div style="${styles.infoBox}">
-                      <h4 style="margin: 0 0 ${EMAIL_STYLES.spacing.sm} 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.h4}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};">✓ What to Do</h4>
-                      <ul style="margin: 0; padding-left: ${EMAIL_STYLES.spacing.lg}; color: ${EMAIL_STYLES.colors.secondary}; font-size: ${EMAIL_STYLES.typography.fontSize.small}; line-height: ${EMAIL_STYLES.typography.lineHeight.relaxed};">
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Arrive 10 minutes early</li>
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Come with clean, makeup-free skin</li>
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Wear comfortable clothing</li>
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Bring a list of current skincare products</li>
-                        <li>Stay hydrated before your appointment</li>
-                      </ul>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="vertical-align: top;">
-                    <div style="${styles.warningBox}">
-                      <h4 style="margin: 0 0 ${EMAIL_STYLES.spacing.sm} 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: ${EMAIL_STYLES.typography.fontSize.h4}; font-weight: ${EMAIL_STYLES.typography.fontWeight.semibold};">✗ What to Avoid</h4>
-                      <ul style="margin: 0; padding-left: ${EMAIL_STYLES.spacing.lg}; color: ${EMAIL_STYLES.colors.secondary}; font-size: ${EMAIL_STYLES.typography.fontSize.small}; line-height: ${EMAIL_STYLES.typography.lineHeight.relaxed};">
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Avoid sun exposure 24 hours before</li>
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Skip retinol products 3 days prior</li>
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">No waxing 24 hours before</li>
-                        <li style="margin-bottom: ${EMAIL_STYLES.spacing.xs};">Avoid chemical peels 1 week prior</li>
-                        <li>Don't use exfoliants the day before</li>
-                      </ul>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Action Buttons -->
-          <tr>
-            <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.xl} ${EMAIL_STYLES.spacing.lg}; text-align: center;">
-              <table role="presentation" style="width: 100%; border-collapse: collapse; max-width: 300px; margin: 0 auto;">
-                <tr>
-                  <td align="center" style="padding: ${EMAIL_STYLES.spacing.xs};">
-                    <a href="${finalRescheduleUrl}" style="${styles.button.secondary}">Reschedule</a>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding: ${EMAIL_STYLES.spacing.xs};">
-                    <a href="${finalCancelUrl}" style="${styles.button.danger}">Cancel</a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Receipt Note -->
-          <tr>
-            <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg};">
-              <p style="margin: 0; ${styles.xsmallText} font-style: italic; text-align: center; color: ${EMAIL_STYLES.colors.secondary};">
-                <strong>Note:</strong> Your payment has been securely processed. This email serves as your booking confirmation.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Booking ID -->
-          ${bookingId ? `
-          <tr>
-            <td style="padding: 0 ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg} ${EMAIL_STYLES.spacing.lg}; border-top: ${EMAIL_STYLES.layout.borderWidth} solid ${EMAIL_STYLES.colors.border};">
-              <p style="margin: 0; ${styles.xsmallText} text-align: center;">
-                <strong>Booking ID:</strong> ${escapeHtml(bookingId)}
-              </p>
             </td>
           </tr>
           ` : ''}
 
-${generateEmailFooterWithSocial(address, styles)}
+          <!-- Appointment Details (Image Left, Info Right) -->
+          <tr>
+            <td style="padding: 0 16px 16px 16px;">
+              <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #fafaf8; border: 1px solid ${EMAIL_STYLES.colors.border}; border-radius: 6px;">
+                <tr>
+                  <td style="padding: 12px; border-bottom: 1px solid ${EMAIL_STYLES.colors.border};">
+                    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600;">Appointment Details</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px;">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        ${serviceImageUrl ? `
+                        <td style="width: 80px; vertical-align: top; padding-right: 12px;">
+                          <img src="${escapeHtml(serviceImageUrl)}" alt="${escapeHtml(serviceName)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; display: block;" />
+                        </td>
+                        ` : ''}
+                        <td style="vertical-align: top;">
+                          <p style="margin: 0 0 8px 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: 15px; font-weight: 600; line-height: 1.3;">${escapeHtml(serviceName)}</p>
+                          <table role="presentation" style="border-collapse: collapse; font-size: 13px;">
+                            <tr>
+                              <td style="color: #888; padding: 2px 8px 2px 0;">📅</td>
+                              <td style="color: #444; padding: 2px 0;">${shortDate}</td>
+                            </tr>
+                            <tr>
+                              <td style="color: #888; padding: 2px 8px 2px 0;">🕐</td>
+                              <td style="color: #444; padding: 2px 0;">${bookingTime} EST</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Location -->
+                <tr>
+                  <td style="padding: 0 12px 12px 12px;">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: ${EMAIL_STYLES.colors.white}; border: 1px solid ${EMAIL_STYLES.colors.border}; border-radius: 4px;">
+                      <tr>
+                        <td style="padding: 10px;">
+                          <table role="presentation" style="border-collapse: collapse;">
+                            <tr>
+                              <td style="color: #888; padding-right: 8px; vertical-align: top;">📍</td>
+                              <td>
+                                <p style="margin: 0; color: #444; font-size: 13px; line-height: 1.4;">${escapeHtml(address)}</p>
+                                <a href="${mapsUrl}" style="color: ${EMAIL_STYLES.colors.primary}; font-size: 12px; text-decoration: none;">Get Directions →</a>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Calendar Buttons (Side by Side) -->
+          <tr>
+            <td style="padding: 0 16px 16px 16px;">
+              <p style="margin: 0 0 8px 0; color: #666; font-size: 12px; text-align: center;">Add to Calendar</p>
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="width: 33.33%; padding: 0 3px 0 0;">
+                    <a href="${links.google}" style="display: block; padding: 8px 4px; background-color: #4285F4; color: ${EMAIL_STYLES.colors.white}; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; text-align: center;">Google</a>
+                  </td>
+                  <td style="width: 33.33%; padding: 0 3px;">
+                    <a href="${links.outlook}" style="display: block; padding: 8px 4px; background-color: #0078D4; color: ${EMAIL_STYLES.colors.white}; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; text-align: center;">Outlook</a>
+                  </td>
+                  <td style="width: 33.33%; padding: 0 0 0 3px;">
+                    <a href="${links.ical}" download="aura-appointment.ics" style="display: block; padding: 8px 4px; background-color: #333; color: ${EMAIL_STYLES.colors.white}; text-decoration: none; border-radius: 4px; font-size: 11px; font-weight: 600; text-align: center;">Apple</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Preparation Tips (Compact) -->
+          <tr>
+            <td style="padding: 0 16px 16px 16px;">
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="width: 50%; padding-right: 6px; vertical-align: top;">
+                    <div style="background-color: #f0f7f1; padding: 10px; border-radius: 6px; border-left: 3px solid ${EMAIL_STYLES.colors.primary};">
+                      <p style="margin: 0 0 6px 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: 12px; font-weight: 600;">✓ Do</p>
+                      <ul style="margin: 0; padding-left: 14px; color: #555; font-size: 11px; line-height: 1.5;">
+                        <li>Arrive 10 min early</li>
+                        <li>Clean, makeup-free skin</li>
+                        <li>Stay hydrated</li>
+                      </ul>
+                    </div>
+                  </td>
+                  <td style="width: 50%; padding-left: 6px; vertical-align: top;">
+                    <div style="background-color: #fff5f5; padding: 10px; border-radius: 6px; border-left: 3px solid ${EMAIL_STYLES.colors.error};">
+                      <p style="margin: 0 0 6px 0; color: ${EMAIL_STYLES.colors.primaryDark}; font-size: 12px; font-weight: 600;">✗ Avoid</p>
+                      <ul style="margin: 0; padding-left: 14px; color: #555; font-size: 11px; line-height: 1.5;">
+                        <li>Sun 24hrs before</li>
+                        <li>Retinol 3 days prior</li>
+                        <li>Waxing 24hrs before</li>
+                      </ul>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Action Buttons (Compact, Side by Side) -->
+          <tr>
+            <td style="padding: 0 16px 16px 16px;">
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="width: 50%; padding-right: 4px;">
+                    <a href="${finalRescheduleUrl}" style="display: block; padding: 10px 8px; background-color: ${EMAIL_STYLES.colors.white}; color: ${EMAIL_STYLES.colors.primary}; text-decoration: none; border: 1px solid ${EMAIL_STYLES.colors.primary}; border-radius: 4px; font-size: 12px; font-weight: 600; text-align: center;">Reschedule</a>
+                  </td>
+                  <td style="width: 50%; padding-left: 4px;">
+                    <a href="${finalCancelUrl}" style="display: block; padding: 10px 8px; background-color: ${EMAIL_STYLES.colors.white}; color: ${EMAIL_STYLES.colors.error}; text-decoration: none; border: 1px solid ${EMAIL_STYLES.colors.error}; border-radius: 4px; font-size: 12px; font-weight: 600; text-align: center;">Cancel</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Booking Reference -->
+          ${bookingId ? `
+          <tr>
+            <td style="padding: 0 16px 12px 16px; text-align: center;">
+              <p style="margin: 0; color: #999; font-size: 11px;">Booking ID: <span style="font-family: monospace;">${escapeHtml(bookingId)}</span></p>
+            </td>
+          </tr>
+          ` : ''}
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #fafaf8; padding: 14px 16px; text-align: center; border-top: 1px solid ${EMAIL_STYLES.colors.border};">
+              <p style="margin: 0 0 4px 0; color: #666; font-size: 12px; font-weight: 600;">Aura Aesthetics</p>
+              <p style="margin: 0 0 6px 0; color: #888; font-size: 11px; line-height: 1.4;">${escapeHtml(address)}</p>
+              <a href="https://www.theauraesthetics.com" style="color: ${EMAIL_STYLES.colors.primary}; font-size: 11px; text-decoration: none;">www.theauraesthetics.com</a>
+            </td>
+          </tr>
 
         </table>
       </td>

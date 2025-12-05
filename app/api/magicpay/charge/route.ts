@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       const upsertBookingRows = (await sql`
         INSERT INTO bookings (
           hapio_booking_id, service_id, service_name, client_email, client_name, client_phone,
-          booking_date, payment_status, magicpay_transaction_id, magicpay_auth_code, metadata, updated_at
+          booking_date, payment_status, magicpay_transaction_id, magicpay_auth_code, payment_provider, metadata, updated_at
         ) VALUES (
           ${bookingId},
           ${svc.id},
@@ -293,6 +293,7 @@ export async function POST(request: NextRequest) {
           'succeeded',
           ${chargeResult.transactionId},
           ${chargeResult.authCode},
+          'magicpay',
           ${JSON.stringify(bookingMetadata)}::jsonb,
           NOW()
         )
@@ -306,6 +307,7 @@ export async function POST(request: NextRequest) {
           payment_status = EXCLUDED.payment_status,
           magicpay_transaction_id = EXCLUDED.magicpay_transaction_id,
           magicpay_auth_code = EXCLUDED.magicpay_auth_code,
+          payment_provider = 'magicpay',
           metadata = COALESCE(bookings.metadata, '{}'::jsonb) || EXCLUDED.metadata,
           updated_at = NOW()
         RETURNING id
@@ -551,16 +553,36 @@ export async function POST(request: NextRequest) {
           : 1;
         endBookingDate.setHours(endBookingDate.getHours() + durationHours);
 
-        const calendarLinks = generateCalendarLinks(svc.name, bookingDate, endBookingDate);
+        const studioAddress = '2998 Green Palm Court, Dania Beach, FL 33312';
+        const clientFullName = `${customer.firstName} ${customer.lastName}`.trim();
+        
+        // Generate calendar links with payment details for rich event description
+        const calendarLinks = generateCalendarLinks(
+          svc.name, 
+          bookingDate, 
+          endBookingDate, 
+          studioAddress,
+          {
+            amountPaid: amountDollars,
+            transactionId: chargeResult.transactionId,
+            bookingId: ensuredBookingRowId || bookingId,
+            clientName: clientFullName,
+          }
+        );
 
         const emailHtml = generateBookingConfirmationEmail({
           serviceName: svc.name,
           serviceImageUrl,
-          clientName: `${customer.firstName} ${customer.lastName}`.trim(),
+          clientName: clientFullName,
           bookingDate,
           bookingTime,
+          address: studioAddress,
           bookingId: ensuredBookingRowId || bookingId,
           calendarLinks,
+          // Payment receipt details
+          amountPaid: amountDollars,
+          transactionId: chargeResult.transactionId,
+          paymentDate: new Date(),
         });
 
         await sendBrevoEmail({

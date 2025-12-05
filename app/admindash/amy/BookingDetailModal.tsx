@@ -26,6 +26,11 @@ interface Booking {
   payment_type?: 'full' | 'deposit' | null;
   payment_status?: string;
   payment_intent_id?: string | null;
+  stripe_payment_intent_id?: string | null;
+  // MagicPay fields
+  payment_provider?: 'stripe' | 'magicpay' | string | null;
+  magicpay_transaction_id?: string | null;
+  magicpay_auth_code?: string | null;
   payment_amount_cents?: number | null;
   refunded_cents?: number | null;
   refund_id?: string | null;
@@ -1156,10 +1161,19 @@ export default function BookingDetailModal({ booking, isOpen, onClose, onRefresh
                     </p>
                   </div>
                   <div>
-                    <label className="text-xs text-warm-gray mb-1">Payment Intent ID</label>
+                    <label className="text-xs text-warm-gray mb-1">
+                      {effective.payment_provider === 'magicpay' ? 'MagicPay Transaction ID' : 'Payment ID'}
+                    </label>
                     <p className="font-medium text-charcoal font-mono text-xs px-2 py-1.5 border border-sage-dark/20 rounded bg-white break-all">
-                      {effective.payment_intent_id || 'N/A'}
+                      {effective.payment_provider === 'magicpay' 
+                        ? (effective.magicpay_transaction_id || 'N/A')
+                        : (effective.payment_intent_id || effective.stripe_payment_intent_id || 'N/A')}
                     </p>
+                    {effective.payment_provider && (
+                      <p className="text-xs text-warm-gray mt-0.5">
+                        Provider: {effective.payment_provider === 'magicpay' ? 'MagicPay' : 'Stripe'}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs text-warm-gray mb-1">Outlook Sync</label>
