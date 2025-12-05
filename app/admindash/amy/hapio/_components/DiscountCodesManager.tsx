@@ -1851,7 +1851,14 @@ export default function DiscountCodesManager() {
                         <div>• Fetched by query: {rawApiResponse._diagnostics.totalFetchedFromQuery}</div>
                         <div>• Categorized: {rawApiResponse._diagnostics.totalCategorized}</div>
                         {rawApiResponse._diagnostics.queryMismatch > 0 && (
-                          <div className="font-bold text-red-700">⚠️ Query mismatch! {rawApiResponse._diagnostics.queryMismatch} codes not returned by query!</div>
+                          <div className="font-bold text-red-700">
+                            ⚠️ Query mismatch! {rawApiResponse._diagnostics.queryMismatch} codes not returned by main query!
+                            {rawApiResponse._diagnostics.missingFromMainQuery?.length > 0 && (
+                              <div className="mt-1 font-normal">
+                                Missing codes: {rawApiResponse._diagnostics.missingFromMainQuery.map((c: any) => `${c.code} (${c.id})`).join(', ')}
+                              </div>
+                            )}
+                          </div>
                         )}
                         {rawApiResponse._diagnostics.missingCodes > 0 && (
                           <div className="font-bold text-red-700">⚠️ Categorization lost {rawApiResponse._diagnostics.missingCodes} codes!</div>

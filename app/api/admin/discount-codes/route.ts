@@ -33,7 +33,17 @@ export async function GET(request: NextRequest) {
     `;
     const oneTimeCount = normalizeRows(oneTimeCountResult)[0]?.count || 0;
     
+    // DIAGNOSTIC: Get all one-time code IDs to compare with actual query results
+    const oneTimeIdsResult = await sql`
+      SELECT id, code, code_type, customer_id, is_active 
+      FROM discount_codes 
+      WHERE (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
+      ORDER BY created_at DESC
+    `;
+    const allOneTimeIds = normalizeRows(oneTimeIdsResult);
+    
     console.log('[Discount Codes API] DB Counts:', { totalInDb, oneTimeCount });
+    console.log('[Discount Codes API] All one-time codes:', allOneTimeIds.map((c: any) => ({ id: c.id, code: c.code })));
 
     // Fetch all one-time discount codes with customer info
     // Handle both explicit 'one_time' codes and legacy codes (NULL code_type with customer_id)
@@ -290,6 +300,10 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
+    // Find codes that exist in simple query but not in main query
+    const fetchedIds = new Set(normalizedCodes.map((c: any) => c.id));
+    const missingFromMainQuery = allOneTimeIds.filter((c: any) => !fetchedIds.has(c.id));
+    
     // Include diagnostic counts in response to help track missing codes
     const diagnostics = {
       totalCodesInDatabase: parseInt(totalInDb),
@@ -303,6 +317,14 @@ export async function GET(request: NextRequest) {
       missingCodes: normalizedCodes.length - (safeActive.length + used.length + inactive.length),
       // If query fetched fewer than expected
       queryMismatch: parseInt(oneTimeCount) - normalizedCodes.length,
+      // Codes that exist but weren't returned by the main query
+      missingFromMainQuery: missingFromMainQuery.map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        code_type: c.code_type,
+        customer_id: c.customer_id,
+        is_active: c.is_active,
+      })),
     };
     
     // Log warning if codes were lost
