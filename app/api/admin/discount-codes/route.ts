@@ -42,48 +42,13 @@ export async function GET(request: NextRequest) {
     `;
     const allOneTimeIds = normalizeRows(oneTimeIdsResult);
     
-    // DIAGNOSTIC: Test the specific query that the main query uses
-    const testQueryResult = await sql`
-      SELECT 
-        id,
-        code,
-        code_type,
-        customer_id,
-        discount_type,
-        discount_value,
-        discount_cap,
-        used,
-        used_at,
-        expires_at,
-        is_active,
-        created_at,
-        created_by
-      FROM discount_codes
-      WHERE (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
-      ORDER BY created_at DESC
-    `;
-    const testQueryCodes = normalizeRows(testQueryResult);
-    console.log('[Discount Codes API] Test query returned:', testQueryCodes.length, 'codes');
-    console.log('[Discount Codes API] Test query codes:', testQueryCodes.map((c: any) => ({ id: c.id, code: c.code })));
-    
-    // DIAGNOSTIC: Get ALL codes in database to see what's missing
+    // Get ALL codes in database for diagnostics display
     const allCodesInDbResult = await sql`
       SELECT id, code, code_type, customer_id, is_active, created_at
       FROM discount_codes
       ORDER BY created_at DESC
     `;
     const allCodesInDb = normalizeRows(allCodesInDbResult);
-    
-    console.log('[Discount Codes API] DB Counts:', { totalInDb, oneTimeCount });
-    console.log('[Discount Codes API] All one-time codes:', allOneTimeIds.map((c: any) => ({ id: c.id, code: c.code })));
-    console.log('[Discount Codes API] ALL codes in DB:', allCodesInDb.map((c: any) => ({ 
-      id: c.id, 
-      code: c.code, 
-      code_type: c.code_type, 
-      has_customer_id: !!c.customer_id,
-      is_active: c.is_active,
-      created_at: c.created_at
-    })));
 
     // Fetch all one-time discount codes WITHOUT JOIN (to avoid potential Neon driver issues)
     // Handle both explicit 'one_time' codes and legacy codes (NULL code_type with customer_id)
@@ -132,9 +97,13 @@ export async function GET(request: NextRequest) {
           LIMIT 1
         `;
         const fullCode = normalizeRows(fullCodeResult)[0];
-        if (fullCode) {
+        // CRITICAL FIX: Only recover codes that are ACTUALLY still active
+        // This prevents deleted codes (is_active=false) from being recovered
+        if (fullCode && fullCode.is_active === true) {
           rawCodes.push(fullCode);
           console.log('[Discount Codes API] Added missing code:', fullCode.code);
+        } else if (fullCode) {
+          console.log('[Discount Codes API] Skipping recovery of inactive code:', fullCode.code, 'is_active:', fullCode.is_active);
         }
       }
       
@@ -142,56 +111,6 @@ export async function GET(request: NextRequest) {
       rawCodes.sort((a: any, b: any) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-    }
-    
-    // DIAGNOSTIC: Check if the missing code exists with the expected values
-    const missingCodeId = 'e97bd07b-e5fa-41bf-a501-c8b89d4091fd';
-    const missingCodeCheck = await sql`
-      SELECT id, code, code_type, customer_id, is_active
-      FROM discount_codes
-      WHERE id = ${missingCodeId}
-      LIMIT 1
-    `;
-    const missingCodeData = normalizeRows(missingCodeCheck)[0];
-    
-    // DIAGNOSTIC: Try to fetch this specific code with the one-time filter
-    const directFilterCheck = await sql`
-      SELECT id, code, code_type, customer_id, is_active
-      FROM discount_codes
-      WHERE id = ${missingCodeId}
-        AND (code_type = 'one_time' OR (code_type IS NULL AND customer_id IS NOT NULL))
-      LIMIT 1
-    `;
-    const directFilterResult = normalizeRows(directFilterCheck)[0];
-    
-    // DIAGNOSTIC: Check raw code_type value
-    const rawCodeTypeCheck = await sql`
-      SELECT id, code, code_type, 
-             code_type = 'one_time' as is_one_time_exact,
-             TRIM(code_type) = 'one_time' as is_one_time_trimmed,
-             LENGTH(code_type) as code_type_length,
-             code_type::text as code_type_text
-      FROM discount_codes
-      WHERE id = ${missingCodeId}
-      LIMIT 1
-    `;
-    const rawCodeTypeResult = normalizeRows(rawCodeTypeCheck)[0];
-    
-    if (missingCodeData) {
-      const shouldMatch = missingCodeData.code_type === 'one_time' || 
-                         (missingCodeData.code_type === null && missingCodeData.customer_id !== null);
-      console.log('[Discount Codes API] Missing code check:', {
-        code: missingCodeData.code,
-        code_type: missingCodeData.code_type,
-        code_type_typeof: typeof missingCodeData.code_type,
-        customer_id: missingCodeData.customer_id,
-        is_active: missingCodeData.is_active,
-        shouldMatch,
-        inRawCodes: rawCodes.some((c: any) => c.id === missingCodeId),
-        rawCodesCount: rawCodes.length,
-        directFilterFound: !!directFilterResult,
-        rawCodeTypeInfo: rawCodeTypeResult
-      });
     }
     
     // Fetch customer info separately to avoid JOIN issues
@@ -523,19 +442,8 @@ export async function GET(request: NextRequest) {
                 (c.code_type === null && !c.customer_id ? 'code_type is NULL and no customer_id' : 
                  `Unknown: code_type=${c.code_type}, customer_id=${c.customer_id}`),
       })),
-      // Direct diagnostic for the missing code
-      missingCodeDiagnostic: missingCodeData ? {
-        code: missingCodeData.code,
-        code_type: missingCodeData.code_type,
-        code_type_typeof: typeof missingCodeData.code_type,
-        customer_id: missingCodeData.customer_id,
-        is_active: missingCodeData.is_active,
-        directFilterFound: !!directFilterResult,
-        rawCodeTypeInfo: rawCodeTypeResult,
-        inRawCodes: rawCodes.some((c: any) => c.id === missingCodeId),
-      } : null,
-      // Codes that were recovered from connection pooling issues
-      recoveredCodes: missingOneTimeCodes.map((c: any) => c.code),
+      // Codes that were recovered from connection pooling issues (only active ones)
+      recoveredCodes: missingOneTimeCodes.filter((c: any) => c.is_active === true).map((c: any) => c.code),
     };
     
     // Log warning if codes were lost
